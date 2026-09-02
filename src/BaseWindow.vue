@@ -1,0 +1,192 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { useWindows, useWindowOptions } from './createWindows'
+import { onWindowKeydown, useWindowDrag } from './useWindowDrag'
+import { RESIZE_DIRS, RESIZE_STYLES, useWindowResize } from './useWindowResize'
+import { useWindowFocus } from './useWindowFocus'
+import { provideWindowContext } from './useWindowContext'
+import { useViewport } from './useViewport'
+import type { WindowDescriptor } from './types'
+
+const props = defineProps<{ descriptor: WindowDescriptor }>()
+
+const win = useWindows()
+const options = useWindowOptions()
+const view = useViewport()
+const el = ref<HTMLDialogElement | null>(null)
+const handle = ref<HTMLElement | null>(null)
+const body = ref<HTMLElement | null>(null)
+const d = props.descriptor
+
+/** Below the breakpoint a floating window is unusable: fullscreen, no drag or resize. */
+const mobile = computed(() => view.w < options.mobileBreakpoint)
+const interactive = () => !mobile.value
+const canDrag = () => interactive() && d.draggable
+const canResize = computed(() => interactive() && d.resizable)
+const active = computed(() => win.activeId.value === d.id)
+
+provideWindowContext(d)
+useWindowDrag(handle, d, {
+  view,
+  bounds: options.bounds,
+  enabled: canDrag,
+  onStart: () => win.focus(d.id),
+  snap: options.snap,
+  onUndock: (pointerX) => win.undockForDrag(d.id, pointerX),
+  onArm: (zone) => win.setPreview(zone, view),
+  onDrop: (zone) => win.snap(d.id, zone, view),
+})
+// Resizing by a grip is an explicit choice of size — it outranks the snap, which is dropped
+// without moving the window back.
+const resize = useWindowResize(d, {
+  enabled: () => canResize.value,
+  onStart: () => win.focus(d.id),
+  onEnd: () => win.undock(d.id),
+})
+onMounted(() => el.value?.show()) // non-modal: background stays usable, taskbar clickable
+
+// After the show() hook on purpose: show() runs the dialog focusing steps, so registering this
+// first would let the UA overwrite it. A window restored from storage on page load must not steal
+// focus, and only the top one takes it.
+useWindowFocus(body, {
+  fallback: handle,
+  shouldFocus: () => active.value && !win.isRestored(d.id),
+  closed: () => !win.byId(d.id),
+})
+
+// The UA stylesheet gives <dialog> position:absolute; margin:auto; inset:0 —
+// all three must be cleared or centering fights the transform.
+const style = computed(() => ({
+  position: 'fixed' as const,
+  margin: '0',
+  inset: 'auto',
+  left: '0',
+  top: '0',
+  padding: '0',
+  display: 'flex',
+  flexDirection: 'column' as const,
+  overflow: 'hidden',
+  boxSizing: 'border-box' as const,
+  zIndex: String(options.zIndexBase + d.z),
+  width: mobile.value ? '100vw' : `${d.w}px`,
+  height: mobile.value ? '100dvh' : `${d.h}px`,
+  transform: mobile.value ? 'none' : `translate(${d.x}px, ${d.y}px)`,
+  maxWidth: '100vw',
+  maxHeight: '100dvh',
+}))
+
+const headStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  flex: '0 0 auto',
+  touchAction: 'none',
+  userSelect: 'none',
+} as const
+
+const bodyStyle = { flex: '1 1 auto', minHeight: '0', overflow: 'auto' } as const
+
+function handleStyle(dir: (typeof RESIZE_DIRS)[number]) {
+  return { position: 'absolute' as const, touchAction: 'none', ...RESIZE_STYLES[dir] }
+}
+
+function onCancel(e: Event) {
+  e.preventDefault() // closing would defeat the point of the library
+  win.minimize(d.id)
+}
+
+// A non-modal <dialog> gets no close request from the UA, so ESC is handled here.
+// Content that needs ESC for its own popper calls preventDefault() first.
+function onEscape(e: KeyboardEvent) {
+  if (e.defaultPrevented || !d.minimizable) return
+  e.preventDefault()
+  win.minimize(d.id)
+}
+
+function onKeydown(e: KeyboardEvent) {
+  onWindowKeydown(e, d, { view, bounds: options.bounds, enabled: interactive })
+}
+
+/** Double-click on the title bar toggles maximize, as it does on Windows. */
+function onHeadDblclick(e: MouseEvent) {
+  if (!options.snap.enabled || !canDrag()) return
+  if ((e.target as Element | null)?.closest('[data-vw-nodrag]')) return
+  win.snap(d.id, win.dockZone(d.id) === 'max' ? 'none' : 'max', view)
+}
+</script>
+
+<template>
+  <dialog
+    ref="el"
+    class="vw"
+    :style="style"
+    :aria-label="d.title || undefined"
+    :data-vw-active="active || undefined"
+    @cancel="onCancel"
+    @keydown.escape="onEscape"
+    @pointerdown="win.focus(d.id)"
+  >
+    <header
+      ref="handle"
+      class="vw__head"
+      :style="{ ...headStyle, cursor: canDrag() ? 'move' : 'default' }"
+      tabindex="0"
+      @keydown="onKeydown"
+      @dblclick="onHeadDblclick"
+    >
+      <slot
+        name="header"
+        :descriptor="d"
+      >
+        <span
+          class="vw__title"
+          style="flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+        >
+          {{ d.title }}
+        </span>
+      </slot>
+      <slot
+        name="controls"
+        :descriptor="d"
+      >
+        <button
+          v-if="d.minimizable"
+          class="vw__btn"
+          type="button"
+          data-vw-nodrag
+          @click="win.minimize(d.id)"
+        >
+          –
+        </button>
+        <button
+          v-if="d.closable"
+          class="vw__btn"
+          type="button"
+          data-vw-nodrag
+          @click="win.requestClose(d.id)"
+        >
+          ✕
+        </button>
+      </slot>
+    </header>
+    <section
+      ref="body"
+      class="vw__body"
+      :style="bodyStyle"
+    >
+      <slot />
+    </section>
+    <div
+      v-for="dir in canResize ? RESIZE_DIRS : []"
+      :key="dir"
+      class="vw__grip"
+      :style="handleStyle(dir)"
+      :data-vw-grip="dir"
+      aria-hidden="true"
+      @pointerdown="resize.onDown($event, dir)"
+      @pointermove="resize.onMove"
+      @pointerup="resize.onUp"
+      @pointercancel="resize.onUp"
+    />
+  </dialog>
+</template>

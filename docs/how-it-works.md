@@ -1,0 +1,239 @@
+# How it works
+
+The whole library follows from one decision:
+
+> **A window is a serializable descriptor in a store, not a component instance.**
+
+Minimize, restore, persistence, the taskbar, and "minimized costs nothing" are consequences of
+that, not separate features.
+
+## The descriptor
+
+Every window is one plain object in one array:
+
+```ts
+interface WindowDescriptor {
+  id: string                       // crypto.randomUUID()
+  name: string                     // key into the components map, NOT a component
+  props: Record<string, unknown>   // ids and primitives only
+  state: unknown | null            // draft state owned by the content component
+  title: string
+  minimized: boolean
+  x: number; y: number; w: number; h: number
+  z: number
+  meta: Record<string, unknown>    // consumer bookkeeping (entity version, ETag, …)
+
+  closable: boolean                // capabilities: serializable, so they persist with the window
+  minimizable: boolean
+  draggable: boolean
+  resizable: boolean
+  minW: number; minH: number
+  maxW: number | null; maxH: number | null   // null means unbounded
+}
+```
+
+Nothing in it is a component reference, a fetched entity, or a function. That is what makes
+`JSON.stringify` — and therefore reload survival — possible at all. `name` is a string key that
+`WindowHost` looks up in the components map at render time.
+
+## The pieces
+
+| File | Job |
+|---|---|
+| `state.ts` | The reactive store: the stack, `open`/`close`/`minimize`/`restore`/`focus`, dedupe, eviction, clamping. No DOM. |
+| `createWindows.ts` | Plugin factory. Resolves options, creates one store per app, provides both, wires persistence. |
+| `options.ts` | Defaults, and memoized `resolve(name)` that turns loader functions into async components. |
+| `WindowHost.vue` | Renders one `BaseWindow` per **non-minimized** descriptor; re-clamps on viewport resize. |
+| `BaseWindow.vue` | The `<dialog>`: geometry, header, drag handle, ESC, focus-on-pointerdown, per-window context. |
+| `WindowTaskbar.vue` | Renderless. Exposes the minimized set to the consumer's own markup. |
+| `useWindowDrag.ts` | Pointer-events drag + arrow-key move/resize, and the snap zone armed by a drag. |
+| `useWindowResize.ts` | The eight resize grips: pointer maths, size limits, and the edges that move `x`/`y`. |
+| `useWindowFocus.ts` | Focus into a window on open, back to the opener on close. |
+| `useWindowState.ts` | Draft state stored on the descriptor. |
+| `useWindowContext.ts` | Per-window control surface via provide/inject. |
+| `useViewport.ts` | The app's one viewport tracker, created by the plugin. One resize listener, however many windows. SSR-safe. |
+| `persist.ts` | Snapshot, schema check, hydration filtering, debounced writes. |
+| `geometry.ts` | Cascade placement, clamping and snap-zone maths — pure functions. |
+
+## Lifecycle of a window
+
+```
+win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })
+  │
+  ├─ unknown name?            → throw immediately (typos fail loudly, not silently)
+  ├─ same name + same props?  → restore + focus the existing window, return its id
+  ├─ at maxWindows?           → close the oldest
+  └─ push descriptor { id, name, props, cascade geometry, z: ++topZ }
+       │
+WindowHost renders `visible` (= stack minus minimized)
+       │
+BaseWindow mounts → dialog.show()  (non-modal)
+       │             provideWindowContext(descriptor)
+       │             content component mounts, gets `v-bind="props"` + `windowId`
+       │
+minimize(id) → descriptor.minimized = true
+       │        → drops out of `visible` → BaseWindow and the content UNMOUNT
+       │        → the descriptor (and its draft `state`) stays in the stack
+       │
+restore(id)  → minimized = false, z = ++topZ → content mounts again, geometry unchanged
+       │
+close(id)    → descriptor removed from the stack; everything about it is gone
+```
+
+`close()` is unconditional and synchronous, so `closeAll()` on logout can never be blocked.
+`requestClose()` is the guarded path — the window's own guard first (registered by its mounted
+content), then the app-wide `beforeClose` option. Only the second one can see a **minimized**
+window, whose content is unmounted and whose guard therefore no longer exists. The ✕ button calls
+`requestClose`; `maxWindows` eviction calls `close`.
+
+Each transition emits an event (`open`, `close`, `focus`, `minimize`, `restore`, `geometry`,
+`title`), subscribable with `win.on(type, cb)`. Note what this deliberately cannot see: a draft
+mutation, or a drag frame. Both write straight onto the descriptor without passing through a store
+method, which is exactly why persistence watches the stack deeply instead of listening to events.
+
+## Why the content is really gone while minimized
+
+`WindowHost` iterates `visible`, which is `stack.filter(w => !w.minimized)`. A minimized window is
+not in the list, so Vue unmounts its subtree: no watchers, no timers, no map or grid instances, no
+`KeepAlive`, no `v-show`. The playground makes this observable with a live mount counter — minimize
+a ticking log viewer and the count drops to zero.
+
+The cost of that is the content cannot keep its form in local `ref`s. That is exactly what
+`useWindowState` exists for: the draft lives on the descriptor, which outlives the mount.
+
+## Why non-modal
+
+Windows are opened with `dialog.show()`, not `showModal()`.
+
+- Several windows can be open at once, the page behind stays usable, and the taskbar stays
+  clickable — all impossible with a modal, which makes everything else inert.
+- Teleported poppers from your own components (select menus, date pickers) render above window
+  content normally, because a non-modal dialog is in the normal stacking context.
+
+The price: no browser top layer, so the library owns `z-index` (`descriptor.z`, bumped on
+`pointerdown` and on `restore`), and the browser sends **no close request**, so ESC is handled by a
+`keydown` listener rather than the `cancel` event. Content that wants ESC for itself calls
+`preventDefault()` first.
+
+## Geometry
+
+- New windows cascade: 28px steps, wrapping every 8 windows, defaults 640×480.
+- Dragging writes `x`/`y` straight onto the descriptor through Pointer Events with pointer capture
+  — one code path for mouse, touch and pen, and no `window`-level listeners to leak.
+- Resizing works the same way, from eight grips positioned inside the window's edges. It replaced
+  CSS `resize: both`, which offered one corner only, could not honour `minW`/`maxW`, and could not
+  express a west or north resize at all — those have to move `x`/`y` as the width changes, because
+  the *opposite* edge is what must stay put. Every path that sets a size, pointer or keyboard or
+  snap, goes through `clampSize`, so they cannot disagree.
+- `z` is a bare counter in the descriptor; the rendered `z-index` is `zIndexBase + z`. Keeping the
+  base out of the stored value means a persisted descriptor stays valid when the base changes.
+  `focus()` skips the write when the window is already on top, so an ordinary click inside a window
+  does not wake the persistence watcher.
+- `bounds.minVisible` (default 80px) is clamped on drag, on hydration, and on every viewport
+  resize, so a window can never end up unreachable.
+- Below `mobileBreakpoint` the rendered geometry is forced fullscreen and drag/resize go inert. The
+  stored geometry is untouched, so the window returns to its old place on a wide viewport.
+
+## Snapping
+
+Snapping assigns geometry; it does not introduce a second layout model. A snapped window is still a
+plain descriptor with `x/y/w/h` — the store simply remembers, outside the persisted state, which
+zone put it there and what it looked like before:
+
+```
+docks: Map<id, { zone, prev }>     // runtime-only, so the descriptor and SCHEMA never move
+```
+
+```
+drag moves           → zoneFromPointer(pointer, viewport, snap) → store.preview → WindowHost ghost
+drag released        → snap(id, zone): stash `prev` once, assign snapRect(zone), focus
+drag starts on a
+  snapped window     → undockForDrag: pre-snap size back, placed under the cursor
+double-click header  → snap(id, dockZone === 'max' ? 'none' : 'max')
+corner resize        → undock(id): keep the new size, forget the zone
+viewport resize      → clampAll: docked windows re-snap, floating ones clamp
+```
+
+The zone geometry comes from `snapRect`, and the ghost is drawn from the same function, so the
+preview cannot disagree with the drop. The snap area is the viewport minus `snap.insets`, which is
+how a consumer's fixed taskbar stays uncovered. A corner beats an edge in `zoneFromPointer`: the
+corner band is wide (100px by default) and the edge band is a few px, otherwise quarters would be
+unreachable. The bottom edge alone arms nothing.
+
+Because `docks` lives outside the reactive `s` object, the debounced persistence watcher never sees
+a ghost hover, and a reload brings a snapped window back as an ordinary floating one.
+
+## The `<dialog>` element
+
+The UA stylesheet gives `<dialog>` `position: absolute; margin: auto; inset: 0`; all three are
+overridden inline (`position: fixed`, `margin: 0`, `inset: auto`) or centering fights the
+transform. Positioning is inline on purpose: the library works with no stylesheet imported at all,
+and `style.css` is cosmetics only.
+
+## Persistence
+
+```
+install → read(storage[key])
+            ├─ missing / unparsable / wrong `schema`      → ignore, start empty
+            ├─ descriptor whose `name` is not registered  → dropped
+            └─ survivors: clamp to the current viewport, hydrate, mark as restored
+watch(stack, deep) → debounce 300ms → storage[key] = { schema, topZ, stack }
+```
+
+On a schema mismatch the snapshot is *migrated* where it can be — every capability field a
+descriptor is missing is filled from that component's defaults — and dropped only when the schema
+is too old to read. Dropping a readable blob would throw away every open window and every draft on
+upgrade, which the reload-survival promise cannot afford. The same repair path fixes a hand-edited
+descriptor, so there is one code path to extend when a field is added.
+
+Everything DOM-touching is guarded by `typeof window === 'undefined'`, so importing the entry in
+Node or during SSR does nothing. `storage` is any `{ getItem, setItem, removeItem }`, so
+`sessionStorage`, an IndexedDB wrapper, or a server-backed adapter all drop in.
+
+`isRestored` is not stored on the descriptor — the store keeps the set of hydrated ids in memory,
+so `useWindowContext().isRestored` tells a content component whether this mount came from storage
+or from a fresh `open()`.
+
+Bump `SCHEMA` in `persist.ts` whenever the descriptor shape changes; a stale blob hydrating into
+new code is the likeliest source of hard-to-reproduce bugs in this design.
+
+## Wiring and SSR
+
+The viewport tracker and the persistence watcher are created inside a detached `effectScope` that
+the plugin stops from `app.onUnmount`, so neither outlives the app that owns it.
+
+`createWindows()` builds one store per app and provides it under a symbol key; `useWindows()` is
+`inject` with a fallback to the most recently installed app so it also works outside `setup()`
+(route guards, services, event handlers in plain modules). Inside components the injected store
+always wins, so multiple app instances stay correct.
+
+## Focus
+
+Non-modal means **no focus trap**, deliberately. "No trap" is not the same choice as "no focus at
+all", though, which is where this started: opening a window now moves focus to its first tabbable
+element (falling back to the header, which is `tabindex="0"`), and closing one hands focus back to
+whatever had it when the window opened.
+
+Two ordering traps, both of which cost a debugging session and are now pinned by tests:
+
+- `dialog.show()` runs the UA's *dialog focusing steps*, which focus the first focusable element in
+  the whole dialog — the header, since it precedes the content. So the focus hook must be
+  registered **after** the `show()` hook, or the browser silently overwrites it. jsdom's `show()`
+  does not do this, so no jsdom test can catch it; it was found in a real browser.
+- An async component — the recommended way to register a window — has not rendered when the window
+  mounts, so there is nothing to focus yet. The header takes focus, and a `MutationObserver` hands
+  it on to the first tabbable element when the content lands, unless the user has moved focus in
+  the meantime.
+
+The opener is a DOM node, so it cannot live in the descriptor. `BaseWindow` captures
+`document.activeElement` in its own setup — before it can steal focus — which keeps the store free
+of DOM references entirely. A window restored from storage on page load does not take focus: it has
+no opener, and stealing focus on load is an accessibility problem rather than a feature.
+
+## What the library deliberately does not do
+
+No modal mode, no confirm/alert helpers, no data fetching, no staleness resolution, no cross-device
+sync, no tiling window management (docked rails, tab stacks, splitters), no design system. Edge
+snapping is the one exception, and it stays geometry-only. Minimize and restore are not announced
+to screen readers, because announcing them needs strings and the library ships none. See [recipes](./recipes.md) for the patterns that
+cover the gaps.
