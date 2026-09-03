@@ -6,9 +6,13 @@ import { RESIZE_DIRS, RESIZE_STYLES, useWindowResize } from './useWindowResize'
 import { useWindowFocus } from './useWindowFocus'
 import { provideWindowContext } from './useWindowContext'
 import { useViewport } from './useViewport'
-import type { WindowDescriptor } from './types'
+import type { WindowDescriptor, WindowVisualState } from './types'
 
-const props = defineProps<{ descriptor: WindowDescriptor }>()
+const props = defineProps<{
+  descriptor: WindowDescriptor
+  /** Driven by `WindowHost`; a frame mounted by hand is simply always `open`. */
+  state?: WindowVisualState
+}>()
 
 const win = useWindows()
 const options = useWindowOptions()
@@ -20,10 +24,13 @@ const d = props.descriptor
 
 /** Below the breakpoint a floating window is unusable: fullscreen, no drag or resize. */
 const mobile = computed(() => view.w < options.mobileBreakpoint)
-const interactive = () => !mobile.value
+const interactive = () => !mobile.value && !leaving.value
 const canDrag = () => interactive() && d.draggable
 const canResize = computed(() => interactive() && d.resizable)
 const active = computed(() => win.activeId.value === d.id)
+const visual = computed<WindowVisualState>(() => props.state ?? 'open')
+/** Retained for the animation only: the store has already let go, so nothing here may be clicked. */
+const leaving = computed(() => visual.value === 'leaving')
 
 provideWindowContext(d)
 useWindowDrag(handle, d, {
@@ -55,6 +62,30 @@ useWindowFocus(
   () => active.value && !win.isRestored(d.id),
 )
 
+/**
+ * Where a minimizing window is headed, as the offset from its own centre to the centre of its
+ * taskbar button plus the scale that would fit it there. Only a consumer who called
+ * `setTaskbarRect` gets these; without them the baseline sheet falls back to a plain fade, and a
+ * *closing* window never gets them at all — it has no button to fly to.
+ *
+ * Custom properties rather than a transform, because the frame's own `transform` is its position:
+ * the sheet animates the separate `translate`/`scale` properties, which compose with it instead of
+ * overwriting it.
+ */
+const minTo = computed(() => {
+  if (!leaving.value || !d.minimized) return null
+  const r = win.taskbarRect(d.id)
+  if (!r) return null
+  const w = mobile.value ? view.w : d.w
+  const cx = mobile.value ? view.w / 2 : d.x + d.w / 2
+  const cy = mobile.value ? view.h / 2 : d.y + d.h / 2
+  return {
+    '--vtd-min-x': `${Math.round(r.x + r.w / 2 - cx)}px`,
+    '--vtd-min-y': `${Math.round(r.y + r.h / 2 - cy)}px`,
+    '--vtd-min-scale': w > 0 ? String(Math.round((r.w / w) * 1000) / 1000) : '0',
+  }
+})
+
 // The UA stylesheet gives <dialog> position:absolute; margin:auto; inset:0 —
 // all three must be cleared or centering fights the transform.
 const style = computed(() => ({
@@ -74,6 +105,8 @@ const style = computed(() => ({
   transform: mobile.value ? 'none' : `translate(${d.x}px, ${d.y}px)`,
   maxWidth: '100vw',
   maxHeight: '100dvh',
+  pointerEvents: leaving.value ? ('none' as const) : undefined,
+  ...minTo.value,
 }))
 
 const headStyle = {
@@ -145,6 +178,11 @@ function onKeydown(e: KeyboardEvent) {
   onWindowKeydown(e, d, { view, bounds: options.bounds, enabled: interactive })
 }
 
+/** Raising a leaving window would ask the store about an id it has already forgotten. */
+function onPointerdown() {
+  if (!leaving.value) win.focus(d.id)
+}
+
 /** Double-click on the title bar toggles maximize, as it does on Windows. */
 function onHeadDblclick(e: MouseEvent) {
   if (!options.snap.enabled || !canDrag()) return
@@ -161,8 +199,9 @@ function onHeadDblclick(e: MouseEvent) {
     :aria-label="d.title || undefined"
     :data-vw-active="active || undefined"
     :data-vw-error="failure ? '' : undefined"
+    :data-vw-state="visual"
     @keydown.escape="onEscape"
-    @pointerdown="win.focus(d.id)"
+    @pointerdown="onPointerdown"
   >
     <header
       ref="handle"

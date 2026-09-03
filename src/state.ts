@@ -44,6 +44,14 @@ export function createStore(options: ResolvedOptions) {
   /** The drop target armed by the current drag, rendered as a ghost by WindowHost. */
   const preview = shallowRef<({ zone: SnapZone } & Rect) | null>(null)
   /**
+   * Where each window's taskbar button is, when the consumer chose to tell us — the only thing a
+   * minimize animation needs that the library cannot know, since the taskbar is the consumer's own
+   * markup. Runtime-only for the same reason as `docks`: a measured rect is stale the moment the
+   * page reflows, so it must never reach storage. Reactive because the button is usually measured
+   * after the window has already started leaving.
+   */
+  const taskbarRects = reactive(new Map<string, Rect>())
+  /**
    * Functions, so they can never be persisted — same placement rationale as `docks`. Guards come
    * from mounted content and die with it.
    */
@@ -129,6 +137,7 @@ export function createStore(options: ResolvedOptions) {
     s.stack = s.stack.filter((w) => w.id !== id)
     restoredIds.delete(id)
     docks.delete(id)
+    taskbarRects.delete(id)
     closeGuards.delete(id)
     emit('close', id)
   }
@@ -138,6 +147,7 @@ export function createStore(options: ResolvedOptions) {
     s.stack = []
     restoredIds.clear()
     docks.clear()
+    taskbarRects.clear()
     closeGuards.clear()
     for (const id of ids) emit('close', id)
   }
@@ -165,6 +175,28 @@ export function createStore(options: ResolvedOptions) {
 
   function taskbarTarget(): HTMLElement | null {
     return focusTarget
+  }
+
+  /**
+   * Records where a window's taskbar button is, so a minimizing window can be animated towards it.
+   * Opt-in, out of `WindowTaskbar`'s slot; a `DOMRect` is accepted as-is because that is what
+   * `getBoundingClientRect()` hands back. `null` forgets the button.
+   */
+  function setTaskbarRect(id: string, rect: DOMRectReadOnly | Rect | null): void {
+    if (!rect) {
+      taskbarRects.delete(id)
+      return
+    }
+    const r = 'width' in rect ? { x: rect.x, y: rect.y, w: rect.width, h: rect.height } : rect
+    const prev = taskbarRects.get(id)
+    // Consumers measure from a ref callback, which re-runs on every taskbar render: writing an
+    // unchanged rect would wake every effect reading it, several times per drag.
+    if (prev && prev.x === r.x && prev.y === r.y && prev.w === r.w && prev.h === r.h) return
+    taskbarRects.set(id, r)
+  }
+
+  function taskbarRect(id: string): Rect | null {
+    return taskbarRects.get(id) ?? null
   }
 
   /** Registered by mounted content; only consulted while that content is alive. */
@@ -334,6 +366,7 @@ export function createStore(options: ResolvedOptions) {
     s.topZ = Math.max(topZ, ...stack.map((w) => w.z), 10)
     restoredIds.clear()
     docks.clear()
+    taskbarRects.clear()
     closeGuards.clear()
     for (const w of stack) restoredIds.add(w.id)
   }
@@ -356,6 +389,8 @@ export function createStore(options: ResolvedOptions) {
     headerOf,
     registerFocusTarget,
     taskbarTarget,
+    setTaskbarRect,
+    taskbarRect,
     minimize,
     restore,
     focus,

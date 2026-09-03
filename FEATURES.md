@@ -298,7 +298,25 @@ resize are disabled — a floating window at that size is unusable.
   keep winning.
 - Stable hooks: `.vw`, `.vw__head`, `.vw__title`, `.vw__body`, `.vw__foot`, `.vw__btn`, `.vw__grip`,
   `.vw-ghost`,
-  `[data-vw-active]`, `[data-vw-zone]`, `[data-vw-grip]`, `[data-vw-nodrag]`.
+  `[data-vw-active]`, `[data-vw-zone]`, `[data-vw-grip]`, `[data-vw-nodrag]`, `[data-vw-state]`.
+
+---
+
+## Motion
+
+- **The library owns the state machine, the consumer owns the motion** —
+  `data-vw-state="entering" | "open" | "leaving"` on the `<dialog>`. `WindowHost` keeps a leaving
+  frame mounted so it can be animated out, then unmounts it.
+- **One property, no second API** — the retention is the computed value of
+  `--vtd-motion-duration` read off the window element, so a consumer override, a media query and
+  `prefers-reduced-motion: reduce` all work through it. Unreadable (no stylesheet, no DOM) means
+  `0ms` and instant removal; the retention is capped at 1000ms regardless.
+- **A minimized window's content is still unmounted immediately** — the frame lingers, never the
+  content. A closing window keeps its content while it fades.
+- **Fly to the taskbar, optionally** — `setTaskbarRect(id, rect)` from `WindowTaskbar`'s slot puts
+  `--vtd-min-x`, `--vtd-min-y` and `--vtd-min-scale` on a minimizing frame; without it, a plain
+  fade. Runtime-only, never persisted.
+- Baseline `style.css` ships a 180ms fade and scale, `0ms` under `prefers-reduced-motion`.
 
 ---
 

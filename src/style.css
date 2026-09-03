@@ -88,6 +88,48 @@
   }
 }
 
+/* Motion. `WindowHost` sets data-vw-state and reads --vtd-motion-duration off the window
+   element to know how long to keep a leaving frame mounted, so the duration is declared here
+   and nowhere else — set it to 0ms and windows appear and vanish in one frame again, as they
+   do with no stylesheet imported at all.
+
+   This is the one public property the file declares rather than only reads, because the host
+   has to be able to read a value back. `:where()` keeps it at zero specificity so a consumer
+   declaration on `:root`, a theme class or `<html>` still wins. */
+:where(:root) {
+  --vtd-motion-duration: 180ms;
+}
+
+/* Transitions rather than keyframes: the enter is the removal of the `entering` state on the
+   next frame, which is also what makes an interrupted leave animate back. `scale` and
+   `translate` are the separate properties on purpose — they compose with the inline
+   `transform` that positions the window instead of overwriting it. */
+.vw {
+  transition:
+    opacity var(--vtd-motion-duration, 0ms) ease,
+    scale var(--vtd-motion-duration, 0ms) ease,
+    translate var(--vtd-motion-duration, 0ms) ease;
+}
+
+.vw[data-vw-state='entering'] {
+  opacity: 0;
+  scale: 0.96;
+}
+
+/* A minimize towards a known taskbar button flies and shrinks; a close, or a minimize with no
+   button registered, has none of the three properties set and falls back to a plain fade. */
+.vw[data-vw-state='leaving'] {
+  opacity: 0;
+  translate: var(--vtd-min-x, 0) var(--vtd-min-y, 0);
+  scale: var(--vtd-min-scale, 0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(:root) {
+    --vtd-motion-duration: 0ms;
+  }
+}
+
 /* The active window: the attribute is the point — a consumer can target it however they like.
    These two properties default to the inactive values, so the baseline look is unchanged. */
 .vw[data-vw-active] {

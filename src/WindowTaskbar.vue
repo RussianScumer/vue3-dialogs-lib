@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, type ComponentPublicInstance } from 'vue'
 import { useWindows } from './createWindows'
+import type { Rect } from './types'
 
 // Renderless: the consumer owns the visual completely.
 const win = useWindows()
@@ -29,8 +30,28 @@ defineSlots<{
      * consulted on close — a closed window has no taskbar button left to focus.
      */
     registerFocusTarget: (el: Element | ComponentPublicInstance | null) => void
+    /**
+     * Tell the library where a window's button is, and a minimizing window can be animated towards
+     * it: the leaving frame gets `--vtd-min-x`, `--vtd-min-y` and `--vtd-min-scale`. Measure from a
+     * ref callback — `:ref="(el) => setTaskbarRect(w.id, el)"` — so the rect is re-taken whenever
+     * the taskbar re-renders. Optional; without it a minimize is a plain fade.
+     */
+    setTaskbarRect: (id: string, rect: DOMRectReadOnly | Rect | Element | ComponentPublicInstance | null) => void
   }): unknown
 }>()
+
+/**
+ * A rect, an element or a component instance are all accepted, because a ref callback hands back
+ * the element and measuring it is the only thing a consumer could do with it.
+ */
+function setTaskbarRect(
+  id: string,
+  rect: DOMRectReadOnly | Rect | Element | ComponentPublicInstance | null,
+): void {
+  const node = rect && '$el' in rect ? (rect.$el as unknown) : rect
+  if (node instanceof Element) return win.setTaskbarRect(id, node.getBoundingClientRect())
+  win.setTaskbarRect(id, (node as DOMRectReadOnly | Rect | null) ?? null)
+}
 
 // A template ref callback hands back the element on mount and `null` on unmount, which is exactly
 // the registration this needs — nothing to clean up here. Bound to a component rather than an
@@ -53,5 +74,6 @@ function registerFocusTarget(el: Element | ComponentPublicInstance | null): void
     :focus="win.focus"
     :minimize="win.minimize"
     :register-focus-target="registerFocusTarget"
+    :set-taskbar-rect="setTaskbarRect"
   />
 </template>

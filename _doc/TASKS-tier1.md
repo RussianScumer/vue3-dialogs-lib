@@ -326,7 +326,8 @@ Focus trapping (non-goal), `Alt+Tab`-style switching (that is §6).
 
 ## VW-05 — Window transitions and the leaving lifecycle
 
-**Roadmap:** §1 · **Size:** L · **Depends on:** VW-01, VW-04 · **Blocks:** VW-06
+**Roadmap:** §1 · **Size:** L · **Depends on:** VW-01, VW-04 · **Blocks:** VW-06 · **Status:** done on
+`vw-05-transitions`.
 
 ### Goal
 
@@ -378,6 +379,61 @@ Snap ghost animation, resize/drag inertia, spring physics.
 This is the riskiest task in the set. The failure mode is windows that never unmount, which looks
 like a memory leak in production and passes a naive test suite. The 50-window loop assertion is not
 optional.
+
+### Notes
+
+- **One `v-for`, not two.** `WindowHost` renders a single insertion-ordered map of frames rather
+  than `visible` plus a leaving list. Two `v-for`s would put the same key in two fragments, so a
+  window crossing from one to the other would be unmounted and remounted — which kills the
+  transition and remounts the content at the exact moment both are supposed to be leaving. Keeping
+  the map's insertion order is the other half of that: a leaving frame must not move in the DOM.
+- **The host holds the frame elements, not the store.** The duration is read off the window
+  element, so something has to hold it. `state.ts` already holds header elements with a narrow
+  justification (only the store can answer "which window is next"), and this question is the host's
+  own, so it stays in the host — one stable ref callback per id, memoized because Vue re-runs a
+  ref whose identity changed and an inline arrow is a new function on every desktop render.
+- **A closing window keeps its content; a minimizing one does not.** Both are the same `leaving`
+  state, and the difference is read off the descriptor rather than passed as a second prop:
+  `minimized` is true for the one and false for the other. That is also what keeps existing test 8
+  honest — "the content is really gone while minimized" would quietly have become "gone,
+  eventually".
+- **`prefers-reduced-motion` needs no code.** The baseline sheet collapses
+  `--vtd-motion-duration` to `0ms`, the host reads `0`, and the frame retires in the same watcher
+  tick — the same path as no stylesheet at all. The one deviation from `style.css`'s "read, never
+  declare" rule is that the sheet must *declare* `--vtd-motion-duration`, since the host reads a
+  value back; `:where(:root)` keeps it at zero specificity so a consumer override still wins.
+- **The sheet animates `translate`/`scale`, never `transform`.** `transform` is where the window
+  *is*. The separate properties compose with it, so the fly-to-taskbar animation cannot fight the
+  drag position.
+- **A hidden tab delivers no animation frame.** Measured, not assumed: `requestAnimationFrame` in
+  a backgrounded Chrome tab did not fire within 800ms, so `entering` released on rAF alone left
+  the window parked at `opacity: 0` until the tab was looked at again. With nothing painting there
+  is nothing to animate, so `settle()` releases the frame immediately when `document.hidden`. This
+  cost a real bug and has its own test.
+- **The retention cap is not the same thing as the duration.** 1000ms is a ceiling on how long a
+  frame may be held, so a consumer who writes `--vtd-motion-duration: 30s` gets a clipped
+  animation rather than a desktop full of dead windows.
+
+### Verification
+
+`npx vitest run` — 143 tests, 126 jsdom (14 new) and 17 browser (3 new). `npm run lint` and
+`npm run type-check` clean. Existing specs untouched.
+
+Both projects again, for the usual reason: jsdom has no cascade, so `transitions.spec.ts` stubs the
+computed duration and pins the machine — retention, adoption on restore, the 50-window loop,
+`closeAll` mid-transition, host unmount — while `transitions.browser.spec.ts` imports `style.css`
+and lets Chromium resolve `--vtd-motion-duration` through inheritance, which is the one claim a
+stub cannot make. The browser spec is also what proves the frame is really animating (`opacity`
+below 1 mid-leave) and that the inline `transform` survives the fly.
+
+Exercised by hand in the playground under Chrome, where §17's slider writes the duration onto
+`<html>`: states through `entering` → `open` → `leaving`, a closing frame retained with its
+content and a minimizing one retained without it, the fly-to properties computed from the real
+taskbar button's rect (`--vtd-min-x: -21px`, `--vtd-min-y: 550px`, `--vtd-min-scale: 0.253`), a
+window restored mid-leave adopting its own frame back, `closeAll()` mid-transition leaving zero
+`<dialog>` elements, and no console output. The automated Chrome tab is `hidden`, which is how the
+animation-frame bug above was found; the timing claims themselves are the browser spec's, since a
+hidden tab throttles the timers that would measure them.
 
 ---
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watchEffect } from 'vue'
 import { WindowHost, WindowTaskbar, useWindows, useWindowOptions } from '../src'
 import { log, useEventLog } from './eventLog'
 import ThemeControls from './ThemeControls.vue'
@@ -110,6 +110,19 @@ function unsnapAll() {
   for (const w of win.s.stack) win.snap(w.id, 'none', view)
   log('unsnapped every window')
 }
+
+/**
+ * The motion duration is one property on <html>, and the host reads it back off the window element
+ * — so this slider changes both the animation and how long the frame is retained, with no second
+ * API. `null` removes it and the baseline sheet's own 180ms comes back.
+ */
+const motionMs = ref<number | null>(null)
+
+watchEffect(() => {
+  const root = document.documentElement.style
+  if (motionMs.value === null) root.removeProperty('--vtd-motion-duration')
+  else root.setProperty('--vtd-motion-duration', `${motionMs.value}ms`)
+})
 
 function reload() {
   location.reload()
@@ -407,6 +420,35 @@ function clearStorage() {
         </section>
 
         <section>
+          <h2>17 · Transitions and where the window went</h2>
+          <p>
+            <code>data-vw-state</code> goes <code>entering</code> → <code>open</code> → <code>leaving</code> on the
+            <code>&lt;dialog&gt;</code>, and the host keeps a leaving frame mounted for exactly
+            <code>--vtd-motion-duration</code> before unmounting it — read off the window element, so this slider and
+            <code>prefers-reduced-motion</code> both work through the one property. Minimize a window and it flies to
+            its own taskbar button, because the taskbar below reports each button's rect with
+            <code>setTaskbarRect</code>; close one and it just fades, having no button to fly to. At
+            <code>0ms</code> windows appear and vanish in one frame, exactly as they do with no stylesheet imported.
+          </p>
+          <label class="motion">
+            <input
+              v-model.number="motionMs"
+              type="range"
+              min="0"
+              max="900"
+              step="20"
+            >
+            {{ motionMs === null ? 'stylesheet default (180ms)' : `${motionMs}ms` }}
+          </label>
+          <button
+            type="button"
+            @click="motionMs = null"
+          >
+            Back to the default
+          </button>
+        </section>
+
+        <section>
           <h2>16 · Small screens</h2>
           <p>
             Below {{ options.mobileBreakpoint }}px windows go fullscreen and drag/resize turn inert; the stored geometry
@@ -466,16 +508,19 @@ function clearStorage() {
     </template>
   </WindowHost>
 
-  <WindowTaskbar v-slot="{ all, active, restore, focus, requestClose, registerFocusTarget }">
+  <WindowTaskbar v-slot="{ all, active, restore, focus, requestClose, registerFocusTarget, setTaskbarRect }">
     <div
       :ref="registerFocusTarget"
       class="taskbar"
       tabindex="-1"
     >
       <span class="taskbar__label">Windows ({{ all.length }})</span>
+      <!-- The ref callback runs on every taskbar render, so the rect a minimizing window flies to
+           is always the current one — even after the buttons have reflowed. -->
       <button
         v-for="w in all"
         :key="w.id"
+        :ref="(el) => setTaskbarRect(w.id, el)"
         type="button"
         class="taskbar__item"
         :class="{ 'is-active': w.id === active, 'is-min': w.minimized }"
@@ -522,6 +567,7 @@ button { margin-right: 8px; margin-bottom: 4px; }
 .side tr.is-active td { font-weight: 600; }
 .taskbar__close { margin-left: 6px; opacity: 0.7; }
 /* Not scoped to the window's own DOM — the slot content belongs to this component. */
+.motion { display: inline-flex; align-items: center; gap: 8px; margin-right: 12px; font-size: 13px; }
 .winfoot { display: flex; justify-content: flex-end; gap: 8px; }
 .winfoot button { margin: 0; }
 </style>

@@ -34,4 +34,5 @@ export type {
   WindowProps,
   WindowSpec,
   WindowsOptions,
+  WindowVisualState,
 } from './types'

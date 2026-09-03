@@ -176,6 +176,13 @@ type ExtractProps<C> = C extends abstract new (...args: never[]) => { $props: in
 /** `windowId` is supplied by WindowHost, never by the caller. */
 export type WindowProps<E> = Omit<ExtractProps<ResolvedComponent<E>>, 'windowId'>
 
+/**
+ * Where a frame is in its visual life, exposed as `data-vw-state` on the `<dialog>`. `WindowHost`
+ * owns the machine — `entering` for the first frame after a window appears, `leaving` for as long as
+ * the frame is retained after the store has let go of it — and the consumer owns the motion.
+ */
+export type WindowVisualState = 'entering' | 'open' | 'leaving'
+
 /** Store transitions a consumer can subscribe to with `on()`. */
 export type WindowEventType = 'open' | 'close' | 'focus' | 'minimize' | 'restore' | 'geometry' | 'title'
 

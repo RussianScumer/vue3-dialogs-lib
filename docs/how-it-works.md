@@ -43,9 +43,9 @@ Nothing in it is a component reference, a fetched entity, or a function. That is
 | `state.ts` | The reactive store: the stack, `open`/`close`/`minimize`/`restore`/`focus`, dedupe, eviction, clamping. No DOM except the header registry focus hand-off needs. |
 | `createWindows.ts` | Plugin factory. Resolves options, creates one store per app, provides both, wires persistence. |
 | `options.ts` | Defaults, per-type async loading options, and memoized `resolve(name)` that turns loader functions into async components. |
-| `WindowHost.vue` | Renders one `BaseWindow` per **non-minimized** descriptor; re-clamps on viewport resize. |
-| `BaseWindow.vue` | The `<dialog>`: geometry, header, drag handle, ESC, focus-on-pointerdown, per-window context. |
-| `WindowTaskbar.vue` | Renderless. Exposes the minimized set to the consumer's own markup, and `registerFocusTarget` for opting into focus on minimize. |
+| `WindowHost.vue` | Renders one `BaseWindow` per **non-minimized** descriptor, holds a leaving frame for the motion duration, and re-clamps on viewport resize. |
+| `BaseWindow.vue` | The `<dialog>`: geometry, header, drag handle, ESC, focus-on-pointerdown, `data-vw-state`, per-window context. |
+| `WindowTaskbar.vue` | Renderless. Exposes the minimized set to the consumer's own markup, `registerFocusTarget` for opting into focus on minimize, and `setTaskbarRect` for opting into the fly-to-button animation. |
 | `useWindowDrag.ts` | Pointer-events drag + arrow-key move/resize, and the snap zone armed by a drag. |
 | `useWindowResize.ts` | The eight resize grips: pointer maths, size limits, and the edges that move `x`/`y`. |
 | `useWindowFocus.ts` | Focus into a window on open, and the destination chain — next window, taskbar, opener — when its frame unmounts. |
@@ -72,12 +72,13 @@ BaseWindow mounts → dialog.show()  (non-modal)
        │             content component mounts, gets `v-bind="props"` + `windowId`
        │
 minimize(id) → descriptor.minimized = true
-       │        → drops out of `visible` → BaseWindow and the content UNMOUNT
+       │        → drops out of `visible` → the content UNMOUNTS at once, the frame goes `leaving`
        │        → the descriptor (and its draft `state`) stays in the stack
        │
 restore(id)  → minimized = false, z = ++topZ → content mounts again, geometry unchanged
        │
 close(id)    → descriptor removed from the stack; everything about it is gone
+       │        → the frame goes `leaving`, with its content, until the motion duration elapses
 ```
 
 `close()` is unconditional and synchronous, so `closeAll()` on logout can never be blocked.
@@ -110,6 +111,62 @@ a ticking log viewer and the count drops to zero.
 
 The cost of that is the content cannot keep its form in local `ref`s. That is exactly what
 `useWindowState` exists for: the draft lives on the descriptor, which outlives the mount.
+
+## Motion
+
+The library owns the state machine; the consumer owns the motion. `WindowHost` puts one attribute
+on the `<dialog>` and nothing else:
+
+```
+data-vw-state="entering"   the first frame after the window appears
+                 "open"    from the next animation frame onwards
+              "leaving"    the store has let go; the frame has not yet
+```
+
+The store stays the truth. `close()` and `minimize()` are synchronous there — the descriptor is
+gone, or minimized, the instant they return — and the *host* is simply slower to let go of the
+frame:
+
+```
+close(id)    → out of the stack → frame goes `leaving`, content and all, retained for the duration
+minimize(id) → out of `visible` → frame goes `leaving`, content unmounted immediately
+restore(id)  → the leaving frame is adopted back, not duplicated, and animates in reverse
+```
+
+A minimized window's content is unmounted the moment it is minimized. The frame is what lingers,
+never the content — otherwise the headline claim would quietly become "unmounted, eventually".
+A closing window keeps its content while it fades, because a window that empties itself first reads
+as a bug rather than an animation.
+
+The duration is read from the computed value of `--vtd-motion-duration` **on the window element**,
+which is why there is no second API for it: a consumer override, a media query and
+`prefers-reduced-motion: reduce` (which the baseline sheet collapses to `0ms`) all arrive through
+the one property the sheet already declares. Unreadable — no stylesheet imported, or no DOM at all —
+means `0ms` and a frame that leaves in the same tick, exactly as it did before any of this existed.
+
+The failure mode worth naming is a frame that never retires: a leak that looks like a working
+animation and passes a naive test. Four things prevent it, and each has a test — the retention is
+capped at 1000ms whatever the stylesheet says, `close()` of an already-leaving window retires it at
+once, unmounting the host retires everything, and 50 open/close rounds must leave zero `<dialog>`
+elements behind. A leaving frame is also `pointer-events: none` and inert to drag, resize and arrow
+keys, since the store no longer knows the id it would be asked about.
+
+The one thing the library cannot know is where the window is *going*, because the taskbar is the
+consumer's markup. So it is offered, not assumed:
+
+```
+setTaskbarRect(id, rect)   from WindowTaskbar's slot, usually out of a button's ref callback
+  ↓
+taskbarRects: Map<id, Rect>              // runtime-only, beside `docks`
+  ↓
+--vtd-min-x / --vtd-min-y / --vtd-min-scale   on the leaving frame
+```
+
+The offsets are from the window's own centre to the button's centre, and they appear on a
+**minimizing** frame only — a closing window has no button to fly to, so the same baseline rule
+falls back to a plain fade for it. The sheet animates the separate `translate` and `scale`
+properties rather than `transform`, because `transform` is the window's position: the individual
+properties compose with it instead of overwriting it.
 
 ## Why non-modal
 
