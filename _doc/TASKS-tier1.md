@@ -1,4 +1,4 @@
-# Tier 1 tasks — VW-01 … VW-10
+# Tier 1 tasks — VW-01 … VW-12
 
 > Execution tasks for all of [ROADMAP-gaps.md](./ROADMAP-gaps.md) Tier 1, in build order.
 > One task per branch, one PR each. Read the roadmap section named in each task before starting;
@@ -515,6 +515,146 @@ Merging, CRDTs, `BroadcastChannel` live sync, server-backed sessions, leader ele
 
 ---
 
+## VW-11 — Fixed (always-on-top) windows
+
+**Roadmap:** Tier 2 "`alwaysOnTop`", promoted · **Size:** M · **Depends on:** VW-12 (see sequencing)
+
+### Goal
+
+A window pinned above every other window, that cannot be dragged, resized or snapped, and that the
+user can unpin from its own header. The Tier 2 sketch ("capability flag + a second `z` band above
+the normal one") moved forward, with one change: pin state is toggleable at runtime and therefore
+lives outside the descriptor.
+
+**Decision taken:** the pin flag is **runtime-only**, in a reactive map beside `docks`. `SCHEMA`
+does not move (constraint 1) and the descriptor gains no field (constraint 2). The cost is
+explicit and accepted: a pinned window comes back **unpinned** after a reload, exactly like a
+snapped window comes back undocked.
+
+A fixed window stays **closable and minimizable**. Only drag, resize and snap are off.
+
+### Do
+
+- `fixed?: boolean` on `WindowDefaults` in `src/types.ts`, so it works both as a `WindowSpec`
+  default and as an `open()` option, with the existing precedence: the `open()` call, then the
+  component's spec, then the library default (unset).
+- Runtime state in `createStore`, beside `docks` and carrying the same rationale comment:
+
+  ```ts
+  const pins = reactive(new Map<string, boolean>())
+  ```
+
+  **An entry means the window is pin-capable; the value means it is currently pinned.** A window
+  opened without `fixed` gets no entry, is not pin-capable, and renders exactly as it does today.
+  This is what keeps the existing suite passing — the "hides the controls a window does not have"
+  test asserts a window with no capabilities renders zero `.vw__btn`.
+- Store API: `isPinned(id)`, `isPinnable(id)`, `setPinned(id, boolean)`. No new `WindowEventType`:
+  the reactive map drives the view directly, and consumers that need to observe pinning already
+  have the store. Pinning calls `undock(id)` — an explicit pin outranks a snap, the same reasoning
+  the resize grip already uses.
+- Clear entries in `close()`, `closeAll()` and `hydrate()` at exactly the places `docks` is cleared.
+- Render band, in `BaseWindow.vue`'s `style` computed: a pinned window renders at
+  `zIndexBase + s.topZ + d.z`, an unpinned one at `zIndexBase + d.z` as today. Since `d.z` is
+  always positive, every pinned window outranks every unpinned one, and pinned windows keep their
+  relative order by `z`. `focus()`, `activeId` and everything persisted are untouched.
+- Inertness: `canDrag()` and `canResize` return false while pinned, `onHeadDblclick` returns early,
+  and the arrow-key path (`onWindowKeydown`, wired through `enabled: interactive`) goes with them.
+  One predicate used everywhere — do not introduce a second notion of "interactive".
+- Header control: a pin toggle in the default `controls` slot, rendered **after** the close button
+  and only when `isPinnable(id)`, marked `data-vw-nodrag`, with `:data-vw-pinned` for styling.
+  Appending after close is load-bearing: the existing tests index `.vw__btn` positionally.
+  Glyph in the style of the existing `–` / `✕`; no `aria-label` (constraint 4 — the accessible-name
+  gap is Tier 2's "Default control labels", not this task).
+- The snap ghost in `WindowHost.vue` keeps `z = topZ + 1`. A pinned window sits above it, which is
+  correct: nothing can be snapped onto a pinned window anyway.
+- Docs: `FEATURES.md`, `README.md` (options table plus a short section), `docs/how-it-works.md`
+  (the runtime-state list next to `docks`), and one pinned window in `playground/`.
+
+### Files
+
+`src/types.ts`, `src/state.ts`, `src/BaseWindow.vue`, `src/__tests__/`, `FEATURES.md`, `README.md`,
+`docs/how-it-works.md`, `playground/`
+
+### Done when
+
+- A window opened with `fixed: true` renders above a window that is focused after it, and stays
+  there across focus changes.
+- Its header does not drag, its grips are absent, arrow keys do not move it, and double-clicking
+  its header does nothing.
+- Its close and minimize controls still work, and it appears in the taskbar when minimized.
+- The pin button unpins: the window becomes draggable, resizable and snappable again and drops back
+  into the normal band. Pinning again re-pins and drops any snap.
+- A window opened without `fixed` renders no pin button and behaves exactly as before — assert the
+  `.vw__btn` count is unchanged.
+- The pin flag appears nowhere in the persisted blob, and a reload returns the window unpinned and
+  draggable. `persist.spec.ts` and `ssr.spec.ts` pass untouched.
+
+### Out of scope
+
+Per-window `zIndexBase`, pinning from the taskbar, a reserved screen region for pinned windows,
+"always on top of *these* windows" partial ordering.
+
+---
+
+## VW-12 — Undock on drag, not on click
+
+**Roadmap:** none — reported bug · **Size:** S · **Depends on:** nothing
+
+### Goal
+
+A single click on a maximized window's header must not restore it. Only a double-click toggles
+maximize, in both directions; a drag still undocks as it does today.
+
+### Root cause
+
+`onDown` in `src/useWindowDrag.ts` calls `options.onUndock?.(e.clientX)` on `pointerdown`, before
+any pointer movement. `BaseWindow.vue` wires that to `win.undockForDrag(d.id, …)`, which restores
+the pre-snap geometry and deletes the dock entry. Two consequences:
+
+- a plain click on the header of a maximized window un-maximizes it;
+- a real double-click un-maximizes on the first `pointerdown`, so by the time `onHeadDblclick`
+  runs, `dockZone(id)` is already `null` and it snaps to `'max'` again. Double-click can maximize
+  but can never restore.
+
+The existing "double-clicking the header maximizes, again restores" test passes only because
+`trigger('dblclick')` fires no `pointerdown`, so the suite is blind to this.
+
+### Do
+
+- Move the `onUndock` call out of `onDown` and into `onMove`, behind a drag threshold — 4px of
+  pointer slop, as a named constant next to `STEP`. It fires at most once per drag.
+- On crossing the threshold, call `onUndock(e.clientX)` and then re-seed `start` from the window's
+  new geometry and the current pointer position, so the window does not jump twice: the
+  pointer-relative header offset that `undockForDrag` establishes must survive the `onMove` that
+  performs it.
+- `onDown` keeps `preventDefault()`, `onStart` (focus) and pointer capture. Raising a window on
+  click is correct and must not regress.
+- Leave `onHeadDblclick` alone. Once the click no longer undocks, `dockZone(id) === 'max'` still
+  holds on the second click and the existing toggle restores correctly.
+
+### Files
+
+`src/useWindowDrag.ts`, `src/__tests__/host.spec.ts`, `docs/how-it-works.md` (the drag line in the
+lifecycle list)
+
+### Done when
+
+- A test using real pointer events (the `pointer()` helper already in `host.spec.ts`):
+  `pointerdown` then `pointerup` on the header of a maximized window, with no movement, leaves
+  `dockZone(id) === 'max'` and the geometry unchanged.
+- A second test covers the reported flow end to end: `pointerdown`, `pointerup`, then `dblclick`
+  restores the pre-snap geometry and leaves `dockZone(id)` null.
+- A drag beyond the threshold off a maximized window still restores the floating size under the
+  pointer; the `undockForDrag` unit tests in `state.spec.ts` stay untouched.
+- Sub-threshold jitter during a click does not undock.
+- The existing drag and snap tests pass untouched.
+
+### Out of scope
+
+Changing what double-click does, persisting snap zones, drag inertia.
+
+---
+
 ## Suggested sequencing for the agent
 
 ```
@@ -522,6 +662,7 @@ VW-01 ─┬─ VW-04 ── VW-05 ── VW-06 ── VW-07 ── VW-08
        │                                │
 VW-02 ─┤                                └─ (VW-09 after VW-04)
 VW-03 ─┘
+VW-12 ── VW-11   independent of the spine
 VW-10  independent, land last
 ```
 
@@ -530,6 +671,9 @@ Strictly serial through the spine: **VW-01 → VW-04 → VW-05 → VW-06 → VW-
 - **VW-02 and VW-03** touch nothing the spine touches and can run in parallel from the start.
 - **VW-09** only needs VW-04; it can run in parallel with VW-05/VW-06 if you have capacity.
 - **VW-10** is isolated in `persist.ts`. Land it last so it rebases onto a settled descriptor.
+- **VW-12 then VW-11** touch nothing the spine touches and can run in parallel from the start.
+  VW-12 goes first: VW-11's "double-click does nothing while pinned" assertion is only trustworthy
+  once the double-click path itself is correct.
 - **VW-05 and VW-06 must not be parallelised** — VW-06's `closing` flag has nothing to attach to
   without VW-05's leaving lifecycle.
 - **VW-08 goes last on the spine on purpose.** It is the only breaking change in the set, and
