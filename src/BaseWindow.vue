@@ -84,7 +84,11 @@ const headStyle = {
   userSelect: 'none',
 } as const
 
+// The three rows the frame is made of: header and footer are intrinsic and never shrink, the body
+// takes the rest and is the only part that scrolls. `minHeight: 0` is what lets it shrink below its
+// content when the user resizes the frame down, instead of pushing the footer out of the window.
 const bodyStyle = { flex: '1 1 auto', minHeight: '0', overflow: 'auto' } as const
+const footStyle = { flex: '0 0 auto' } as const
 
 function handleStyle(dir: (typeof RESIZE_DIRS)[number]) {
   return { position: 'absolute' as const, touchAction: 'none', ...RESIZE_STYLES[dir] }
@@ -189,6 +193,16 @@ function onHeadDblclick(e: MouseEvent) {
     >
       <slot />
     </section>
+    <footer
+      v-if="$slots.footer"
+      class="vw__foot"
+      :style="footStyle"
+    >
+      <slot
+        name="footer"
+        :descriptor="d"
+      />
+    </footer>
     <div
       v-for="dir in canResize ? RESIZE_DIRS : []"
       :key="dir"

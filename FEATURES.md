@@ -177,8 +177,8 @@ satisfies `StorageLike` — `localStorage`, `sessionStorage`, or your own adapte
 ### `WindowHost`
 
 Mounted once, above the router outlet. Renders every non-minimized window, resolves each
-descriptor's component by name, and draws the snap ghost. Forwards `header` and `controls` slots
-through to each window.
+descriptor's component by name, and draws the snap ghost. Forwards `header`, `controls` and
+`footer` slots through to each window.
 
 ### `BaseWindow`
 
@@ -188,8 +188,13 @@ the taskbar clickable.
 - Clears the UA `position: absolute; margin: auto; inset: 0` so `transform`-based positioning works.
 - `zIndexBase` is added to every window's `z` at render time, to clear an app's own stacking
   contexts.
-- `header` and `controls` slots, each receiving the descriptor; default controls are minimize and
-  close, shown per the window's capability flags.
+- `header`, `controls` and `footer` slots, each receiving the descriptor; default controls are
+  minimize and close, shown per the window's capability flags.
+- **Three rows: header, body, footer.** The header and the footer are intrinsic and never shrink;
+  `.vw__body` takes the rest and is the only part that scrolls (`overflow: auto` inline, so it
+  holds with no stylesheet imported). Resizing the frame smaller gives up scroll area, never the
+  footer. The `footer` slot is optional — unused, no `.vw__foot` element is rendered and the body
+  keeps the full height.
 - **ESC minimizes** through a `keydown` listener on the window element. There is no `cancel`
   handler: `cancel` and ESC-to-close are `showModal()` behaviour, and a `.show()` dialog never
   receives them — asserted in a real browser by `src/__tests__/esc.browser.spec.ts`. ESC stands
@@ -264,7 +269,8 @@ resize are disabled — a floating window at that size is unusable.
   class, or inline on `<html>` wins by inheritance with no selector to out-specify.
 - **Dark mode defaults** under `prefers-color-scheme: dark`, still as fallbacks, so consumer values
   keep winning.
-- Stable hooks: `.vw`, `.vw__head`, `.vw__title`, `.vw__body`, `.vw__btn`, `.vw__grip`, `.vw-ghost`,
+- Stable hooks: `.vw`, `.vw__head`, `.vw__title`, `.vw__body`, `.vw__foot`, `.vw__btn`, `.vw__grip`,
+  `.vw-ghost`,
   `[data-vw-active]`, `[data-vw-zone]`, `[data-vw-grip]`, `[data-vw-nodrag]`.
 
 ---

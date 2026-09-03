@@ -73,6 +73,11 @@ function openPopper() {
   win.open('popperDemo', {}, { w: 420, h: 280 })
 }
 
+/** Content far taller than the frame, to show the body scrolling under a pinned header and footer. */
+function openLongDoc() {
+  win.open('longDoc', {}, { w: 460, h: 320 })
+}
+
 function floodMaxWindows() {
   log(`opening ${options.maxWindows + 2} windows against maxWindows=${options.maxWindows}`)
   for (let i = 0; i < options.maxWindows + 2; i++) win.open('logViewer', { source: `flood-${i}` }, { w: 300, h: 200 })
@@ -340,6 +345,22 @@ function clearStorage() {
         </section>
 
         <section>
+          <h2>16 · Body scroll and a sticky footer</h2>
+          <p>
+            <code>.vw__body</code> scrolls; the header and the <code>footer</code> slot around it do not. The footer
+            here is the host's <code>footer</code> slot, so it applies to every window and receives the descriptor —
+            that is how its buttons know whether this window can be minimized or closed. Shrink the window from a grip
+            and the scroll area gives way, never the footer.
+          </p>
+          <button
+            type="button"
+            @click="openLongDoc"
+          >
+            Open long document
+          </button>
+        </section>
+
+        <section>
           <h2>15 · Small screens</h2>
           <p>
             Below {{ options.mobileBreakpoint }}px windows go fullscreen and drag/resize turn inert; the stored geometry
@@ -378,7 +399,26 @@ function clearStorage() {
     </div>
   </main>
 
-  <WindowHost />
+  <WindowHost>
+    <template #footer="{ descriptor }">
+      <div class="winfoot">
+        <button
+          type="button"
+          :disabled="!descriptor.minimizable"
+          @click="win.minimize(descriptor.id)"
+        >
+          Minimize
+        </button>
+        <button
+          type="button"
+          :disabled="!descriptor.closable"
+          @click="win.requestClose(descriptor.id)"
+        >
+          Close
+        </button>
+      </div>
+    </template>
+  </WindowHost>
 
   <WindowTaskbar v-slot="{ all, active, restore, focus, requestClose }">
     <div class="taskbar">
@@ -431,4 +471,7 @@ button { margin-right: 8px; margin-bottom: 4px; }
 .taskbar__item.is-active { opacity: 1; outline: 2px solid #60a5fa; }
 .side tr.is-active td { font-weight: 600; }
 .taskbar__close { margin-left: 6px; opacity: 0.7; }
+/* Not scoped to the window's own DOM — the slot content belongs to this component. */
+.winfoot { display: flex; justify-content: flex-end; gap: 8px; }
+.winfoot button { margin: 0; }
 </style>

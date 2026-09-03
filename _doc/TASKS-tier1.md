@@ -105,3 +105,61 @@ Two things the browser spec cannot prove, and does not pretend to: a native pick
 opened by driven input, so the picker assertion is on the element type; and the picker guard's own
 justification is pinned by a separate test asserting `defaultPrevented === false`, which will fail
 loudly if Chromium ever starts marking that keydown handled — at which point the guard can go.
+
+---
+
+## VW-02 — Body scroll and sticky footer
+
+**Roadmap:** §5 · **Size:** S · **Blocks:** nothing (but unblocks realistic demo content) · **Status:** done on `vw-02-body-scroll-footer`.
+
+### Goal
+
+A window has a fixed `h` the user can shrink. Content taller than the frame currently escapes it
+and takes the action buttons with it.
+
+### Do
+
+- `overflow: auto` on `.vw__body` — in the **inline structural styles**, not `style.css`, since the
+  library must be functional without the sheet (global constraint 7). This is structure, not
+  cosmetics.
+- Add `.vw__foot` as a stable class hook: an optional `footer` slot on `BaseWindow`, rendered after
+  `.vw__body`, that does not scroll. The window becomes a three-row grid
+  (`auto` / `1fr` / `auto`) so header and footer are pinned and only the body scrolls.
+- Footer renders nothing and occupies no space when the slot is unused.
+- Baseline `style.css`: separator border and padding for `.vw__foot`, cosmetics only.
+- `playground/`: one window with long content and a footer with two buttons.
+
+### Files
+
+`src/BaseWindow.vue`, `style.css`, `playground/`, `FEATURES.md`, `docs/recipes.md`
+
+### Done when
+
+- Content 3× the window height scrolls inside `.vw__body`; header and footer stay put.
+- Resizing the window smaller keeps the footer visible and shrinks the scroll area.
+- A window with no `footer` slot renders identical DOM height to before this change.
+- Works with `style.css` not imported.
+
+### Out of scope
+
+Scroll shadows, overscroll behaviour, virtualisation.
+
+### Notes
+
+- `.vw__body` already carried `overflow: auto` and `flex: 1 1 auto; min-height: 0` inline, so the
+  scroll half of this task was in place; the change is the footer row, its class hook and the docs.
+- The frame stays a flex column rather than becoming a grid — header `0 0 auto`, body `1 1 auto`
+  with `min-height: 0`, footer `0 0 auto` is the same `auto / 1fr / auto` behaviour with no
+  restructuring of the existing header and body styles.
+- The `footer` slot is host-level, like `header` and `controls`: it applies to every window and
+  receives the descriptor, so a consumer branches on `descriptor.name` for a per-type footer.
+- Measured in `src/__tests__/layout.browser.spec.ts`, not jsdom: `clientHeight`, `scrollHeight` and
+  `getBoundingClientRect()` are all zero there. The spec runs with no stylesheet imported, and
+  with `mobileBreakpoint: 0` because the test browser is narrower than the 768px default and a
+  mobile window is fullscreen — a different layout question.
+- The footer-bottom assertion is against the dialog's `clientHeight`, not its outer rect: the UA
+  gives `<dialog>` a 3px border that the library does not clear.
+
+### Verification
+
+`npx vitest run` — 109 tests, 99 jsdom and 10 browser (3 new). Existing specs untouched.

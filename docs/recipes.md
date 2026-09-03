@@ -203,9 +203,9 @@ marked — use `all` and `active` instead:
 
 `requestClose` runs the guards; `close` does not.
 
-## 8 · Custom header and control buttons
+## 8 · Custom header, control buttons and a footer
 
-The library ships no strings, so labels and `aria-label`s are yours. Both slots pass the
+The library ships no strings, so labels and `aria-label`s are yours. All three slots pass the
 descriptor and apply to every window:
 
 ```vue
@@ -227,12 +227,33 @@ const win = useWindows()
     <button aria-label="Minimize window" @click="win.minimize(descriptor.id)">–</button>
     <button aria-label="Close window" @click="win.close(descriptor.id)">✕</button>
   </template>
+
+  <template #footer="{ descriptor }">
+    <button @click="win.requestClose(descriptor.id)">Cancel</button>
+    <button @click="save(descriptor)">Save</button>
+  </template>
 </WindowHost>
 </template>
 ```
 
 `data-vw-nodrag` on any element in the header stops it from starting a drag, so inputs and buttons
 behave normally.
+
+The footer is the sticky row under the body: a window is `header / body / footer`, and `.vw__body`
+is the only part that scrolls. Content taller than the frame therefore stays inside the frame, and
+shrinking the window with a resize grip eats into the scroll area rather than pushing the buttons
+out of view. The slot is per-window in content but global in markup, so branch on the descriptor
+when only some windows should have one:
+
+```vue
+<template #footer="{ descriptor }">
+  <template v-if="descriptor.name === 'itemEditor'">…</template>
+</template>
+```
+
+Leave the slot off entirely and no `.vw__foot` element is rendered at all — the body keeps the full
+height of the frame. The baseline stylesheet gives `.vw__foot` a top border and `--vtd-foot-pad` of
+padding; both are cosmetics, the pinning is inline.
 
 ## 9 · Restyle it
 
@@ -253,6 +274,7 @@ level above the windows — nothing in the library declares them on `.vw`, so no
   --vtd-head-fg: #fff;
   --vtd-head-pad: 6px 8px;
   --vtd-body-pad: 12px;
+  --vtd-foot-pad: 8px 12px;
   --vtd-btn-hover-bg: rgba(255, 255, 255, 0.2);
 }
 

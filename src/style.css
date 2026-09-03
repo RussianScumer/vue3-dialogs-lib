@@ -19,6 +19,7 @@
   --_vtd-head-fg: var(--vtd-head-fg, inherit);
   --_vtd-head-pad: var(--vtd-head-pad, 6px 8px);
   --_vtd-body-pad: var(--vtd-body-pad, 12px);
+  --_vtd-foot-pad: var(--vtd-foot-pad, 8px 12px);
   --_vtd-btn-hover-bg: var(--vtd-btn-hover-bg, rgba(0, 0, 0, 0.08));
 
   font-family: var(--_vtd-font);
@@ -45,6 +46,12 @@
 
 .vw__body {
   padding: var(--_vtd-body-pad);
+}
+
+/* Pinned by BaseWindow's inline layout; this is the separator and padding only. */
+.vw__foot {
+  padding: var(--_vtd-foot-pad);
+  border-top: var(--_vtd-border);
 }
 
 .vw__btn {

@@ -55,6 +55,15 @@ const ghostStyle = computed(() => {
         v-bind="slotProps"
       />
     </template>
+    <template
+      v-if="$slots.footer"
+      #footer="slotProps"
+    >
+      <slot
+        name="footer"
+        v-bind="slotProps"
+      />
+    </template>
     <component
       :is="options.resolve(w.name)"
       v-bind="w.props"

@@ -281,7 +281,8 @@ The ghost is a `.vw-ghost` element styled through `--vtd-ghost-bg`, `--vtd-ghost
 `style.css` is cosmetics only — layout and positioning are inline, so windows work without it.
 Restyle through the `--vtd-*` custom properties: `--vtd-font`, `--vtd-font-size`, `--vtd-radius`,
 `--vtd-border`, `--vtd-shadow`, `--vtd-bg`, `--vtd-fg`, `--vtd-accent`, `--vtd-head-bg`,
-`--vtd-head-fg`, `--vtd-head-pad`, `--vtd-body-pad`, `--vtd-btn-hover-bg`, `--vtd-ghost-bg`,
+`--vtd-head-fg`, `--vtd-head-pad`, `--vtd-body-pad`, `--vtd-foot-pad`, `--vtd-btn-hover-bg`,
+`--vtd-ghost-bg`,
 `--vtd-ghost-outline`, `--vtd-ghost-radius`.
 
 The stylesheet reads these properties and never declares them, so set them wherever it suits —
@@ -297,6 +298,10 @@ leaving the baseline look unchanged. Resize grips are `.vw__grip` elements carry
 
 The library ships no strings: header button labels and their `aria-label`s come from the
 `controls` slot on `WindowHost`/`BaseWindow`.
+
+A window is three rows: header, body, footer. `.vw__body` is the only one that scrolls, so content
+taller than the frame stays inside it and the action buttons in the optional `footer` slot stay
+reachable while the user resizes the window down.
 
 ## Known limitations
 

@@ -20,6 +20,7 @@ createApp(App)
           maxH: 520,
         },
         popperDemo: () => import('./windows/PopperDemo.vue'),
+        longDoc: () => import('./windows/LongDoc.vue'),
       },
       persist: { key: 'playground:windows', storage: localStorage },
       maxWindows: 8,
