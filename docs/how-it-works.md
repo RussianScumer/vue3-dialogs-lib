@@ -42,7 +42,7 @@ Nothing in it is a component reference, a fetched entity, or a function. That is
 |---|---|
 | `state.ts` | The reactive store: the stack, `open`/`close`/`minimize`/`restore`/`focus`, dedupe, eviction, clamping. No DOM. |
 | `createWindows.ts` | Plugin factory. Resolves options, creates one store per app, provides both, wires persistence. |
-| `options.ts` | Defaults, and memoized `resolve(name)` that turns loader functions into async components. |
+| `options.ts` | Defaults, per-type async loading options, and memoized `resolve(name)` that turns loader functions into async components. |
 | `WindowHost.vue` | Renders one `BaseWindow` per **non-minimized** descriptor; re-clamps on viewport resize. |
 | `BaseWindow.vue` | The `<dialog>`: geometry, header, drag handle, ESC, focus-on-pointerdown, per-window context. |
 | `WindowTaskbar.vue` | Renderless. Exposes the minimized set to the consumer's own markup. |
@@ -230,6 +230,21 @@ The opener is a DOM node, so it cannot live in the descriptor. `BaseWindow` capt
 `document.activeElement` in its own setup — before it can steal focus — which keeps the store free
 of DOM references entirely. A window restored from storage on page load does not take focus: it has
 no opener, and stealing focus on load is an accessibility problem rather than a feature.
+
+## Failure containment
+
+Windows are siblings in one `v-for` in `WindowHost`. Left alone, an error thrown by one window's
+content propagates up through that `v-for` while the host is patching and takes the whole desktop
+with it — every other window unmounts because one of them was broken. For a window manager that is
+the wrong trade in every case, so `BaseWindow` registers `onErrorCaptured`, renders the type's
+`errorComponent` in its own body instead of the content, and returns `false` to stop the error
+there.
+
+The cost of stopping it is that `app.config.errorHandler` never sees it; the error is passed to the
+error component as a prop instead, which is the place a consumer reports it from. The same
+component is what `defineAsyncComponent` renders when the chunk itself fails, so "the code never
+arrived" and "the code arrived and threw" look identical to the user — the difference is not one
+they can act on.
 
 ## What the library deliberately does not do
 

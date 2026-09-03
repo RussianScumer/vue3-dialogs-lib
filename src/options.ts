@@ -1,7 +1,17 @@
 import { defineAsyncComponent, type Component } from 'vue'
-import type { ResolvedOptions, WindowDefaults, WindowEntry, WindowSpec, WindowsOptions } from './types'
+import type {
+  AsyncWindowOptions,
+  ResolvedOptions,
+  WindowDefaults,
+  WindowEntry,
+  WindowSpec,
+  WindowsOptions,
+} from './types'
 
 const NO_DEFAULTS: WindowDefaults = Object.freeze({})
+
+/** Keys of `AsyncWindowOptions`: they configure loading, not the window, so they are split off. */
+const ASYNC_KEYS = ['loadingComponent', 'errorComponent', 'delay', 'timeout'] as const
 
 /** A spec is the only entry shape that is an object carrying a `component`. */
 function isSpec(entry: WindowEntry): entry is WindowSpec {
@@ -12,14 +22,29 @@ export function resolveOptions(options: WindowsOptions): ResolvedOptions {
   const components = options.components ?? {}
   const cache = new Map<string, Component>()
   const insets = options.snap?.insets
+  const globalAsync: AsyncWindowOptions = options.async ?? {}
 
-  // Stripped once at install, so open() and hydration both read a plain defaults object.
+  // Stripped once at install, so open() and hydration both read a plain defaults object, and the
+  // async keys never travel towards the descriptor.
   const defaults: Record<string, WindowDefaults> = {}
+  const asyncOptions: Record<string, AsyncWindowOptions> = {}
   for (const [name, entry] of Object.entries(components)) {
     if (!isSpec(entry)) continue
     const { component, ...rest } = entry
     void component
+    const async: AsyncWindowOptions = {}
+    for (const key of ASYNC_KEYS) {
+      if (rest[key] === undefined) continue
+      Object.assign(async, { [key]: rest[key] })
+      delete rest[key]
+    }
     defaults[name] = rest
+    asyncOptions[name] = async
+  }
+
+  /** Per-type over app-wide, key by key: a spec that sets only `timeout` keeps the global spinner. */
+  function asyncFor(name: string): AsyncWindowOptions {
+    return { ...globalAsync, ...asyncOptions[name] }
   }
 
   return {
@@ -53,7 +78,7 @@ export function resolveOptions(options: WindowsOptions): ResolvedOptions {
       // in defineComponent so they carry component options.
       const resolved =
         typeof source === 'function' && !('render' in source) && !('setup' in source)
-          ? defineAsyncComponent(source as () => Promise<Component>)
+          ? defineAsyncComponent({ loader: source as () => Promise<Component>, ...asyncFor(name) })
           : (source as Component)
 
       cache.set(name, resolved)
@@ -61,6 +86,9 @@ export function resolveOptions(options: WindowsOptions): ResolvedOptions {
     },
     defaultsFor(name) {
       return defaults[name] ?? NO_DEFAULTS
+    },
+    errorComponentFor(name) {
+      return asyncFor(name).errorComponent ?? null
     },
   }
 }

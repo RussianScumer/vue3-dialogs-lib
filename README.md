@@ -39,11 +39,18 @@ app.use(createWindows({
   mobileBreakpoint: 768,                 // below this: fullscreen, no drag/resize
   zIndexBase: 0,                         // added to every window's z, to clear your own overlays
   beforeClose: (d) => confirm(`Close ${d.title}?`), // consulted by requestClose(), see below
+  async: {                               // fallback loading/error states for every window type
+    loadingComponent: WindowLoading,     // per-type overrides live on the component's spec
+    errorComponent: WindowError,         // also used when a window's content throws
+  },
 }))
 ```
 
 A bare function in `components` is treated as an async loader. A plain functional component must
-be wrapped in `defineComponent` so it carries component options.
+be wrapped in `defineComponent` so it carries component options. `loadingComponent`,
+`errorComponent`, `delay` and `timeout` can also be set per type on a `WindowSpec`; a window whose
+content throws renders the same `errorComponent` inside its own frame and leaves every other window
+alone.
 
 Mount the host once, above the router outlet:
 

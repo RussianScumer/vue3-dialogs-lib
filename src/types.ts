@@ -126,8 +126,27 @@ export interface PersistOptions {
 /** A component, or a loader function returning one (`() => import('./X.vue')`). */
 export type WindowComponent = Component | (() => Promise<Component | { default: Component }>)
 
+/**
+ * How a window's component loads and how it fails. Per-type on `WindowSpec`, app-wide under
+ * `async` in the options; the per-type value wins key by key. These describe the component, not the
+ * window, so they are not accepted per `open()` call and never reach the descriptor.
+ */
+export interface AsyncWindowOptions {
+  /** Rendered while a loader is in flight, once `delay` has elapsed. */
+  loadingComponent?: Component
+  /**
+   * Rendered when the loader rejects or times out, and — via `BaseWindow`'s `onErrorCaptured` —
+   * when the content itself throws. Receives the error as an `error` prop in both cases.
+   */
+  errorComponent?: Component
+  /** Ms before `loadingComponent` appears. Vue's default is 200. */
+  delay?: number
+  /** Ms after which a pending load counts as failed. Unset means no timeout. */
+  timeout?: number
+}
+
 /** A component plus the defaults every window of that type should open with. */
-export interface WindowSpec extends WindowDefaults {
+export interface WindowSpec extends WindowDefaults, AsyncWindowOptions {
   component: WindowComponent
 }
 
@@ -179,6 +198,8 @@ export interface WindowsOptions {
   zIndexBase?: number
   /** Consulted by `requestClose()` for every window, including minimized ones. */
   beforeClose?: BeforeCloseGuard
+  /** Fallback loading/error handling for every window that does not set its own. */
+  async?: AsyncWindowOptions
 }
 
 export interface ResolvedOptions {
@@ -194,4 +215,10 @@ export interface ResolvedOptions {
   resolve(name: string): Component
   /** The `WindowSpec` defaults for a name, or an empty object. */
   defaultsFor(name: string): WindowDefaults
+  /**
+   * The error component for a name — per-type, else app-wide, else null. `BaseWindow` reads it for
+   * a content component that threw; `resolve()` has already handed the same one to
+   * `defineAsyncComponent` for a loader that failed.
+   */
+  errorComponentFor(name: string): Component | null
 }

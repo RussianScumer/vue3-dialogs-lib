@@ -163,3 +163,68 @@ Scroll shadows, overscroll behaviour, virtualisation.
 ### Verification
 
 `npx vitest run` — 109 tests, 99 jsdom and 10 browser (3 new). Existing specs untouched.
+
+---
+
+## VW-03 — Async loading and error states
+
+**Roadmap:** §7 · **Size:** S · **Blocks:** nothing · **Status:** done on `vw-03-async-error-states`.
+
+### Goal
+
+A window's component is a chunk. Today a slow one is an empty frame with a title, a failed one is
+the same empty frame forever, and a component that throws on mount takes `WindowHost` — and every
+other open window — down with it.
+
+### Do
+
+- `loadingComponent` / `errorComponent` / `delay` / `timeout` accepted per component on
+  `WindowSpec`, and app-wide as `createWindows({ async })`, per-type winning key by key. Passed
+  straight to `defineAsyncComponent` in `options.resolve()`.
+- These configure the component, not the window: not accepted in `OpenOptions`, stripped from the
+  spec before it becomes `defaultsFor(name)`, never on the descriptor (global constraint 2).
+- `onErrorCaptured` in `BaseWindow`: the body renders the type's `errorComponent` with the error as
+  an `error` prop, the frame keeps its header and controls, and the error does not propagate.
+- `data-vw-error` on the `<dialog>` so the state is styleable without the library shipping a string.
+- `playground/`: a slow chunk, a chunk that never arrives, and a component that throws on mount.
+
+### Files
+
+`src/types.ts`, `src/options.ts`, `src/BaseWindow.vue`, `src/__tests__/async.spec.ts` (new),
+`playground/`, `FEATURES.md`, `README.md`, `docs/recipes.md`, `docs/how-it-works.md`
+
+### Done when
+
+- A pending loader renders `loadingComponent`; the content replaces it when the loader settles.
+- A rejecting loader, and a loader that outlives `timeout`, both render `errorComponent` with the
+  error.
+- A content component that throws on mount renders the error state inside its own frame while every
+  other window keeps rendering — roadmap verification 21.
+- A throwing type with no `errorComponent` is an empty body and a still-closable window.
+- The async keys reach neither `defaultsFor()` nor the descriptor.
+
+### Out of scope
+
+Retry UI, a default error component, error events on the store, `Suspense`.
+
+### Notes
+
+- **The error must not propagate.** Returning nothing from `onErrorCaptured` was tried first, to
+  keep `app.config.errorHandler` and Vue's own logging in the loop. It fails the headline
+  requirement: an error thrown in a content component's `setup` reaches `WindowHost` mid-patch and
+  aborts the whole `v-for`, so the measured result was one dialog rendered instead of two. The hook
+  returns `false`, and the error is delivered to the error component as a prop instead — that is
+  the consumer's reporting hook.
+- The same `errorComponent` covers both failures — a chunk that never arrived, and a chunk that
+  arrived and threw — because the difference is not one the user can act on. `errorComponentFor()`
+  is on `ResolvedOptions` for exactly this: `BaseWindow` reads what `resolve()` already handed to
+  `defineAsyncComponent`.
+- With no `errorComponent` registered the body is empty rather than carrying library text, per
+  global constraint 4. `data-vw-error` is the hook that makes that state addressable.
+- jsdom, not browser mode: nothing here is measured against the UA. The specs mount several apps in
+  one file, so they read the store out of the mounted app rather than through `useWindows()`'s
+  module-level fallback, which only ever points at one of them.
+
+### Verification
+
+`npx vitest run` — 116 tests, 106 jsdom (7 new) and 10 browser. Existing specs untouched.

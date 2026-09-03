@@ -488,3 +488,53 @@ const off = win.on('*', (e) => analytics.track(`window:${e.type}`, { id: e.id })
 Events cover store transitions only. A draft mutation and a drag frame write straight onto the
 descriptor without passing through a store method, so neither emits — if you need those, watch the
 descriptor yourself.
+
+## 19 · Say something while a window loads, and when it fails
+
+A window's component is a chunk. Give the slow case a spinner and the broken case a message — both
+are components you own, registered per type or app-wide:
+
+```js
+createWindows({
+  components: {
+    // Per type: this one is big, so it gets its own spinner and a deadline.
+    report: {
+      component: () => import('./windows/Report.vue'),
+      loadingComponent: WindowLoading,
+      delay: 0,        // ms before the spinner appears; Vue's default is 200
+      timeout: 8000,   // ms after which the load counts as failed
+    },
+    itemEditor: () => import('./windows/ItemEditor.vue'),
+  },
+  // App-wide fallback for every type that does not name its own.
+  async: { errorComponent: WindowError },
+})
+```
+
+Per-type values win key by key: `report` above keeps the app-wide `errorComponent` while overriding
+the spinner. These configure the component, not the window — they cannot be passed to `open()` and
+never reach the descriptor, so nothing about them is persisted.
+
+The error component receives the error, and covers both failures — a chunk that never arrived, and
+content that threw once it did:
+
+```vue
+<script setup>
+defineProps({ error: { type: null, default: null } })
+</script>
+
+<template>
+  <p>Could not load: {{ error?.message }}</p>
+  <button type="button" @click="$emit('retry')">Try again</button>
+</template>
+```
+
+A window whose content threw keeps its frame: the header, the controls and the geometry are all
+still live, so the user can move it out of the way or close it, and `data-vw-error` on the
+`<dialog>` lets you style it. One window failing never affects the others — `BaseWindow` catches
+the error and stops it there, rather than letting it reach `WindowHost` and take the whole desktop
+down. That containment is also why the error does not reach `app.config.errorHandler`: report it
+from your error component if you want it centrally.
+
+With no `errorComponent` registered the body is simply empty — the library ships no strings of its
+own — which is a working window and a blank one. Register one.

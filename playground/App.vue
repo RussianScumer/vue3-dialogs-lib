@@ -78,6 +78,19 @@ function openLongDoc() {
   win.open('longDoc', {}, { w: 460, h: 320 })
 }
 
+/** Three ways a window's component can fail to be there: slow, never, and throwing. */
+function openSlowPanel() {
+  win.open('slowPanel', {}, { title: 'Slow chunk' })
+}
+
+function openHungPanel() {
+  win.open('hungPanel', {}, { title: 'Never arrives' })
+}
+
+function openBrokenPanel() {
+  win.open('brokenPanel', {}, { title: 'Throws on mount' })
+}
+
 function floodMaxWindows() {
   log(`opening ${options.maxWindows + 2} windows against maxWindows=${options.maxWindows}`)
   for (let i = 0; i < options.maxWindows + 2; i++) win.open('logViewer', { source: `flood-${i}` }, { w: 300, h: 200 })
@@ -361,7 +374,34 @@ function clearStorage() {
         </section>
 
         <section>
-          <h2>15 · Small screens</h2>
+          <h2>15 · Loading and failure</h2>
+          <p>
+            A window's component is a chunk that may be slow, may never arrive, or may throw once it
+            does. Open the last one alongside any other window: only its own frame turns into the
+            error state.
+          </p>
+          <button
+            type="button"
+            @click="openSlowPanel"
+          >
+            Slow chunk (1.5s)
+          </button>
+          <button
+            type="button"
+            @click="openHungPanel"
+          >
+            Never arrives (2s timeout)
+          </button>
+          <button
+            type="button"
+            @click="openBrokenPanel"
+          >
+            Throws on mount
+          </button>
+        </section>
+
+        <section>
+          <h2>16 · Small screens</h2>
           <p>
             Below {{ options.mobileBreakpoint }}px windows go fullscreen and drag/resize turn inert; the stored geometry
             is untouched. Narrow the browser to see it.

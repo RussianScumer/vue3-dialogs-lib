@@ -1,6 +1,8 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import { createWindows } from '../src'
+import WindowError from './windows/WindowError.vue'
+import WindowLoading from './windows/WindowLoading.vue'
 import { log } from './eventLog'
 import '../src/style.css'
 
@@ -21,8 +23,32 @@ createApp(App)
         },
         popperDemo: () => import('./windows/PopperDemo.vue'),
         longDoc: () => import('./windows/LongDoc.vue'),
+        // A slow chunk with its own spinner: the frame is usable before the content exists.
+        slowPanel: {
+          component: () =>
+            new Promise<typeof import('./windows/SlowPanel.vue')>((resolve) => {
+              setTimeout(() => resolve(import('./windows/SlowPanel.vue')), 1500)
+            }),
+          loadingComponent: WindowLoading,
+          delay: 0,
+          w: 380,
+          h: 220,
+        },
+        // A loader that never settles, given a deadline: after it, the app-wide errorComponent.
+        hungPanel: {
+          component: () => new Promise<never>(() => {}),
+          loadingComponent: WindowLoading,
+          delay: 0,
+          timeout: 2000,
+          w: 380,
+          h: 220,
+        },
+        // The chunk arrives; the component throws on mount.
+        brokenPanel: { component: () => import('./windows/BrokenPanel.vue'), w: 380, h: 220 },
       },
       persist: { key: 'playground:windows', storage: localStorage },
+      // App-wide fallback: any window type that does not name its own error component gets this.
+      async: { errorComponent: WindowError },
       maxWindows: 8,
       // The taskbar below is 33px tall and fixed: snapped windows must not hide under it.
       snap: { insets: { bottom: 36 } },

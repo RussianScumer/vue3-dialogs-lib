@@ -30,6 +30,22 @@ memoized; a bare function is wrapped in `defineAsyncComponent` automatically
 
 Descriptors store the *name*, never a component reference, which is what keeps them serializable.
 
+### Loading and failure states
+
+A window's component is usually a chunk, so it can be slow, absent, or broken. A `WindowSpec`
+accepts `loadingComponent`, `errorComponent`, `delay` and `timeout`, and `createWindows({ async })`
+sets the same four app-wide; the per-type value wins key by key. They are handed to
+`defineAsyncComponent` and are *not* window configuration: they cannot be passed to `open()` and
+never reach the descriptor (`src/options.ts`).
+
+`BaseWindow` also catches errors from the content itself with `onErrorCaptured` and renders the
+type's `errorComponent` in its own body, with the error as an `error` prop — the same component the
+async wrapper uses for a chunk that failed, so both failures look alike. Propagation stops there on
+purpose: an error allowed to reach `WindowHost` mid-patch takes every other window with it. A
+window in this state keeps its header and controls, and carries `data-vw-error` for styling. With
+no `errorComponent` registered the body is empty — the library ships no strings — and the window is
+still movable, minimizable and closable.
+
 ### Plugin install, single instance per app
 
 `app.use(createWindows({ ... }))` provides the store, resolved options and the viewport tracker
@@ -200,7 +216,11 @@ the taskbar clickable.
   receives them — asserted in a real browser by `src/__tests__/esc.browser.spec.ts`. ESC stands
   down for content that called `preventDefault()`, for a window that is not the active one, for a
   native picker target, and for `minimizable: false`.
-- `data-vw-active` marks the top window for styling.
+- **Content that throws is contained**: `onErrorCaptured` swaps the body for the type's
+  `errorComponent` and stops propagation, so one bad window cannot tear down the host and every
+  other window with it.
+- `data-vw-active` marks the top window for styling, `data-vw-error` a window whose content
+  failed.
 
 ### `WindowTaskbar`
 

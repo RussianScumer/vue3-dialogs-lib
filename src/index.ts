@@ -10,6 +10,7 @@ export type { WindowsApi, TypedWindowsApi, CloseGuard } from './state'
 export type { WindowContext } from './injection'
 export type { ResizeDir } from './useWindowResize'
 export type {
+  AsyncWindowOptions,
   BeforeCloseGuard,
   Bounds,
   ComponentsMap,

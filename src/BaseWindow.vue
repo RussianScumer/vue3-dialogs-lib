@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onErrorCaptured, onMounted, ref } from 'vue'
 import { useWindows, useWindowOptions } from './createWindows'
 import { onWindowKeydown, useWindowDrag } from './useWindowDrag'
 import { RESIZE_DIRS, RESIZE_STYLES, useWindowResize } from './useWindowResize'
@@ -121,6 +121,25 @@ function onEscape(e: KeyboardEvent) {
   win.minimize(d.id)
 }
 
+/**
+ * One bad window must not take the desktop with it: an error thrown by the content is caught here,
+ * at the frame that owns it, and the body renders the type's `errorComponent` instead — the same
+ * one `defineAsyncComponent` uses when the loader itself fails, so both failures look alike. The
+ * frame keeps its header, so the window can still be moved, minimized and closed.
+ *
+ * Propagation is stopped: an error left to travel up reaches `WindowHost` mid-patch and takes the
+ * whole `v-for` — every other window — down with it, which is the failure this exists to prevent.
+ * The error is not lost, it is handed to `errorComponent` as its `error` prop; a consumer that
+ * wants it centrally reports it from there.
+ */
+const failure = ref<unknown>(null)
+const errorComponent = computed(() => options.errorComponentFor(d.name))
+
+onErrorCaptured((err) => {
+  failure.value = err
+  return false
+})
+
 function onKeydown(e: KeyboardEvent) {
   onWindowKeydown(e, d, { view, bounds: options.bounds, enabled: interactive })
 }
@@ -140,6 +159,7 @@ function onHeadDblclick(e: MouseEvent) {
     :style="style"
     :aria-label="d.title || undefined"
     :data-vw-active="active || undefined"
+    :data-vw-error="failure ? '' : undefined"
     @keydown.escape="onEscape"
     @pointerdown="win.focus(d.id)"
   >
@@ -191,7 +211,12 @@ function onHeadDblclick(e: MouseEvent) {
       class="vw__body"
       :style="bodyStyle"
     >
-      <slot />
+      <component
+        :is="errorComponent"
+        v-if="failure && errorComponent"
+        :error="failure"
+      />
+      <slot v-else-if="!failure" />
     </section>
     <footer
       v-if="$slots.footer"
