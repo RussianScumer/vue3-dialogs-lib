@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { userEvent } from '@vitest/browser/context'
+import { userEvent } from 'vitest/browser'
 import { defineComponent, h, nextTick } from 'vue'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { createWindows, useWindows } from '../createWindows'
@@ -15,6 +15,8 @@ import WindowHost from '../WindowHost.vue'
 const Content = defineComponent({
   props: {
     windowId: { type: String, default: '' },
+    /** Only to keep two windows out of each other's dedupe bucket. */
+    tag: { type: String, default: '' },
     /** Mimics content that owns ESC for its own popper — the documented escape hatch. */
     eatEscape: { type: Boolean, default: false },
   },
@@ -42,7 +44,8 @@ let wrapper: VueWrapper | null = null
 
 function app() {
   const plugin = createWindows({ components: { editor: Content } })
-  wrapper = mount(defineComponent({ components: { WindowHost }, template: '<WindowHost />' }), {
+  // A render function, not a `template`: the browser build of Vue is runtime-only.
+  wrapper = mount(defineComponent({ render: () => h(WindowHost) }), {
     global: { plugins: [plugin] },
     attachTo: document.body,
   })
@@ -138,8 +141,8 @@ describe('ESC in a real browser', () => {
 
   it('does nothing when the target is in a window that is not the active one', async () => {
     const { win } = app()
-    const back = win.open('editor', {})
-    const front = win.open('editor', {})
+    const back = win.open('editor', { tag: 'back' })
+    const front = win.open('editor', { tag: 'front' })
     await nextTick()
     expect(win.activeId.value).toBe(front)
 
