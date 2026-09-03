@@ -48,11 +48,12 @@ onMounted(() => el.value?.show()) // non-modal: background stays usable, taskbar
 // After the show() hook on purpose: show() runs the dialog focusing steps, so registering this
 // first would let the UA overwrite it. A window restored from storage on page load must not steal
 // focus, and only the top one takes it.
-useWindowFocus(body, {
-  fallback: handle,
-  shouldFocus: () => active.value && !win.isRestored(d.id),
-  closed: () => !win.byId(d.id),
-})
+useWindowFocus(
+  win,
+  d,
+  { root: el, head: handle, body },
+  () => active.value && !win.isRestored(d.id),
+)
 
 // The UA stylesheet gives <dialog> position:absolute; margin:auto; inset:0 —
 // all three must be cleared or centering fights the transform.

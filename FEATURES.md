@@ -226,7 +226,8 @@ the taskbar clickable.
 
 Renderless — the consumer owns the visual completely. The default slot receives `windows`
 (minimized only), `all`, `active`, and the `restore`, `close`, `requestClose`, `focus`, `minimize`
-actions.
+actions, plus `registerFocusTarget` — bind it as `:ref="registerFocusTarget"` on the element that
+should take focus when the last window is minimized.
 
 ---
 
@@ -246,12 +247,18 @@ Every window's content receives a `windowId` prop, supplied by `WindowHost`.
 
 ## Accessibility
 
-- **Focus is moved into an opening window** and handed back to the opener on close. Non-modal means
+- **Focus is moved into an opening window**, and handed on when its frame leaves. Non-modal means
   no focus trap, deliberately — but that is not the same choice as no focus management.
+- **Focus has a defined destination on minimize and close.** Both unmount the frame, so leaving
+  focus alone would leave it on `<body>`, with the keyboard user back at the top of the page.
+  The chain, in order: the window that is now on top, by its header; then the taskbar, if the
+  consumer opted in with `registerFocusTarget` and this is a minimize (a closed window has no
+  button left to focus); then the element that opened the window, if it is still in the document.
+  Focus only moves if it was inside that window to begin with — a background window going away
+  never takes focus from where the user put it.
 - **Async content is handled** — a window whose component has not loaded yet takes focus on the
   header and hands it on to the first tabbable element when the content lands, unless the user has
   moved focus in the meantime (`MutationObserver`, disconnected as soon as it fires).
-- **Minimize does not move focus** — the window is coming back.
 - **Restored windows do not steal focus** on page load, and only the top window takes it.
 - The header is `tabindex="0"` and is the keyboard drag/resize surface, with a `:focus-visible`
   outline.

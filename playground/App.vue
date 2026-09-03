@@ -346,6 +346,12 @@ function clearStorage() {
             The top non-minimized window carries <code>data-vw-active</code> and is marked in the taskbar and the stack
             table below. It is derived from <code>z</code> rather than stored, so it cannot fall out of step.
           </p>
+          <p>
+            Both minimize and close unmount the frame, so focus has to go somewhere. Open two windows and minimize the
+            top one with the keyboard: focus lands on the next window's header. Minimize the last one and it lands on
+            the taskbar below, which opted in with <code>:ref="registerFocusTarget"</code> — never on
+            <code>&lt;body&gt;</code>.
+          </p>
         </section>
 
         <section>
@@ -460,8 +466,12 @@ function clearStorage() {
     </template>
   </WindowHost>
 
-  <WindowTaskbar v-slot="{ all, active, restore, focus, requestClose }">
-    <div class="taskbar">
+  <WindowTaskbar v-slot="{ all, active, restore, focus, requestClose, registerFocusTarget }">
+    <div
+      :ref="registerFocusTarget"
+      class="taskbar"
+      tabindex="-1"
+    >
       <span class="taskbar__label">Windows ({{ all.length }})</span>
       <button
         v-for="w in all"

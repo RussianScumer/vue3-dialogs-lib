@@ -588,7 +588,10 @@ describe('focus', () => {
     wrapper.unmount()
   })
 
-  it('leaves focus alone when a window is only minimized', async () => {
+  // Was "leaves focus alone when a window is only minimized" until VW-04. Minimize unmounts the
+  // content, so "alone" meant <body> and the keyboard user back at the top of the page; with no
+  // other window and no registered taskbar target, the opener is the end of the chain.
+  it('hands focus back to the opener when the only window is minimized', async () => {
     const opener = document.createElement('button')
     document.body.appendChild(opener)
     opener.focus()
@@ -601,7 +604,7 @@ describe('focus', () => {
 
     win.minimize(id)
     await nextTick()
-    expect(document.activeElement).not.toBe(opener)
+    expect(document.activeElement).toBe(opener)
     opener.remove()
   })
 })

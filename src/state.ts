@@ -48,6 +48,15 @@ export function createStore(options: ResolvedOptions) {
    * from mounted content and die with it.
    */
   const closeGuards = new Map<string, CloseGuard>()
+  /**
+   * Header elements of the mounted frames, and the consumer's opt-in taskbar destination. Elements,
+   * so like `closeGuards` they can never reach storage, and outside `s` so registering one cannot
+   * wake the persistence watcher. This is the only DOM the store holds, and it holds it for one
+   * reason: a window whose frame unmounts has to hand focus to another window, which is a question
+   * about `z` and `minimized` that only the store can answer.
+   */
+  const headers = new Map<string, HTMLElement>()
+  let focusTarget: HTMLElement | null = null
   const listeners = new Map<string, Set<(e: WindowEvent) => void>>()
 
   /** Non-minimized windows, in creation order — the set WindowHost renders. */
@@ -131,6 +140,31 @@ export function createStore(options: ResolvedOptions) {
     docks.clear()
     closeGuards.clear()
     for (const id of ids) emit('close', id)
+  }
+
+  /** Registered by a mounted `BaseWindow`, so a leaving window can hand focus to this one. */
+  function registerHeader(id: string, el: HTMLElement): () => void {
+    headers.set(id, el)
+    return () => {
+      if (headers.get(id) === el) headers.delete(id)
+    }
+  }
+
+  function headerOf(id: string): HTMLElement | null {
+    return headers.get(id) ?? null
+  }
+
+  /**
+   * Where focus goes when the last window is minimized: the consumer's taskbar, which is where the
+   * window's button now is. Opt-in, passed as a ref callback out of `WindowTaskbar`'s slot, so
+   * `null` arrives on unmount.
+   */
+  function registerFocusTarget(el: HTMLElement | null): void {
+    focusTarget = el
+  }
+
+  function taskbarTarget(): HTMLElement | null {
+    return focusTarget
   }
 
   /** Registered by mounted content; only consulted while that content is alive. */
@@ -318,6 +352,10 @@ export function createStore(options: ResolvedOptions) {
     closeAll,
     requestClose,
     onBeforeClose,
+    registerHeader,
+    headerOf,
+    registerFocusTarget,
+    taskbarTarget,
     minimize,
     restore,
     focus,

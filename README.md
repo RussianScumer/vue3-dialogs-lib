@@ -57,8 +57,8 @@ Mount the host once, above the router outlet:
 ```vue
 <router-view />
 <WindowHost />
-<WindowTaskbar v-slot="{ all, active, restore, focus, close }">
-  <div class="my-taskbar">
+<WindowTaskbar v-slot="{ all, active, restore, focus, close, registerFocusTarget }">
+  <div :ref="registerFocusTarget" class="my-taskbar" tabindex="-1">
     <button
       v-for="w in all"
       :key="w.id"
@@ -74,7 +74,9 @@ Mount the host once, above the router outlet:
 
 `WindowTaskbar` renders no markup of its own — the consumer owns the visual completely. The slot
 gets `all` (every window), `windows` (only the minimized ones), `active` (the top window's id or
-`null`), and `restore` / `focus` / `minimize` / `close` / `requestClose`.
+`null`), and `restore` / `focus` / `minimize` / `close` / `requestClose`. `registerFocusTarget` is
+optional: bind it as a template ref and the taskbar becomes where focus goes when the last window
+is minimized, instead of the element that opened it.
 
 ## Driving it
 
@@ -230,9 +232,11 @@ edits is the sharpest edge this design creates.
   first, the window is not the active one (Tab can reach a background window without raising it),
   the key was aimed at a native picker (`<select>`, `<input type="date">` and friends, which take
   ESC for themselves without marking the event handled), or the window is `minimizable: false`.
-- Opening a window moves focus into it — its first tabbable element, or the header. Closing one
-  hands focus back to whatever opened it. There is deliberately **no focus trap**: these windows
-  are not modal.
+- Opening a window moves focus into it — its first tabbable element, or the header. Minimizing or
+  closing one hands focus on, in this order: the window now on top, by its header; the taskbar, if
+  it opted in with `registerFocusTarget` and this was a minimize; the element that opened the
+  window. Never `<body>`, and never at all if focus had already been moved out of that window.
+  There is deliberately **no focus trap**: these windows are not modal.
 - The header is focusable: arrow keys move the window, shift+arrow resizes it.
 - Windows resize from any of eight grips, honouring `minW`/`minH`/`maxW`/`maxH`. A west or north
   grip moves `x`/`y` too, so the opposite edge stays put.

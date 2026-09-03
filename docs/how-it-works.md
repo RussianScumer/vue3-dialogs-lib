@@ -40,15 +40,15 @@ Nothing in it is a component reference, a fetched entity, or a function. That is
 
 | File | Job |
 |---|---|
-| `state.ts` | The reactive store: the stack, `open`/`close`/`minimize`/`restore`/`focus`, dedupe, eviction, clamping. No DOM. |
+| `state.ts` | The reactive store: the stack, `open`/`close`/`minimize`/`restore`/`focus`, dedupe, eviction, clamping. No DOM except the header registry focus hand-off needs. |
 | `createWindows.ts` | Plugin factory. Resolves options, creates one store per app, provides both, wires persistence. |
 | `options.ts` | Defaults, per-type async loading options, and memoized `resolve(name)` that turns loader functions into async components. |
 | `WindowHost.vue` | Renders one `BaseWindow` per **non-minimized** descriptor; re-clamps on viewport resize. |
 | `BaseWindow.vue` | The `<dialog>`: geometry, header, drag handle, ESC, focus-on-pointerdown, per-window context. |
-| `WindowTaskbar.vue` | Renderless. Exposes the minimized set to the consumer's own markup. |
+| `WindowTaskbar.vue` | Renderless. Exposes the minimized set to the consumer's own markup, and `registerFocusTarget` for opting into focus on minimize. |
 | `useWindowDrag.ts` | Pointer-events drag + arrow-key move/resize, and the snap zone armed by a drag. |
 | `useWindowResize.ts` | The eight resize grips: pointer maths, size limits, and the edges that move `x`/`y`. |
-| `useWindowFocus.ts` | Focus into a window on open, back to the opener on close. |
+| `useWindowFocus.ts` | Focus into a window on open, and the destination chain — next window, taskbar, opener — when its frame unmounts. |
 | `useWindowState.ts` | Draft state stored on the descriptor. |
 | `useWindowContext.ts` | Per-window control surface via provide/inject. |
 | `useViewport.ts` | The app's one viewport tracker, created by the plugin. One resize listener, however many windows. SSR-safe. |
@@ -85,6 +85,16 @@ close(id)    → descriptor removed from the stack; everything about it is gone
 content), then the app-wide `beforeClose` option. Only the second one can see a **minimized**
 window, whose content is unmounted and whose guard therefore no longer exists. The ✕ button calls
 `requestClose`; `maxWindows` eviction calls `close`.
+
+Both `minimize` and `close` unmount the frame, and an unmounted frame cannot keep the focus it was
+holding — the browser drops it on `<body>`. So `useWindowFocus` records, just before the unmount,
+whether focus was inside that window, and if it was, walks a chain: the window now on top, by the
+header it registered with the store; then the taskbar, if the consumer bound
+`registerFocusTarget` and this was a minimize rather than a close; then the element that opened the
+window. The store owns the header registry because the first step is a question about `z` and
+`minimized` that only the store can answer — it reuses the same `activeId` computed that
+`data-vw-active` is drawn from, so the focus destination cannot drift away from the visibly active
+window.
 
 Each transition emits an event (`open`, `close`, `focus`, `minimize`, `restore`, `geometry`,
 `title`), subscribable with `win.on(type, cb)`. Note what this deliberately cannot see: a draft

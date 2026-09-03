@@ -233,7 +233,7 @@ Retry UI, a default error component, error events on the store, `Suspense`.
 
 ## VW-04 — Focus destinations on minimize and close
 
-**Roadmap:** §8 · **Size:** M · **Depends on:** VW-01
+**Roadmap:** §8 · **Size:** M · **Depends on:** VW-01 · **Status:** done on `vw-04-focus-destinations`.
 
 ### Goal
 
@@ -274,6 +274,41 @@ Define and implement the destination chain, in order:
 ### Out of scope
 
 Focus trapping (non-goal), `Alt+Tab`-style switching (that is §6).
+
+### Notes
+
+- **One existing test changed, deliberately.** `host.spec.ts`'s "leaves focus alone when a window
+  is only minimized" asserted that minimizing the only window does *not* focus the opener — which
+  is step 3 of the chain this task defines. Global constraint 6 says a test needing to change is a
+  signal the task is out of its lane; here it is the signal that the task is exactly in it, since
+  "minimize does not move focus" is the sentence VW-04 exists to delete. It was rewritten to the
+  new contract, with the old title kept in a comment. Nothing else in the suite moved.
+- **The store holds DOM now, for one reason.** Step 1 asks "which window is on top", which is a
+  question about `z` and `minimized`; step 1 then has to focus that window's header, which is an
+  element some other component owns. The header registry lives in `state.ts` beside `docks` and
+  `closeGuards` — runtime-only, outside the watched `s`, and elements, so it can no more be
+  persisted than a guard function can. It reuses the existing `activeId` computed rather than
+  adding a second "which one is next", so the focus destination cannot drift from `data-vw-active`.
+- **`excluding the one leaving` needs no exclusion.** By the time the frame unmounts the store has
+  already stopped counting it: a closed window is out of the stack and a minimized one is skipped
+  by `activeId`. The leaving window can never be its own destination.
+- **Containment is measured in `onBeforeUnmount`, not `onUnmounted`.** By the latter the frame is
+  detached and `document.activeElement` has already fallen back to `<body>`, so "was focus inside
+  this window" can no longer be asked.
+- **No `nextTick` anywhere.** The next window's header is already mounted, and the taskbar target
+  is the consumer's own persistent element rather than a per-window button, so both destinations
+  exist at unmount time. A per-window button would have needed one, since the taskbar re-renders
+  after the host.
+- `registerFocusTarget` is a plain Vue ref callback: the element arrives on mount and `null` on
+  unmount, which is the whole registration. Nothing to clean up, and no library markup needed to
+  scope the lookup.
+- jsdom, not browser mode: `document.activeElement` and `focus()` are exactly what is asserted, and
+  the existing focus coverage in `host.spec.ts` already lives there.
+
+### Verification
+
+`npx vitest run` — 122 tests, 112 jsdom (6 new) and 10 browser. `npm run type-check` and
+`npm run lint` clean. One existing assertion rewritten, as recorded above.
 
 ---
 

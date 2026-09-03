@@ -186,8 +186,8 @@ badges or unsaved-changes markers). For an actual taskbar — every window, with
 marked — use `all` and `active` instead:
 
 ```vue
-<WindowTaskbar v-slot="{ all, active, restore, focus, requestClose }">
-  <div v-if="all.length" class="taskbar">
+<WindowTaskbar v-slot="{ all, active, restore, focus, requestClose, registerFocusTarget }">
+  <div v-if="all.length" :ref="registerFocusTarget" class="taskbar" tabindex="-1">
     <button
       v-for="w in all"
       :key="w.id"
@@ -202,6 +202,14 @@ marked — use `all` and `active` instead:
 ```
 
 `requestClose` runs the guards; `close` does not.
+
+`registerFocusTarget` is the opt-in for keyboard users. Minimizing a window unmounts it, so its
+focus has to go somewhere: normally to the next window's header, but when it was the last window
+there is no next one, and focus would otherwise fall back to whatever opened it — often far from
+the taskbar button the window just turned into. Binding it as a template ref makes the taskbar that
+destination. It needs to be focusable to receive focus, hence `tabindex="-1"`; drop the binding
+entirely and the opener stays the fallback. It is not consulted when a window is *closed* — there
+is no button left to focus.
 
 ## 8 · Custom header, control buttons and a footer
 
