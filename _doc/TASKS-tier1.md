@@ -302,12 +302,18 @@ Focus trapping (non-goal), `Alt+Tab`-style switching (that is §6).
 - `registerFocusTarget` is a plain Vue ref callback: the element arrives on mount and `null` on
   unmount, which is the whole registration. Nothing to clean up, and no library markup needed to
   scope the lookup.
-- jsdom, not browser mode: `document.activeElement` and `focus()` are exactly what is asserted, and
-  the existing focus coverage in `host.spec.ts` already lives there.
+- **Both projects, and the browser one earns its place.** The chain's logic is jsdom's to prove —
+  `focus.spec.ts`, next to the existing focus coverage in `host.spec.ts`. But jsdom fakes the two
+  things the chain runs against: `dialog.show()` there is a shim that sets an attribute, so the UA's
+  dialog focusing steps never run and never get the chance to compete with ours, and jsdom's
+  `focus()` is unconditional where a real browser refuses it on an element it does not consider
+  focusable. `focus.browser.spec.ts` measures the chain in Chromium, which is also what pins the
+  documented `tabindex="-1"` on the registered taskbar target as load-bearing rather than
+  decorative.
 
 ### Verification
 
-`npx vitest run` — 122 tests, 112 jsdom (6 new) and 10 browser. `npm run type-check` and
+`npx vitest run` — 126 tests, 112 jsdom (6 new) and 14 browser (4 new). `npm run type-check` and
 `npm run lint` clean. One existing assertion rewritten, as recorded above.
 
 ---
