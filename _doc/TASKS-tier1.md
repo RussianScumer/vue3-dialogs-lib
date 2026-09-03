@@ -36,6 +36,12 @@ whether it works.
    cosmetics only. A task that makes the library depend on the baseline sheet is wrong.
 8. **Tests colocated** in `src/__tests__/`. DOM-level work goes in vitest browser mode
    (Playwright provider), not jsdom — `HTMLDialogElement` support there is unreliable.
+9. **Three gates before a task is done**, in order: `npm run lint` and `npm run type-check`; then
+   `npx vitest run` across both projects; then the change exercised by hand in the running
+   playground (`npm run dev`), in a real browser. The specs and the browser session catch different
+   things — a spec proves the logic against the UA, a playground session is what puts it through
+   real pointer input, real window stacking and the consumer's own markup. A task that has only
+   passed the first two is not finished.
 
 ---
 
