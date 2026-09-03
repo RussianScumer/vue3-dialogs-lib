@@ -190,8 +190,11 @@ the taskbar clickable.
   contexts.
 - `header` and `controls` slots, each receiving the descriptor; default controls are minimize and
   close, shown per the window's capability flags.
-- `cancel` is prevented — closing on ESC would defeat the point of the library; ESC minimizes
-  instead, and content that needs ESC for its own popper calls `preventDefault()` first.
+- **ESC minimizes** through a `keydown` listener on the window element. There is no `cancel`
+  handler: `cancel` and ESC-to-close are `showModal()` behaviour, and a `.show()` dialog never
+  receives them — asserted in a real browser by `src/__tests__/esc.browser.spec.ts`. ESC stands
+  down for content that called `preventDefault()`, for a window that is not the active one, for a
+  native picker target, and for `minimizable: false`.
 - `data-vw-active` marks the top window for styling.
 
 ### `WindowTaskbar`

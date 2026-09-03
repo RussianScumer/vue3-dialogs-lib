@@ -41,7 +41,8 @@ whether it works.
 
 ## VW-01 — Audit the ESC path
 
-**Roadmap:** §10 · **Size:** S · **Blocks:** VW-05, VW-06
+**Roadmap:** §10 · **Size:** S · **Blocks:** VW-05, VW-06 · **Status:** done on `vw-01-esc-audit`,
+with one verification gap — see the note at the end of this section.
 
 ### Goal
 
@@ -78,6 +79,35 @@ ESC-to-close fire only for dialogs opened with `showModal()`. This library uses 
 ### Out of scope
 
 Any change to what ESC *does* (minimize stays minimize). Focus movement — that is VW-04.
+
+### Audit findings
+
+Measured in Chromium against the playground, before any code changed:
+
+- `@cancel` is dead. A `.show()` dialog received zero `cancel` and zero `close` events on ESC;
+  `cancel` and ESC-to-close are `showModal()` behaviour. The handler is deleted.
+- ESC already minimized the active window through the existing `keydown` listener, so the listener
+  stayed where it was and only gained guards.
+- **A native picker does not set `defaultPrevented`.** With a `<select>` focused, the ESC keydown
+  reached the page with `defaultPrevented === false` and the window minimized. The task's
+  "assert it rather than assume it" resolves against the assumption, so the guard is on the element
+  type: `<select>` and the picker `<input>` types never minimize, popup open or not.
+- **"Popup is open" is not an assertable state.** Synthetic key input cannot open a native
+  `<select>` popup — `alt+ArrowDown` followed by `ArrowDown` moved the selection from `a` to `b`,
+  which only happens with the list closed. This holds for CDP-driven input generally, vitest browser
+  mode included, so no test can distinguish an open picker from a focused one.
+
+### Verification gap
+
+`src/__tests__/esc.browser.spec.ts` and the `browser` vitest project are committed but **have never
+been executed**: the Playwright `chromium-headless-shell` download did not complete on the machine
+this was written on. The guard logic is covered by the jsdom suite (99 passing), and the browser
+facts above were measured by hand rather than by the spec. Before merging, run:
+
+```
+npx playwright install chromium-headless-shell
+npx vitest run --project browser
+```
 
 ---
 

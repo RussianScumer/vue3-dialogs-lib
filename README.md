@@ -217,10 +217,12 @@ edits is the sharpest edge this design creates.
   taskbar stays clickable, and teleported poppers from your own components keep working. The cost
   is no top layer, so the library manages `z-index` itself — offset it with `zIndexBase` if your
   app has its own stacking contexts to clear.
-- **ESC minimizes** the focused window rather than closing it. A non-modal `<dialog>` gets no close
-  request from the browser, so this runs off a `keydown` handler: content that needs ESC for its own
-  popper calls `preventDefault()` and the window stays put. A window with `minimizable: false`
-  ignores ESC entirely.
+- **ESC minimizes** the active window rather than closing it. A non-modal `<dialog>` gets no close
+  request from the browser — `cancel` and ESC-to-close belong to `showModal()` — so this runs off a
+  `keydown` handler on the window element. It does nothing when: content called `preventDefault()`
+  first, the window is not the active one (Tab can reach a background window without raising it),
+  the key was aimed at a native picker (`<select>`, `<input type="date">` and friends, which take
+  ESC for themselves without marking the event handled), or the window is `minimizable: false`.
 - Opening a window moves focus into it — its first tabbable element, or the header. Closing one
   hands focus back to whatever opened it. There is deliberately **no focus trap**: these windows
   are not modal.

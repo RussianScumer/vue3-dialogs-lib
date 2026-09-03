@@ -90,15 +90,29 @@ function handleStyle(dir: (typeof RESIZE_DIRS)[number]) {
   return { position: 'absolute' as const, touchAction: 'none', ...RESIZE_STYLES[dir] }
 }
 
-function onCancel(e: Event) {
-  e.preventDefault() // closing would defeat the point of the library
-  win.minimize(d.id)
+/**
+ * A native picker owns ESC: the popup closes and the window must stay. Chromium does *not* mark
+ * that keydown `defaultPrevented`, measured rather than assumed, so the escape hatch below cannot
+ * cover it. Nothing exposes whether a picker's popup is open either, which makes the element type
+ * the only guard available: ESC on a focused picker never minimizes, popup open or not.
+ */
+const PICKERS = ['date', 'datetime-local', 'month', 'time', 'week', 'color', 'file']
+
+function ownsEscape(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el) return false
+  if (el.tagName === 'SELECT') return true
+  return el.tagName === 'INPUT' && PICKERS.includes((el as HTMLInputElement).type)
 }
 
-// A non-modal <dialog> gets no close request from the UA, so ESC is handled here.
-// Content that needs ESC for its own popper calls preventDefault() first.
+/**
+ * A non-modal <dialog> gets no close request from the UA — its `cancel` event and ESC-to-close are
+ * `showModal()` behaviour — so ESC is a plain keydown listener on the window element. It stands
+ * down for content that took the key first, for a window that is not the active one (Tab can reach
+ * a background window without raising it), and for a native picker.
+ */
 function onEscape(e: KeyboardEvent) {
-  if (e.defaultPrevented || !d.minimizable) return
+  if (e.defaultPrevented || !active.value || !d.minimizable || ownsEscape(e.target)) return
   e.preventDefault()
   win.minimize(d.id)
 }
@@ -122,7 +136,6 @@ function onHeadDblclick(e: MouseEvent) {
     :style="style"
     :aria-label="d.title || undefined"
     :data-vw-active="active || undefined"
-    @cancel="onCancel"
     @keydown.escape="onEscape"
     @pointerdown="win.focus(d.id)"
   >

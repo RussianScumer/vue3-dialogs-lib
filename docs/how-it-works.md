@@ -112,8 +112,9 @@ Windows are opened with `dialog.show()`, not `showModal()`.
 
 The price: no browser top layer, so the library owns `z-index` (`descriptor.z`, bumped on
 `pointerdown` and on `restore`), and the browser sends **no close request**, so ESC is handled by a
-`keydown` listener rather than the `cancel` event. Content that wants ESC for itself calls
-`preventDefault()` first.
+`keydown` listener rather than the `cancel` event — a `.show()` dialog never receives `cancel` at
+all. Content that wants ESC for itself calls `preventDefault()` first; a background window and a
+native picker are skipped too.
 
 ## Geometry
 

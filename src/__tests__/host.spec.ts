@@ -90,13 +90,10 @@ describe('WindowHost', () => {
     const id = win.open('editor', { id: 1 })
     await nextTick()
 
-    // A non-modal dialog gets no UA close request, so the keydown path is the real one.
+    // A non-modal dialog gets no UA close request, so the keydown path is the only one. The
+    // `cancel` half of this assertion went with the handler VW-01 deleted: `esc.browser.spec.ts`
+    // proves a `.show()` dialog never receives that event.
     await wrapper.find('dialog.vw').trigger('keydown', { key: 'Escape' })
-    expect(win.byId(id)!.minimized).toBe(true)
-
-    win.restore(id)
-    await nextTick()
-    await wrapper.find('dialog.vw').trigger('cancel')
     expect(win.byId(id)!.minimized).toBe(true)
   })
 
@@ -110,6 +107,40 @@ describe('WindowHost', () => {
     wrapper.find('dialog.vw').element.dispatchEvent(event)
     await nextTick()
     expect(win.byId(id)!.minimized).toBe(false)
+  })
+
+  it('ignores ESC aimed at a window that is not the active one', async () => {
+    const { wrapper, win } = app()
+    const back = win.open('editor', { id: 1 })
+    const front = win.open('editor', { id: 2 })
+    await nextTick()
+
+    // Tab can reach a background window without raising it; only pointerdown calls focus().
+    await wrapper.findAll('dialog.vw')[0]!.trigger('keydown', { key: 'Escape' })
+    expect(win.byId(back)!.minimized).toBe(false)
+    expect(win.byId(front)!.minimized).toBe(false)
+  })
+
+  it('ignores ESC aimed at a native picker, which takes the key for itself', async () => {
+    const { wrapper, win } = app()
+    const id = win.open('editor', { id: 1 })
+    await nextTick()
+
+    const dialog = wrapper.find('dialog.vw').element
+    const body = dialog.querySelector('.vw__body')!
+    for (const el of [document.createElement('select'), Object.assign(document.createElement('input'), { type: 'date' })]) {
+      body.append(el)
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      await nextTick()
+      expect(win.byId(id)!.minimized).toBe(false)
+    }
+
+    // A plain text input is not a picker: ESC there still minimizes.
+    const text = document.createElement('input')
+    body.append(text)
+    text.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    await nextTick()
+    expect(win.byId(id)!.minimized).toBe(true)
   })
 
   it('header buttons minimize and close', async () => {
