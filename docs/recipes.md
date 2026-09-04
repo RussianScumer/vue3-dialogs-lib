@@ -692,19 +692,23 @@ sheet's result is the guard's answer.
 
 ## 22 · Move the keyboard shortcuts out of the way
 
-The snap and switch chords are on by default. `Meta`+arrow is what Windows itself uses, which is
-also why it is the first thing to collide with a real window manager — GNOME, KDE and a few macOS
-setups take it before the page ever sees it. Move the bindings rather than forking:
+Every action ships with two chords: the familiar one (`Meta`+arrow, `` Alt+` ``) and one that
+survives a window manager (`Ctrl`+`Shift`+arrow, `Ctrl`+`Shift`+`1`…`4`, `` Ctrl+` ``). The familiar
+one is usually grabbed above the browser — Windows' Snap Assist, GNOME and KDE tiling, GNOME's
+switch-group, macOS Chrome's Back — which the page can neither see nor prevent, so the second chord
+is what most users will actually be pressing.
+
+If either collides with your own app, move it. An override replaces **both** defaults for that
+action, so you never inherit the half you did not name:
 
 ```js
 app.use(createWindows({
   components,
   keymap: {
     bindings: {
-      snapLeft: 'Ctrl+Alt+ArrowLeft',
-      snapRight: 'Ctrl+Alt+ArrowRight',
-      snapMax: 'Ctrl+Alt+ArrowUp',
-      snapNone: 'Ctrl+Alt+ArrowDown',
+      snapLeft: 'Ctrl+Shift+BracketLeft',   // one chord, replacing both defaults
+      snapRight: 'Ctrl+Shift+BracketRight',
+      snapMax: ['Ctrl+Shift+ArrowUp', 'F11'], // or several
       snapTopLeft: null,          // unbind the quarters you do not want
       snapTopRight: null,
       snapBottomLeft: null,
@@ -715,8 +719,13 @@ app.use(createWindows({
 ```
 
 An action takes one chord, an array of them, or `null` to unbind it. Anything not mentioned keeps
-its default, and `keymap: { enabled: false }` removes the lot — including the ones you never
+both its defaults, and `keymap: { enabled: false }` removes the lot — including the ones you never
 rebound.
+
+Nothing here can tell you whether a chord reaches the page on your users' machines, because a
+grabbed key produces no event at all. If you build a rebinding UI, read the chord out of a real
+`keydown` — a chord the window manager eats can never be recorded, so whatever your user manages to
+press is by construction one that works.
 
 Switching windows stays available either way, so you can put it on your own shortcut:
 

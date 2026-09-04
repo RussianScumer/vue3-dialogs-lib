@@ -293,8 +293,15 @@ function clearStorage() {
             From anywhere inside a window: <kbd>Meta</kbd>+arrow snaps left, right, maximized or back to the pre-snap
             geometry, <kbd>Meta</kbd>+<kbd>Shift</kbd>+arrow takes the four quarters clockwise from the top-left, and
             <kbd>Alt</kbd>+<kbd>`</kbd> cycles focus between windows (<kbd>Shift</kbd> reverses it). Inside a text
-            field the keystroke belongs to the field. Every binding is movable through
-            <code>keymap.bindings</code>, and <code>keymap: { enabled: false }</code> removes them all.
+            field the keystroke belongs to the field.
+          </p>
+          <p>
+            Your desktop has almost certainly taken those already — Windows snapping, GNOME and KDE tiling, GNOME's
+            switch-group — and a grabbed key never reaches the page at all, so each action has a second chord one
+            modifier out of the way: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+arrow for the halves and maximize,
+            <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd>…<kbd>4</kbd> for the quarters in reading order, and
+            <kbd>Ctrl</kbd>+<kbd>`</kbd> to cycle. Every binding is movable through <code>keymap.bindings</code>, and
+            <code>keymap: { enabled: false }</code> removes them all.
           </p>
           <button
             type="button"

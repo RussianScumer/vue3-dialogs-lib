@@ -30,12 +30,14 @@ Notable changes to `vue-windows`. Dates are release dates; unreleased work sits 
 
 ### Added
 
-- A keyboard keymap: `Meta`+arrow snaps, `Meta`+`Shift`+arrow takes the quarters, and
-  `` Alt+` `` / `` Alt+Shift+` `` switch windows. On by default and every binding movable through
-  `keymap.bindings`, since `Meta`+arrow collides with a real OS window manager on some platforms;
-  `keymap: { enabled: false }` removes the lot. A keystroke inside an `<input>`, `<textarea>` or
-  `contenteditable` never reaches it. Snapping goes through the same `snap(id, zone, view)` a drop
-  does, and obeys the same flags, insets and `mobileBreakpoint` inertness.
+- A keyboard keymap, with two chords per action: the familiar `Meta`+arrow / `Meta`+`Shift`+arrow /
+  `` Alt+` `` and, because a desktop has usually taken those before the browser sees them,
+  `Ctrl`+`Shift`+arrow for the halves, `Ctrl`+`Shift`+`1`…`4` for the quarters in reading order and
+  `` Ctrl+` `` for switching. Every binding is movable through `keymap.bindings` — an override
+  replaces both chords for its action — and `keymap: { enabled: false }` removes the lot. A
+  keystroke inside an `<input>`, `<textarea>` or `contenteditable` never reaches it. Snapping goes
+  through the same `snap(id, zone, view)` a drop does, and obeys the same flags, insets and
+  `mobileBreakpoint` inertness.
 - `focusNext()` / `focusPrev()` on the store, whatever the keymap is set to: the next non-minimized
   window by `z`, wrapping, focusing its header. A window that owns a child is skipped, since its
   own frame is `inert` while the question is open.

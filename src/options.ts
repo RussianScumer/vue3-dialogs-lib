@@ -24,26 +24,42 @@ function isSpec(entry: WindowEntry): entry is WindowSpec {
 }
 
 /**
- * The default bindings, as documented. `Meta+Arrow` is what Windows itself uses for snapping, and
- * `Alt+\`` is the second half of the platform's window switcher — both are the shortcuts a user
- * already has in their fingers, which is why they are the defaults despite colliding with some OS
- * window managers. Every one of them is rebindable, and `keymap: { enabled: false }` removes them.
+ * Every action carries two default chords: the one the user already has in their fingers, and one
+ * that survives the window manager.
+ *
+ * The first is the platform's own — `Meta+Arrow` is Windows' snap, `Alt+\`` the second half of its
+ * switcher — and on most desktops it never reaches the page at all: Windows takes `Win+Arrow` for
+ * Snap Assist, GNOME and KDE take `Super+Arrow` for tiling, GNOME takes `Alt+\`` for switch-group,
+ * and macOS Chrome reads `Cmd+←` as Back. A grab happens above the browser, so it cannot be
+ * detected, warned about or overridden — the only answer is a second chord one modifier away from
+ * everything a desktop reserves. `Ctrl+Shift` is that gap: GNOME uses `Ctrl+Alt+Arrow` for
+ * workspaces, KDE `Ctrl+Alt+Shift+Arrow` for move-to-desktop, macOS `Ctrl+Arrow` for Mission
+ * Control. Inside a text field it is word-select, which the keymap already stands down for.
  *
  * The quarters are the four corners walked clockwise from the top-left, where the arrow names the
  * edge you travel along to reach the next one: up to the top-left, right to the top-right, down to
- * the bottom-right, left to the bottom-left.
+ * the bottom-right, left to the bottom-left. Their fallback cannot reuse the arrows — `Ctrl+Shift`
+ * plus one is already a half — so it is the digits in reading order, which needs no convention at
+ * all: 1 top-left, 2 top-right, 3 bottom-left, 4 bottom-right. Bound by `code`, since `Shift+1` is
+ * `!` on one layout and something else on the next.
+ *
+ * Switching keeps `Shift` as its reverse in both families, which is worth more than family purity:
+ * the fallback pair is `Ctrl+\`` and `Ctrl+Shift+\``, not two chords in the `Ctrl+Shift` gap.
+ *
+ * An override replaces both chords for that action, which is the point: a consumer who names their
+ * own binding does not inherit a collision they did not ask for.
  */
-const DEFAULT_BINDINGS: Record<KeymapAction, string> = {
-  snapLeft: 'Meta+ArrowLeft',
-  snapRight: 'Meta+ArrowRight',
-  snapMax: 'Meta+ArrowUp',
-  snapNone: 'Meta+ArrowDown',
-  snapTopLeft: 'Meta+Shift+ArrowUp',
-  snapTopRight: 'Meta+Shift+ArrowRight',
-  snapBottomRight: 'Meta+Shift+ArrowDown',
-  snapBottomLeft: 'Meta+Shift+ArrowLeft',
-  focusNext: 'Alt+Backquote',
-  focusPrev: 'Alt+Shift+Backquote',
+const DEFAULT_BINDINGS: Record<KeymapAction, string[]> = {
+  snapLeft: ['Meta+ArrowLeft', 'Ctrl+Shift+ArrowLeft'],
+  snapRight: ['Meta+ArrowRight', 'Ctrl+Shift+ArrowRight'],
+  snapMax: ['Meta+ArrowUp', 'Ctrl+Shift+ArrowUp'],
+  snapNone: ['Meta+ArrowDown', 'Ctrl+Shift+ArrowDown'],
+  snapTopLeft: ['Meta+Shift+ArrowUp', 'Ctrl+Shift+Digit1'],
+  snapTopRight: ['Meta+Shift+ArrowRight', 'Ctrl+Shift+Digit2'],
+  snapBottomLeft: ['Meta+Shift+ArrowLeft', 'Ctrl+Shift+Digit3'],
+  snapBottomRight: ['Meta+Shift+ArrowDown', 'Ctrl+Shift+Digit4'],
+  focusNext: ['Alt+Backquote', 'Ctrl+Backquote'],
+  focusPrev: ['Alt+Shift+Backquote', 'Ctrl+Shift+Backquote'],
 }
 
 /** The zone each snap action asks for. `snapNone` gives the window its pre-snap geometry back. */
@@ -102,9 +118,9 @@ function parseChord(chord: string): KeyChord | null {
   return out
 }
 
-function chordsFor(value: string | string[] | null | undefined, fallback: string): KeyChord[] {
+function chordsFor(value: string | string[] | null | undefined, fallback: string[]): KeyChord[] {
   if (value === null) return []
-  const list = value === undefined ? [fallback] : Array.isArray(value) ? value : [value]
+  const list = value === undefined ? fallback : Array.isArray(value) ? value : [value]
   const out: KeyChord[] = []
   for (const chord of list) {
     const parsed = parseChord(chord)

@@ -387,24 +387,35 @@ reload a snapped window comes back as a plain floating window with the geometry 
 With the header focused, arrow keys move the window by 10px and `Shift`+arrows resize it. From
 anywhere inside a window there is a keymap as well:
 
-| Chord | Action |
-| --- | --- |
-| `Meta`+`←` / `→` / `↑` / `↓` | `snapLeft`, `snapRight`, `snapMax`, `snapNone` |
-| `Meta`+`Shift`+`↑` / `→` / `↓` / `←` | the quarters, clockwise from the top-left |
-| `Alt`+`` ` `` / `Alt`+`Shift`+`` ` `` | `focusNext`, `focusPrev` |
+| Action | Familiar chord | Chord that survives |
+| --- | --- | --- |
+| `snapLeft`, `snapRight`, `snapMax`, `snapNone` | `Meta`+`←` / `→` / `↑` / `↓` | `Ctrl`+`Shift`+ the same arrow |
+| the quarters, clockwise from the top-left | `Meta`+`Shift`+`↑` / `→` / `↓` / `←` | `Ctrl`+`Shift`+`1`…`4`, reading order |
+| `focusNext`, `focusPrev` | `Alt`+`` ` `` / `Alt`+`Shift`+`` ` `` | `Ctrl`+`` ` `` / `Ctrl`+`Shift`+`` ` `` |
+
+**Why two chords.** The familiar one usually never arrives: Windows takes `Win`+arrow for Snap
+Assist, GNOME and KDE take `Super`+arrow for tiling, GNOME takes `Alt`+`` ` `` for switch-group, and
+macOS Chrome reads `Cmd`+`←` as Back. A window manager grabs a key above the browser, so the page
+cannot detect it, warn about it or take it back — the second chord sits one modifier away from
+everything a desktop reserves, and is what the feature runs on in practice. The quarters cannot
+reuse the arrows there, since `Ctrl`+`Shift`+arrow is already a half, so they are the digits in
+reading order — matched by `event.code`, because `Shift`+`1` is `!` on one layout and something else
+on the next.
 
 The snap chords go through the same `snap(id, zone, view)` a drop does, so they respect
 `snap.enabled`, `snap.insets`, the window's `draggable`/`resizable` flags and the inertness below
 `mobileBreakpoint`. A keystroke inside an `<input>`, `<textarea>` or `contenteditable` belongs to
-the text field and never reaches the window.
+the text field and never reaches the window — `Meta`+`←` is line-start on macOS, and
+`Ctrl`+`Shift`+arrow is word-select everywhere.
 
-`Meta`+arrow collides with a real OS window manager on some platforms, so every binding moves:
+Every binding moves, and an override replaces **both** default chords for that action, so you never
+inherit a collision you did not ask for:
 
 ```js
 keymap: {
   bindings: {
     snapLeft: 'Ctrl+Alt+ArrowLeft',      // one chord replaces the default
-    snapMax: ['Meta+ArrowUp', 'F11'],    // or several
+    snapMax: ['Ctrl+ArrowUp', 'F11'],    // or several
     snapNone: null,                      // or none at all
   },
 }

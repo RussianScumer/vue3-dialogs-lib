@@ -863,6 +863,21 @@ Chord sequences, per-window keymaps, a shortcuts cheatsheet UI.
 - **Modifiers are compared exactly, not as a subset.** `Meta+ArrowUp` and `Meta+Shift+ArrowUp` are
   different actions on adjacent keys; a subset match would have made the quarter fall through to
   maximize the moment a consumer unbound it.
+- **Every action ships two chords, because one of them is usually dead.** The task's defaults are
+  the familiar ones, and on the three big desktops the familiar one never reaches the page at all:
+  Windows takes `Win`+arrow for Snap Assist, GNOME and KDE take `Super`+arrow for tiling, GNOME
+  takes `` Alt+` `` for switch-group, and macOS Chrome reads `Cmd`+`←` as Back. A window-manager
+  grab happens above the browser — no event, no signal, nothing to detect or override — so the only
+  available answer is a second chord one modifier away from everything a desktop reserves.
+  `Ctrl`+`Shift` is that gap (GNOME's workspaces are `Ctrl`+`Alt`+arrow, KDE's move-to-desktop
+  `Ctrl`+`Alt`+`Shift`+arrow, macOS' Mission Control `Ctrl`+arrow), and it is already covered by the
+  editable guard, since inside a text field it is word-select. The quarters cannot reuse the arrows
+  there — `Ctrl`+`Shift`+arrow is a half — so they are `Digit1`…`Digit4` in reading order, which
+  needs no convention at all, bound by `code` because `Shift`+`1` is `!` on one layout and something
+  else on the next. Switching keeps `Shift` as its reverse in both families rather than staying
+  inside the `Ctrl`+`Shift` gap. **An override replaces both chords for its action**: a consumer who
+  names a binding must not inherit the collision they did not ask for. Platform sniffing was
+  rejected — `userAgentData.platform` names the OS, and the grab is the window manager's.
 - **A chord matches `event.key` or `event.code`.** `Alt` turns `` ` `` into a dead key on several
   layouts, so `Alt+Backquote` written against `key` alone would be unreachable exactly where the
   binding matters. `Backquote` is the default for that reason, and either spelling works.
@@ -877,7 +892,7 @@ Chord sequences, per-window keymaps, a shortcuts cheatsheet UI.
 
 ### Verification
 
-`npx vitest run` — 206 tests, 186 jsdom (18 new in `keymap.spec.ts`) and 20 browser. `npm run lint`
+`npx vitest run` — 208 tests, 188 jsdom (20 new in `keymap.spec.ts`) and 20 browser. `npm run lint`
 and `npm run type-check` clean. Existing specs untouched.
 
 jsdom only for the new spec, following VW-06 and VW-08: the keymap is option resolution, one
@@ -900,12 +915,21 @@ arrow still nudging 10px and `Shift`+arrow still resizing, with `Meta`+arrow doi
 after a reload the persisted blob still at `schema: 2` with the same twenty descriptor keys and no
 trace of a keymap. No console output but Vite's own.
 
+The fallback chords were measured the same way, in a second session at 2560×990: `Ctrl+Shift+←/→`
+giving the 1280-wide halves, `Ctrl+Shift+↑` the full 2560 width, `Ctrl+Shift+1…4` the four 1280×477
+quarters in reading order, `Ctrl+Shift+↓` returning the window to its pre-snap 380×300 at 96,96,
+`` Ctrl+` `` walking all three windows and `` Ctrl+Shift+` `` reversing — and `Ctrl+Shift+←` inside
+the editor's `<input>`, where it is word-select, changing nothing about the window. The 520px
+heights on the halves are the log viewer's own `maxH`, the same clamp the pointer path applies.
+
 The automation tab is `hidden`, as it has been since VW-05, and this time that cost more than stale
 screenshots: the extension's key channel delivered nothing at all to the page — a plain `ArrowLeft`
-never arrived, let alone a modified one — so the session was driven with `KeyboardEvent`s dispatched
-onto the real elements. What that cannot prove is the one thing no test can: whether the host OS
-lets `Meta`+arrow reach the browser in the first place. That is precisely why the bindings are
-overridable.
+never arrived, and neither did `Ctrl+Shift+←` when the fallbacks were added — so both sessions were
+driven with `KeyboardEvent`s dispatched onto the real elements. **The one claim no test and no
+automation here can make is whether a given host OS lets a chord through at all**; a grabbed key
+produces no event to observe. That is the whole reason for the second chord, and for keeping every
+binding overridable. Confirming `Ctrl`+`Shift`+arrow against a real Windows, GNOME and macOS
+desktop is a human's job, and is still open.
 
 ---
 

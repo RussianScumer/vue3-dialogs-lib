@@ -78,6 +78,37 @@ describe('keymap — snapping', () => {
     expect(win.byId(id)).toMatchObject({ x: 100, y: 90, w: 400, h: 300 })
   })
 
+  it('the Ctrl+Shift fallbacks reach the same zones as the Meta chords', async () => {
+    const { wrapper, win } = app()
+    const id = win.open('editor', { id: 1 }, { x: 100, y: 90, w: 400, h: 300 }).id
+    await nextTick()
+    const dialog = wrapper.find('dialog.vw')
+
+    // Every desktop that matters takes Meta+Arrow for its own tiling, so the second chord is what
+    // the feature actually runs on. Same actions, same rects.
+    const chords = [
+      [{ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, shiftKey: true }, 'left'],
+      [{ key: 'ArrowRight', code: 'ArrowRight', ctrlKey: true, shiftKey: true }, 'right'],
+      [{ key: 'ArrowUp', code: 'ArrowUp', ctrlKey: true, shiftKey: true }, 'max'],
+      // The quarters cannot reuse the arrows — Ctrl+Shift+Arrow is already a half — so they are the
+      // digits in reading order, matched by `code` because Shift+1 is `!` on a US layout.
+      [{ key: '!', code: 'Digit1', ctrlKey: true, shiftKey: true }, 'top-left'],
+      [{ key: '@', code: 'Digit2', ctrlKey: true, shiftKey: true }, 'top-right'],
+      [{ key: '#', code: 'Digit3', ctrlKey: true, shiftKey: true }, 'bottom-left'],
+      [{ key: '$', code: 'Digit4', ctrlKey: true, shiftKey: true }, 'bottom-right'],
+    ] as const
+
+    for (const [chord, zone] of chords) {
+      await dialog.trigger('keydown', chord)
+      expect(win.dockZone(id)).toBe(zone)
+      expect(win.byId(id)).toMatchObject(snapRect(zone, view(), NO_INSETS))
+    }
+
+    await dialog.trigger('keydown', { key: 'ArrowDown', code: 'ArrowDown', ctrlKey: true, shiftKey: true })
+    expect(win.dockZone(id)).toBeNull()
+    expect(win.byId(id)).toMatchObject({ x: 100, y: 90, w: 400, h: 300 })
+  })
+
   it('respects snap.insets, like the pointer path', async () => {
     const insets = { top: 20, bottom: 36 }
     const { wrapper, win } = app({ snap: { insets } })
@@ -184,6 +215,24 @@ describe('keymap — window switching', () => {
     expect(win.activeId.value).toBe(a)
   })
 
+  it('Ctrl+` switches too, with Shift reversing it in both families', async () => {
+    const { wrapper, win } = app()
+    const a = win.open('editor', { id: 1 }).id
+    win.open('editor', { id: 2 })
+    const c = win.open('editor', { id: 3 }).id
+    await nextTick()
+
+    // From the top of the stack, next wraps to the bottom.
+    await wrapper.findAll('dialog.vw')[2]!.trigger('keydown', { key: '`', code: 'Backquote', ctrlKey: true })
+    expect(win.activeId.value).toBe(a)
+
+    // a is now on top, so prev is the one below it — the window that was just left.
+    await wrapper
+      .findAll('dialog.vw')[0]!
+      .trigger('keydown', { key: '~', code: 'Backquote', ctrlKey: true, shiftKey: true })
+    expect(win.activeId.value).toBe(c)
+  })
+
   it('skips minimized windows', async () => {
     const { win } = app()
     const a = win.open('editor', { id: 1 }).id
@@ -241,8 +290,11 @@ describe('keymap — configuration', () => {
     const dialog = wrapper.find('dialog.vw')
 
     await dialog.trigger('keydown', { key: 'ArrowLeft', metaKey: true })
+    await dialog.trigger('keydown', { key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, shiftKey: true })
     await dialog.trigger('keydown', { key: 'ArrowUp', metaKey: true, shiftKey: true })
+    await dialog.trigger('keydown', { key: '!', code: 'Digit1', ctrlKey: true, shiftKey: true })
     await dialog.trigger('keydown', { ...BACKQUOTE, altKey: true })
+    await dialog.trigger('keydown', { ...BACKQUOTE, ctrlKey: true })
 
     expect(win.dockZone(id)).toBeNull()
     expect(win.byId(id)).toMatchObject({ x: 100, y: 90, w: 400, h: 300 })
@@ -256,7 +308,8 @@ describe('keymap — configuration', () => {
     const dialog = wrapper.find('dialog.vw')
 
     await dialog.trigger('keydown', { key: 'ArrowLeft', metaKey: true })
-    expect(win.dockZone(id)).toBeNull() // the default is gone with the override
+    await dialog.trigger('keydown', { key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, shiftKey: true })
+    expect(win.dockZone(id)).toBeNull() // an override replaces *both* defaults, collision included
 
     await dialog.trigger('keydown', { key: 'ArrowLeft', ctrlKey: true, altKey: true })
     expect(win.dockZone(id)).toBe('left')
