@@ -51,6 +51,16 @@ export interface OpenOptions extends WindowDefaults {
   meta?: Record<string, unknown>
   /** false opens a second window even when one with the same name and props is already open. */
   dedupe?: boolean
+  /**
+   * Open this window as a child of another one: it renders directly above its owner, makes only
+   * the owner's own `<dialog>` inert, moves with it as a group, and closes with it. The macOS
+   * document-modal sheet — no top layer, no page-wide backdrop, no focus trap.
+   *
+   * Owned windows skip dedupe, do not count towards `maxWindows`, are always `closable` and never
+   * `minimizable`, and are **never persisted**: a confirm must not come back after a reload. That
+   * is why the link lives in a runtime-only map and not on the descriptor.
+   */
+  owner?: string
 }
 
 export interface Viewport {

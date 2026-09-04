@@ -537,7 +537,8 @@ events, which is what this task is about; the timing claims are the specs'.
 
 ## VW-07 — Owned child windows
 
-**Roadmap:** §4 (decided: option **a**) · **Size:** L · **Depends on:** VW-06
+**Roadmap:** §4 (decided: option **a**) · **Size:** L · **Depends on:** VW-06 · **Status:** done on
+`vw-07-owned-child-windows`.
 
 ### Goal
 
@@ -591,6 +592,81 @@ This is the macOS document-modal sheet, not a page modal.
 ### Out of scope
 
 `alertdialog` semantics, a bundled confirm component, page-wide backdrop, focus trap.
+
+### Notes
+
+- **The cycle the task asks for cannot be built.** `open()` is the only thing that adds an owner
+  link, and the window it links is brand new, so the new window can never already be an ancestor of
+  its own owner. The walk up the chain still carries a `seen` set and throws on a repeat — a loop
+  that can hang is not a thing to leave in a library — but what the tests can reach are the two
+  real failures: an unknown owner id, and a chain past the cap. Both throw at call time, as an
+  unknown window name does.
+- **The pending join outranks the owner refusal, deliberately.** "`requestClose(ownerId)` is
+  refused outright" is the rule for a request that arrives while a child is open. But in the shape
+  this whole feature exists for, the child *is* that request's own guard asking its question — so
+  by the time the child exists, `requestClose` is already pending, and VW-06's re-entrancy hands
+  the second caller the same promise. Refusing there would answer "the window stayed open" while
+  the real answer is still out. The refusal therefore sits after the `pending` join and covers the
+  other case: a child opened by something other than a guard. Both are tested.
+- **Ownership is a group, not a parent pointer, for stacking.** "Focusing either raises both" is
+  not `owner.z + 1` computed at render time; it is one re-stack of the whole chain, owners before
+  children, on every focus. That is also how the child gets its `owner.z + 1` at open, which is why
+  `open()` calls the re-stack directly rather than `focus()`: the fresh window is already at
+  `topZ`, so `focus()`'s early return would have left the owner wherever it was.
+- **`inert` is written by hand, not bound.** A binding would clear the attribute on false, taking a
+  consumer's own `inert` with it, and there is no way to record what was there before. The watcher
+  records it once and hands it back — which is also what makes an owner that is itself somebody's
+  child survive its own child going away.
+- **That watcher is `flush: 'sync'`.** Closing a child hands focus back to the owner's header
+  through VW-04's chain, and a real UA refuses to focus anything inside an inert subtree. On the
+  default `pre` flush the host retires the child's frame in the same tick that clears `inert`, and
+  which of the two runs first is a matter of watcher creation order — the focus landed on nothing.
+  Sync makes the attribute go the instant the store forgets the link.
+- **Eviction counts roots, not windows.** `maxWindows` compares against the unowned windows only,
+  and evicts one of those; a child leaves with its owner rather than being picked. Anything else
+  would let a confirm close a real window to make room for itself.
+- **Persistence is filtered on the way out *and* on the way in.** Out, because the link lives in a
+  runtime map and a persisted child would come back as an ordinary window with no owner and no way
+  to be answered. In, because a hand-crafted blob can carry an `owner` key that no version of this
+  code writes, and dropping it is cheaper than reasoning about what it would mean.
+- **A function in `props` is legal for an owned window, and only for one.** The playground's sheet
+  takes its `answer` callback as a prop — normally the thing a descriptor may not carry. It is safe
+  for exactly the reason the window is: it is never written to storage, so the callback can never
+  come back dead. The playground says so where it does it.
+- **An unanswered question must not hang the guard.** A sheet can go away without answering — ESC
+  dismisses it, closing the owner takes it down — so the playground settles its promise from
+  `on('close')` as well as from the buttons. That is the consumer's half of the contract and it is
+  written into recipe 20, because getting it wrong leaves a window `closing` forever.
+
+### Verification
+
+`npx vitest run` — 174 tests, 154 jsdom (17 new in `owned.spec.ts`) and 20 browser (3 new in
+`owned.browser.spec.ts`). `npm run lint` and `npm run type-check` clean. Existing specs untouched.
+
+Both projects, and the browser one carries the half jsdom cannot: jsdom implements nothing of
+`inert`, so the jsdom spec can only prove the library sets the attribute — ownership bookkeeping,
+the close cascade, the refusals, the stacking group, the eviction rule and the two persistence
+directions are all store logic and belong there. What the UA owes is measured in Chromium: an
+`elementFromPoint` at the owner's own button comes back as `<body>` while the sibling's comes back
+as itself, `focus()` on anything inside the inert owner is refused, a sibling still drags, and a
+keydown on an inert owner is never delivered at all.
+
+Exercised by hand in the running playground under Chrome. The `window.confirm` VW-06 stood in with
+is gone: the editor's guard now opens a real owned window. Measured there — the sheet at
+`z-index: 1015` over its owner at `1014` with the untouched sibling at `1011`; the owner carrying
+`inert` and nothing else on the desktop doing so; the owner's input neither hittable nor focusable
+while a sibling window still drags by its header; `minimize(owner)` refused with the dev warning
+and no other console output; ESC on the sheet dismissing it, focus landing back inside the editor
+and every control re-enabled; "Keep editing" keeping the window and "Discard" closing it; a chain
+four windows deep with each owner inert and only the deepest interactive, a fifth throwing
+`owner chain deeper than 3 windows` and an unknown owner id throwing at the call; the persisted
+blob holding only the two real windows with no `owner` key anywhere in it, and a reload bringing
+back exactly those two, neither inert; `closeAll()` with a question out leaving zero `<dialog>`
+elements.
+
+One thing worth writing down about driving it: `await`ing `requestClose(owner)` from the console
+while the sheet is open hangs, because that promise is the question and the question is on screen.
+That is the feature working, and it froze the automation channel once before it was understood.
 
 ---
 

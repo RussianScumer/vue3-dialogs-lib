@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
-import { useWindowContext, useWindowState } from '../../src'
+import { useWindowContext, useWindows, useWindowState } from '../../src'
 import { log, trackMount } from '../eventLog'
 
 const props = defineProps<{ id: number; windowId: string }>()
@@ -9,20 +9,57 @@ const props = defineProps<{ id: number; windowId: string }>()
 const form = useWindowState(props.windowId, () => ({ name: '', note: '' }))
 const { descriptor, setTitle, requestClose, onBeforeClose, minimize, isRestored, closing } =
   useWindowContext()
+const win = useWindows()
 
 setTitle(`Item ${props.id}`)
+
+/**
+ * Asks the question in a window of its own, owned by this one. The sheet renders above this editor
+ * and makes only this editor inert — every other window stays usable, which a `confirm()` cannot
+ * say.
+ *
+ * The `close` subscription is what makes this safe to await: the sheet can go away without ever
+ * answering — ESC dismisses it, closing this window takes it down with it — and an unanswered
+ * question must resolve as "keep the window", never hang the guard.
+ */
+function askToDiscard(): Promise<boolean> {
+  return new Promise((resolve) => {
+    let off: (() => void) | null = null
+    let done = false
+    const settle = (ok: boolean) => {
+      if (done) return
+      done = true
+      off?.()
+      resolve(ok)
+    }
+    const id = win.open(
+      'confirmSheet',
+      { message: `Discard the draft in "${descriptor.title}"?`, answer: settle },
+      {
+        owner: props.windowId,
+        title: 'Discard changes?',
+        // Over its owner, not in the cascade corner: where a sheet belongs is the consumer's call.
+        x: Math.round(descriptor.x + descriptor.w / 2 - 160),
+        y: Math.round(descriptor.y + 48),
+      },
+    )
+    off = win.on('close', (e) => {
+      if (e.id === id) settle(false)
+    })
+  })
+}
 
 // Refuse to close while the draft has something in it. Registered from the content, so it lives
 // exactly as long as the content does — minimize this window and the guard is gone with it.
 //
 // Async on purpose: the guard is awaited, and the window is `closing` until it answers, which is
-// what the disabled controls below are reading. A real app asks the question in a window of its
-// own; until owned child windows exist, the native confirm stands in for one.
+// what the disabled controls below are reading — and what gives the owned confirm below the time
+// to be asked and answered at all.
 onBeforeClose(async () => {
   if (!form.name) return true
   log(`ItemEditor ${props.id}: guard asked — checking for unsaved changes…`)
   await new Promise((resolve) => setTimeout(resolve, 600)) // stands in for a round-trip
-  const discard = window.confirm(`Discard the draft in "${descriptor.title}"?`)
+  const discard = await askToDiscard()
   log(`ItemEditor ${props.id}: guard ${discard ? 'allowed the close' : 'refused to close'}`)
   return discard
 })

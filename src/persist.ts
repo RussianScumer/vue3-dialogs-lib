@@ -23,6 +23,9 @@ function isDescriptor(v: unknown, options: ResolvedOptions): v is WindowDescript
   return (
     typeof d.id === 'string' &&
     typeof d.name === 'string' &&
+    // Owned windows are runtime-only and are never written; a blob claiming one is hand-crafted or
+    // from a shape this code does not know, and a confirm must never come back from storage.
+    d.owner == null &&
     typeof d.minimized === 'boolean' &&
     ['x', 'y', 'w', 'h', 'z'].every((k) => typeof d[k] === 'number' && Number.isFinite(d[k])) &&
     // A descriptor whose window type no longer exists can never be rendered.
@@ -109,7 +112,14 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
     () => {
       clearTimeout(timer)
       timer = setTimeout(() => {
-        const data: Snapshot = { schema: SCHEMA, topZ: store.s.topZ, stack: store.s.stack }
+        // Owned windows are dropped on the way out, not filtered on the way in: the link lives in
+        // a runtime map, so a persisted child would come back as an ordinary window with no owner
+        // and no way to be answered.
+        const data: Snapshot = {
+          schema: SCHEMA,
+          topZ: store.s.topZ,
+          stack: store.s.stack.filter((w) => !store.ownerOf(w.id)),
+        }
         try {
           p.storage.setItem(p.key, JSON.stringify(data))
         } catch {

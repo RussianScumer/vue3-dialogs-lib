@@ -334,7 +334,8 @@ function clearStorage() {
           <h2>12 · Refusing to close</h2>
           <p>
             Type into an item editor's <em>Name</em> and its own guard takes over the ✕: it is <em>async</em>, so it
-            spends 600ms pretending to check for unsaved changes and then asks with a <code>confirm</code>. While it
+            spends 600ms pretending to check for unsaved changes and then asks in an owned child window (case 18).
+            While it
             is out the window is <code>closing</code> — its controls, the footer buttons and the taskbar ✕ all stand
             down, and a second click joins the same request instead of asking twice. That guard is registered by the
             content, so minimizing the window unmounts it along with everything else. A minimized window is covered
@@ -423,6 +424,29 @@ function clearStorage() {
         </section>
 
         <section>
+          <h2>18 · Owned child windows</h2>
+          <p>
+            The question case 12's guard asks is a window, not a <code>confirm()</code>: opened with
+            <code>{{ '{ owner: id }' }}</code>, it renders directly above the editor that asked and makes
+            <em>only that editor</em> <code>inert</code> — the editor stops taking clicks and focus, and every other
+            window on the desktop keeps working, drag included. There is no page-wide backdrop and no focus trap; this
+            is the macOS sheet, not <code>showModal()</code>.
+          </p>
+          <p>
+            Type a name into an item editor and press its ✕. While the sheet is open the editor cannot be minimized
+            and cannot be asked to close again — the sheet <em>is</em> the question. ESC dismisses the sheet instead of
+            minimizing it, and dismissing counts as “keep editing”. Focusing either window raises both, in order.
+            Owned windows are never persisted: open one, reload, and only the editor comes back.
+          </p>
+          <button
+            type="button"
+            @click="openItem"
+          >
+            Open item editor
+          </button>
+        </section>
+
+        <section>
           <h2>17 · Transitions and where the window went</h2>
           <p>
             <code>data-vw-state</code> goes <code>entering</code> → <code>open</code> → <code>leaving</code> on the
@@ -473,7 +497,7 @@ function clearStorage() {
             <td>{{ w.minimized ? 'min' : `${Math.round(w.x)},${Math.round(w.y)} ${w.w}×${w.h}` }}</td>
             <td>{{ win.dockZone(w.id) ?? '—' }}</td>
             <td>z{{ w.z }} → {{ options.zIndexBase + w.z }}</td>
-            <td>{{ [w.closable ? '' : 'no-x', w.minimizable ? '' : 'no-min', w.draggable ? '' : 'no-drag', w.resizable ? '' : 'no-size'].filter(Boolean).join(' ') || '—' }}</td>
+            <td>{{ [win.ownerOf(w.id) ? 'child' : '', win.hasChild(w.id) ? 'inert' : '', w.closable ? '' : 'no-x', w.minimizable ? '' : 'no-min', w.draggable ? '' : 'no-drag', w.resizable ? '' : 'no-size'].filter(Boolean).join(' ') || '—' }}</td>
           </tr>
         </table>
 
@@ -522,8 +546,10 @@ function clearStorage() {
       <span class="taskbar__label">Windows ({{ all.length }})</span>
       <!-- The ref callback runs on every taskbar render, so the rect a minimizing window flies to
            is always the current one — even after the buttons have reflowed. -->
+      <!-- Owned windows are left out: a sheet belongs to its owner, not to the desktop, and it
+           cannot be minimized in the first place. -->
       <button
-        v-for="w in all"
+        v-for="w in all.filter((x) => !win.ownerOf(x.id))"
         :key="w.id"
         :ref="(el) => setTaskbarRect(w.id, el)"
         type="button"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onErrorCaptured, onMounted, ref } from 'vue'
+import { computed, onErrorCaptured, onMounted, ref, watch } from 'vue'
 import { useWindows, useWindowOptions } from './createWindows'
 import { onWindowKeydown, useWindowDrag } from './useWindowDrag'
 import { RESIZE_DIRS, RESIZE_STYLES, useWindowResize } from './useWindowResize'
@@ -34,6 +34,10 @@ const active = computed(() => win.activeId.value === d.id)
  * very guard that is still being awaited.
  */
 const closing = computed(() => win.isClosing(d.id))
+/** True for a sheet: a window opened with `{ owner }`, which ESC dismisses instead of minimizing. */
+const owned = computed(() => win.ownerOf(d.id) !== null)
+/** True while this window owns a child. The child is the question; this frame stands down. */
+const blocked = computed(() => win.hasChild(d.id))
 const visual = computed<WindowVisualState>(() => props.state ?? 'open')
 /** Retained for the animation only: the store has already let go, so nothing here may be clicked. */
 const leaving = computed(() => visual.value === 'leaving')
@@ -57,6 +61,37 @@ const resize = useWindowResize(d, {
   onEnd: () => win.undock(d.id),
 })
 onMounted(() => el.value?.show()) // non-modal: background stays usable, taskbar clickable
+
+/**
+ * A child window makes its owner inert — the owner's own `<dialog>` and nothing else. No top layer,
+ * no page-wide backdrop, no focus trap: a sibling window stays completely interactive, drag
+ * included, which is the whole difference between this and `showModal()`.
+ *
+ * Whatever `inert` was there before is recorded and handed back, so a consumer who set it
+ * themselves keeps it, and an owner that is itself somebody's child is not un-inerted by its own
+ * child going away.
+ *
+ * Written by hand rather than bound in the template for that recording, and flushed `sync` for the
+ * focus chain: closing a child hands focus back to this header, and a real UA refuses to focus
+ * anything inside an inert subtree — so the attribute has to be gone by then, not next tick.
+ */
+let priorInert: boolean | null = null
+
+watch(
+  () => blocked.value && !!el.value,
+  (on) => {
+    const node = el.value
+    if (!node) return
+    if (on) {
+      priorInert ??= node.hasAttribute('inert')
+      node.setAttribute('inert', '')
+    } else if (priorInert !== null) {
+      if (!priorInert) node.removeAttribute('inert')
+      priorInert = null
+    }
+  },
+  { flush: 'sync' },
+)
 
 // After the show() hook on purpose: show() runs the dialog focusing steps, so registering this
 // first would let the UA overwrite it. A window restored from storage on page load must not steal
@@ -156,7 +191,16 @@ function ownsEscape(target: EventTarget | null): boolean {
  * a background window without raising it), and for a native picker.
  */
 function onEscape(e: KeyboardEvent) {
-  if (e.defaultPrevented || !active.value || !d.minimizable || ownsEscape(e.target)) return
+  if (e.defaultPrevented || !active.value || ownsEscape(e.target)) return
+  // A sheet is dismissed by ESC rather than minimized — it is not minimizable, and dismissing is
+  // what the key means over a question. It goes through `requestClose`, so a child with a guard of
+  // its own is still asked. An inert owner never gets here: the UA does not deliver the event.
+  if (owned.value) {
+    e.preventDefault()
+    void win.requestClose(d.id)
+    return
+  }
+  if (!d.minimizable) return
   e.preventDefault()
   win.minimize(d.id)
 }

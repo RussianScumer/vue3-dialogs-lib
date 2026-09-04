@@ -43,6 +43,9 @@ createApp(App)
           w: 380,
           h: 220,
         },
+        // The confirm an ItemEditor's close guard asks with: opened as an owned child of the
+        // window asking the question, so it is never persisted and closes with its owner.
+        confirmSheet: { component: () => import('./windows/ConfirmSheet.vue'), w: 320, h: 190 },
         // The chunk arrives; the component throws on mount.
         brokenPanel: { component: () => import('./windows/BrokenPanel.vue'), w: 380, h: 220 },
       },

@@ -563,3 +563,64 @@ from your error component if you want it centrally.
 
 With no `errorComponent` registered the body is simply empty — the library ships no strings of its
 own — which is a working window and a blank one. Register one.
+
+## 20 · Ask a question in a window of its own
+
+A close guard can say "wait", but it needs something to ask with. Open a window that belongs to
+the one asking:
+
+```js
+const id = win.open('confirmSheet', { message, answer }, { owner: props.windowId })
+```
+
+An owned window renders directly above its owner and sets `inert` on the owner's `<dialog>` — and
+on nothing else. There is no page-wide backdrop, no top layer and no focus trap: every *other*
+window on the desktop stays fully interactive, drag included. This is the macOS document-modal
+sheet, not `showModal()`.
+
+What the library does with it, none of which you have to arrange:
+
+- the pair moves as a group — focusing either raises both, and the child is always one `z` above
+  its owner;
+- `minimize(owner)` and `requestClose(owner)` are refused while the child is open, since the child
+  *is* the question; `close(owner)` closes the child first and then the owner;
+- ESC dismisses the child instead of minimizing it, and an inert owner never receives the key;
+- the child is always `closable`, never `minimizable`, skips dedupe, and neither counts towards
+  `maxWindows` nor evicts anything to make room;
+- it is **never persisted**: a confirm must not come back after a reload. The link lives in a
+  runtime map, so nothing about it reaches the descriptor or `SCHEMA`.
+
+A chain may be three deep — a sheet may own a sheet — and asking for a fourth throws at `open()`,
+as an unknown owner id does.
+
+Answering is the consumer's half, and there is one rule: **a sheet can go away without answering**.
+ESC dismisses it, and closing the owner takes it down with it. Settle the promise on `close` too,
+or the guard waits forever:
+
+```js
+function ask(message) {
+  return new Promise((resolve) => {
+    let off, done = false
+    const settle = (ok) => { if (!done) { done = true; off?.(); resolve(ok) } }
+    const id = win.open('confirmSheet', { message, answer: settle }, { owner: props.windowId })
+    off = win.on('close', (e) => { if (e.id === id) settle(false) })
+  })
+}
+
+onBeforeClose(async () => !form.name || (await ask(`Discard the draft in ${descriptor.title}?`)))
+```
+
+A function in `props` is normally the thing a descriptor may not carry. It is safe here for the
+same reason the whole window is: an owned window is never written to storage, so the callback can
+never come back dead after a reload. Nothing else in the library relaxes that rule.
+
+Where the sheet appears is yours — pass `x`/`y` from the owner's descriptor to put it over the
+window that asked, rather than into the cascade:
+
+```js
+{ owner: props.windowId, x: Math.round(descriptor.x + descriptor.w / 2 - 160), y: descriptor.y + 48 }
+```
+
+`win.ownerOf(id)`, `win.childrenOf(id)` and `win.hasChild(id)` answer the rest — a taskbar usually
+wants `all.filter((w) => !win.ownerOf(w.id))`, since a sheet belongs to its owner and not to the
+desktop.

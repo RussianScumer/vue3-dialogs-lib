@@ -238,6 +238,35 @@ unreachable. The bottom edge alone arms nothing.
 Because `docks` lives outside the reactive `s` object, the debounced persistence watcher never sees
 a ghost hover, and a reload brings a snapped window back as an ordinary floating one.
 
+## Owned child windows
+
+A window may own another one. `open(name, props, { owner: id })` records the link in a runtime map
+and re-stacks the whole group, which is what puts the child at exactly `owner.z + 1`:
+
+```
+owners: Map<childId, ownerId>      // runtime-only, beside `docks` — never persisted
+```
+
+```
+open(..., { owner })   → owners.set(child, owner); raise the group (owner, then its children)
+focus(either)          → the whole group is raised in chain order, relative stacking preserved
+owner has a child      → BaseWindow sets `inert` on the owner's own <dialog>, nothing else
+minimize(owner)        → refused, dev warning: unmounting it would strand the question
+requestClose(owner)    → refused: the child is the question, answer it first
+close(owner)           → children close first, then the owner
+ESC on a child         → requestClose(child) — dismiss, not minimize
+persistence            → owned windows are filtered out of the blob, and dropped out of one
+```
+
+`inert` is set imperatively rather than bound, because whatever was there before is recorded and
+handed back — an owner that is itself somebody's child must not be un-inerted by its own child
+going away. It is written with a `sync` watcher, not the default `pre`: closing a child hands focus
+back to the owner's header through the destination chain, and a real UA refuses to focus anything
+inside an inert subtree, so the attribute has to be gone by then rather than next tick.
+
+The chain is capped at three links, and an unknown owner id throws at `open()` exactly as an
+unknown window name does.
+
 ## The `<dialog>` element
 
 The UA stylesheet gives `<dialog>` `position: absolute; margin: auto; inset: 0`; all three are

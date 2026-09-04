@@ -36,6 +36,12 @@ function rectOf(d: WindowDescriptor): Rect {
   return { x: d.x, y: d.y, w: d.w, h: d.h }
 }
 
+/**
+ * How many owner links a chain may have. A confirm over an editor is one; a confirm over that
+ * confirm is already unusual, and the cap is what stops a bug from building a tower of them.
+ */
+const MAX_OWNER_DEPTH = 3
+
 export function createStore(options: ResolvedOptions) {
   const s = reactive({ stack: [] as WindowDescriptor[], topZ: 10 })
   /** Ids that arrived from storage rather than from a fresh open(). */
@@ -56,6 +62,13 @@ export function createStore(options: ResolvedOptions) {
    * after the window has already started leaving.
    */
   const taskbarRects = reactive(new Map<string, Rect>())
+  /**
+   * Child id → owner id. Runtime-only like `docks`, and for a sharper reason: an owned window is
+   * the question a close guard is asking, and a question must never survive a reload. Reactive,
+   * because the owner's frame goes inert the moment a child appears and interactive again the
+   * moment it is answered.
+   */
+  const owners = reactive(new Map<string, string>())
   /**
    * Functions, so they can never be persisted — same placement rationale as `docks`. Guards come
    * from mounted content and die with it.
@@ -117,15 +130,74 @@ export function createStore(options: ResolvedOptions) {
     return w
   }
 
+  /** The window this one is a child of, or null. Runtime-only, so it is never on the descriptor. */
+  function ownerOf(id: string): string | null {
+    return owners.get(id) ?? null
+  }
+
+  /** Live children of a window, in stack order. */
+  function childrenOf(id: string): string[] {
+    const out: string[] = []
+    for (const w of s.stack) if (owners.get(w.id) === id) out.push(w.id)
+    return out
+  }
+
+  /** True while this window owns a child — the condition that makes its frame inert. */
+  function hasChild(id: string): boolean {
+    for (const owner of owners.values()) if (owner === id) return true
+    return false
+  }
+
+  /**
+   * The owner chain above a window, nearest first. The `seen` set makes a cycle an error rather
+   * than a hang; nothing in the public API can build one, since `open()` is the only way to add a
+   * link and the window it links is brand new, but a walk that can loop forever is not a thing to
+   * leave in a library.
+   */
+  function ancestorsOf(id: string): string[] {
+    const chain: string[] = []
+    const seen = new Set<string>([id])
+    let cur = owners.get(id)
+    while (cur) {
+      if (seen.has(cur)) throw new Error(`[vue-windows] owner cycle at "${cur}"`)
+      seen.add(cur)
+      chain.push(cur)
+      cur = owners.get(cur)
+    }
+    return chain
+  }
+
+  /** A window and everything below it, owners before their children — the order they stack in. */
+  function groupOf(id: string): WindowDescriptor[] {
+    const chain = ancestorsOf(id)
+    const out: WindowDescriptor[] = []
+    const walk = (wid: string) => {
+      const w = byId(wid)
+      if (w) out.push(w)
+      for (const child of childrenOf(wid)) walk(child)
+    }
+    walk(chain[chain.length - 1] ?? id)
+    return out
+  }
+
+  /** Re-stacks a whole group in one go, which is what keeps a child at exactly `owner.z + 1`. */
+  function raiseGroup(group: WindowDescriptor[]): void {
+    for (const w of group) w.z = ++s.topZ
+  }
+
   /**
    * Raising an already-top window would be a pointless store write on every pointerdown, and the
    * deep persistence watcher would wake for it. `restore()` clears `minimized` before calling in,
    * so a window coming back from the taskbar still lands on top.
+   *
+   * An owner and its children move as one: focusing either raises the whole group, in chain order,
+   * so their relative stacking never changes and a sheet can never end up under its own owner.
    */
   function focus(id: string): string {
     const w = require(id)
-    if (w.z === s.topZ && !w.minimized) return id
-    w.z = ++s.topZ
+    const group = groupOf(id)
+    if (group[group.length - 1]!.z === s.topZ && !w.minimized) return id
+    raiseGroup(group)
     emit('focus', id)
     return id
   }
@@ -133,6 +205,12 @@ export function createStore(options: ResolvedOptions) {
   function minimize(id: string): string {
     const w = require(id)
     if (!w.minimizable || w.minimized) return id
+    // Minimizing would unmount the owner while its own question is still on screen, leaving a
+    // sheet with nothing behind it.
+    if (hasChild(id)) {
+      warn(`"${id}" owns an open child window and cannot be minimized until the child is closed`)
+      return id
+    }
     w.minimized = true
     emit('minimize', id)
     return id
@@ -150,7 +228,11 @@ export function createStore(options: ResolvedOptions) {
   /** Unconditional: guards belong to `requestClose`, so `closeAll()` on logout can never block. */
   function close(id: string): void {
     if (!byId(id)) return
+    // Children first, and unconditionally: an owned window is the owner's question and must never
+    // outlive it — the alternative is a sheet floating over nothing.
+    for (const child of childrenOf(id)) close(child)
     s.stack = s.stack.filter((w) => w.id !== id)
+    owners.delete(id)
     restoredIds.delete(id)
     docks.delete(id)
     taskbarRects.delete(id)
@@ -164,6 +246,7 @@ export function createStore(options: ResolvedOptions) {
     const ids = s.stack.map((w) => w.id)
     s.stack = []
     restoredIds.clear()
+    owners.clear()
     docks.clear()
     taskbarRects.clear()
     closeGuards.clear()
@@ -270,6 +353,13 @@ export function createStore(options: ResolvedOptions) {
     const w = byId(id)
     if (!w) return Promise.resolve(true)
 
+    // The child *is* the question. Answering the owner's close over the top of it would dismiss a
+    // question the user has not answered, so the request is refused outright rather than queued.
+    if (hasChild(id)) {
+      warn(`"${id}" owns an open child window; answer the child before closing the owner`)
+      return Promise.resolve(false)
+    }
+
     closing.add(id)
     const p = runGuards(id, w)
     // A window with no guards at all never suspends: `runGuards` ran to its end, and its `finally`
@@ -283,13 +373,35 @@ export function createStore(options: ResolvedOptions) {
   function openWindow(name: string, props: Record<string, unknown> = {}, opts: OpenOptions = {}): string {
     if (!options.components[name]) throw new Error(`[vue-windows] unknown window "${name}"`)
 
-    // One window per entity: same name + same props means the same thing.
-    if (opts.dedupe !== false) {
+    const owner = opts.owner ?? null
+    if (owner !== null) {
+      // Unknown owner throws at call time, exactly as an unknown name does: both are the caller
+      // asking for something that does not exist.
+      if (!byId(owner)) throw new Error(`[vue-windows] unknown owner window "${owner}"`)
+      // `ancestorsOf` throws on a cycle; the cap is what keeps a confirm-on-a-confirm finite.
+      if (ancestorsOf(owner).length + 1 > MAX_OWNER_DEPTH) {
+        throw new Error(`[vue-windows] owner chain deeper than ${MAX_OWNER_DEPTH} windows`)
+      }
+      // A sheet with no owner on screen is orphaned UI, so the owner comes back with it.
+      if (require(owner).minimized) restore(owner)
+    }
+
+    // One window per entity: same name + same props means the same thing. An owned window is not
+    // an entity, it is a question about one — two of them can be open at once and must be.
+    if (owner === null && opts.dedupe !== false) {
       const dup = s.stack.find((w) => w.name === name && shallowEqual(w.props, props))
       if (dup) return restore(dup.id)
     }
 
-    while (s.stack.length >= options.maxWindows && s.stack[0]) close(s.stack[0].id)
+    // Owned windows are not the user's windows: they neither count towards the limit nor are ever
+    // the thing evicted to make room for it. A confirm must not close a real window to appear.
+    if (owner === null) {
+      let roots = s.stack.filter((w) => !owners.has(w.id))
+      while (roots.length >= options.maxWindows && roots[0]) {
+        close(roots[0].id)
+        roots = s.stack.filter((w) => !owners.has(w.id))
+      }
+    }
 
     // Precedence: the open() call, then the component's spec, then the library default.
     const defs = options.defaultsFor(name)
@@ -303,8 +415,10 @@ export function createStore(options: ResolvedOptions) {
       ...cascade(s.stack.length, { x: opts.x, y: opts.y, w: opts.w ?? defs.w, h: opts.h ?? defs.h }),
       z: ++s.topZ,
       meta: opts.meta ?? {},
-      closable: opts.closable ?? defs.closable ?? true,
-      minimizable: opts.minimizable ?? defs.minimizable ?? true,
+      // Forced for an owned window, not defaulted: a sheet the user cannot dismiss is a trap, and a
+      // minimized sheet is a question with nothing left to answer it about.
+      closable: owner !== null ? true : (opts.closable ?? defs.closable ?? true),
+      minimizable: owner !== null ? false : (opts.minimizable ?? defs.minimizable ?? true),
       draggable: opts.draggable ?? defs.draggable ?? true,
       resizable: opts.resizable ?? defs.resizable ?? true,
       minW: opts.minW ?? defs.minW ?? DEFAULT_MIN_W,
@@ -314,6 +428,13 @@ export function createStore(options: ResolvedOptions) {
     }
     Object.assign(d, clampSize(d.w, d.h, d))
     s.stack.push(d)
+    if (owner !== null) {
+      owners.set(d.id, owner)
+      // Not `focus()`: the fresh window is already at topZ, so the early return would leave its
+      // owner wherever it was. The whole group is re-stacked, which is what puts the child at
+      // exactly `owner.z + 1` however deep the chain goes.
+      raiseGroup(groupOf(d.id))
+    }
     emit('open', d.id)
     return d.id
   }
@@ -422,6 +543,7 @@ export function createStore(options: ResolvedOptions) {
     s.stack = stack
     s.topZ = Math.max(topZ, ...stack.map((w) => w.z), 10)
     restoredIds.clear()
+    owners.clear()
     docks.clear()
     taskbarRects.clear()
     closeGuards.clear()
@@ -444,6 +566,9 @@ export function createStore(options: ResolvedOptions) {
     closeAll,
     requestClose,
     isClosing,
+    ownerOf,
+    childrenOf,
+    hasChild,
     onBeforeClose,
     registerHeader,
     headerOf,
