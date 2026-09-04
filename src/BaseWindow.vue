@@ -24,7 +24,13 @@ const d = props.descriptor
 
 /** Below the breakpoint a floating window is unusable: fullscreen, no drag or resize. */
 const mobile = computed(() => view.w < options.mobileBreakpoint)
-const interactive = () => !mobile.value && !leaving.value
+/** Pinned above every other window, and inert to geometry for as long as it is. */
+const pinned = computed(() => win.isPinned(d.id))
+/**
+ * The one notion of "this frame answers to input that moves it". Drag, resize, the header's arrow
+ * keys and the maximize double-click all read it, so a window can never be half inert.
+ */
+const interactive = () => !mobile.value && !leaving.value && !pinned.value
 const canDrag = () => interactive() && d.draggable
 const canResize = computed(() => interactive() && d.resizable)
 const active = computed(() => win.activeId.value === d.id)
@@ -140,7 +146,10 @@ const style = computed(() => ({
   flexDirection: 'column' as const,
   overflow: 'hidden',
   boxSizing: 'border-box' as const,
-  zIndex: String(options.zIndexBase + d.z),
+  // Two bands. `d.z` is always positive, so `topZ + d.z` puts every pinned window above every
+  // unpinned one while pinned windows keep their own relative order. Nothing persisted moves:
+  // `focus()` and `activeId` still see one stack.
+  zIndex: String(options.zIndexBase + (pinned.value ? win.s.topZ : 0) + d.z),
   width: mobile.value ? '100vw' : `${d.w}px`,
   height: mobile.value ? '100dvh' : `${d.h}px`,
   transform: mobile.value ? 'none' : `translate(${d.x}px, ${d.y}px)`,
@@ -308,6 +317,18 @@ function onHeadDblclick(e: MouseEvent) {
           @click="win.requestClose(d.id)"
         >
           ✕
+        </button>
+        <!-- After the close button on purpose: the control order is part of the public surface,
+             and appending is what keeps a positional `.vw__btn` index meaning what it did. -->
+        <button
+          v-if="win.isPinnable(d.id)"
+          class="vw__btn"
+          type="button"
+          data-vw-nodrag
+          :data-vw-pinned="pinned || undefined"
+          @click="win.setPinned(d.id, !pinned)"
+        >
+          ▲
         </button>
       </slot>
     </header>

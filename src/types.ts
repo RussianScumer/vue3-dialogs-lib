@@ -43,6 +43,17 @@ export interface WindowDefaults {
   minH?: number
   maxW?: number | null
   maxH?: number | null
+  /**
+   * Open the window pinned above every other one: it cannot be dragged, resized or snapped, and it
+   * carries a pin button that lets the user let go of it again. Unlike the capability flags above
+   * this one is **not** on the descriptor and is **not persisted** — pinning is toggleable at
+   * runtime, so it lives in a runtime-only map and a reload brings the window back unpinned, the
+   * same way a snapped window comes back undocked.
+   *
+   * Mentioning the key at all — `fixed: false` included — is what makes a window pin-*capable* and
+   * gives it the button; a window that never mentions it renders exactly as it does today.
+   */
+  fixed?: boolean
 }
 
 export interface OpenOptions extends WindowDefaults {

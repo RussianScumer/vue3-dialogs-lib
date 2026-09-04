@@ -58,20 +58,30 @@ function openLogWithSpecDefaults() {
 /**
  * Nothing in the header, nothing to grab: only a programmatic close can get rid of it. The id is
  * kept because every window here sets its own title from its content, so titles are not handles.
+ * Named "locked" rather than "fixed" because `fixed` is case 20's option, and it means the other
+ * thing entirely — always on top, and still closable.
  */
-const fixedPanelId = ref<string | null>(null)
+const lockedPanelId = ref<string | null>(null)
 
-function openFixedPanel() {
-  fixedPanelId.value = win.open(
+function openLockedPanel() {
+  lockedPanelId.value = win.open(
     'logViewer',
-    { source: 'fixed' },
+    { source: 'locked' },
     { x: 120, y: 120, w: 380, h: 300, closable: false, minimizable: false, draggable: false, resizable: false },
   ).id
 }
 
-function closeFixedPanel() {
-  if (fixedPanelId.value) win.close(fixedPanelId.value) // close() ignores both the flag and any guard
-  fixedPanelId.value = null
+function closeLockedPanel() {
+  if (lockedPanelId.value) win.close(lockedPanelId.value) // close() ignores both the flag and any guard
+  lockedPanelId.value = null
+}
+
+/**
+ * Always on top: `fixed` is not a descriptor flag, so it neither persists nor is it a lock — the
+ * window keeps its ✕ and its –, and the pin button in its own header lets the user let go of it.
+ */
+function openPinnedPanel() {
+  win.open('logViewer', { source: 'pinned' }, { x: 260, y: 60, w: 380, h: 240, fixed: true })
 }
 
 function openConstrained() {
@@ -332,21 +342,21 @@ function clearStorage() {
           <p>
             <code>closable</code>, <code>minimizable</code>, <code>draggable</code>, <code>resizable</code> and the
             <code>min</code>/<code>max</code> size live on the descriptor, so they survive a reload with the window.
-            The fixed panel (<em>Log: fixed</em>) has no header buttons, no grips and no drag; <code>close(id)</code>
+            The locked panel (<em>Log: locked</em>) has no header buttons, no grips and no drag; <code>close(id)</code>
             still disposes of it, because the flag is an affordance and not a lock. Its options also outrank the
             <code>logViewer</code> spec defaults from case 11.
           </p>
           <button
             type="button"
-            @click="openFixedPanel"
+            @click="openLockedPanel"
           >
-            Open fixed panel
+            Open locked panel
           </button>
           <button
             type="button"
-            @click="closeFixedPanel"
+            @click="closeLockedPanel"
           >
-            close(id) the fixed panel
+            close(id) the locked panel
           </button>
           <button
             type="button"
@@ -523,6 +533,40 @@ function clearStorage() {
         </section>
 
         <section>
+          <h2>20 · Pinned (always-on-top) windows</h2>
+          <p>
+            <code>fixed: true</code> opens a window above every other one and keeps it there: open the pinned log,
+            then click any other window, snap it, or maximize it — the pinned one stays on top. It renders in a second
+            z band (<code>zIndexBase + topZ + z</code>), so nothing about <code>focus()</code> or the active window
+            changes; there is still one stack.
+          </p>
+          <p>
+            It cannot be dragged, resized or snapped — no grips, no header drag, arrow keys do nothing and
+            double-clicking the header does nothing — but it stays closable and minimizable, and it shows up in the
+            taskbar like any other window. The extra button in its header after the ✕ unpins it: it becomes draggable,
+            resizable and snappable again and drops back into the normal band. Press it once more to re-pin, which
+            also drops any snap it had picked up.
+          </p>
+          <p>
+            The pin is <em>runtime-only</em> — the same placement as snap state — so it never touches the descriptor
+            or the storage schema. Pin the window, reload, and it comes back unpinned and draggable, exactly as a
+            snapped window comes back undocked.
+          </p>
+          <button
+            type="button"
+            @click="openPinnedPanel"
+          >
+            Open pinned panel
+          </button>
+          <button
+            type="button"
+            @click="openLog('busy')"
+          >
+            Open another window to click around
+          </button>
+        </section>
+
+        <section>
           <h2>17 · Transitions and where the window went</h2>
           <p>
             <code>data-vw-state</code> goes <code>entering</code> → <code>open</code> → <code>leaving</code> on the
@@ -572,8 +616,8 @@ function clearStorage() {
             <td>{{ w.title || w.name }}</td>
             <td>{{ w.minimized ? 'min' : `${Math.round(w.x)},${Math.round(w.y)} ${w.w}×${w.h}` }}</td>
             <td>{{ win.dockZone(w.id) ?? '—' }}</td>
-            <td>z{{ w.z }} → {{ options.zIndexBase + w.z }}</td>
-            <td>{{ [win.ownerOf(w.id) ? 'child' : '', win.hasChild(w.id) ? 'inert' : '', w.closable ? '' : 'no-x', w.minimizable ? '' : 'no-min', w.draggable ? '' : 'no-drag', w.resizable ? '' : 'no-size'].filter(Boolean).join(' ') || '—' }}</td>
+            <td>z{{ w.z }} → {{ options.zIndexBase + (win.isPinned(w.id) ? win.s.topZ : 0) + w.z }}</td>
+            <td>{{ [win.ownerOf(w.id) ? 'child' : '', win.hasChild(w.id) ? 'inert' : '', win.isPinned(w.id) ? 'pinned' : '', w.closable ? '' : 'no-x', w.minimizable ? '' : 'no-min', w.draggable ? '' : 'no-drag', w.resizable ? '' : 'no-size'].filter(Boolean).join(' ') || '—' }}</td>
           </tr>
         </table>
 

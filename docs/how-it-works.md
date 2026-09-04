@@ -262,6 +262,7 @@ drag released        → snap(id, zone): stash `prev` once, assign snapRect(zone
 drag starts on a
   snapped window     → undockForDrag: pre-snap size back, placed under the cursor
 double-click header  → snap(id, dockZone === 'max' ? 'none' : 'max')
+pinned window        → every one of these is refused; see Pinned windows
 corner resize        → undock(id): keep the new size, forget the zone
 viewport resize      → clampAll: docked windows re-snap, floating ones clamp
 ```
@@ -274,6 +275,39 @@ unreachable. The bottom edge alone arms nothing.
 
 Because `docks` lives outside the reactive `s` object, the debounced persistence watcher never sees
 a ghost hover, and a reload brings a snapped window back as an ordinary floating one.
+
+## Pinned windows
+
+`fixed` is the third piece of runtime-only per-window state, beside `docks` and `owners`, and it is
+there for a reason of its own: pinning is toggled from the header, so it is not a capability the
+descriptor could carry without `SCHEMA` moving.
+
+```
+pins: Map<id, boolean>             // runtime-only, beside `docks` — never persisted
+```
+
+**An entry means the window is pin-capable; the value means it is currently pinned.** A window
+opened without `fixed` has no entry, gets no pin button, and renders exactly as it did before this
+existed — which is also what keeps the control count of an ordinary window where it was.
+
+```
+open(..., { fixed })   → pins.set(id, fixed); `fixed: false` is capable but unpinned
+setPinned(id, true)    → undock(id): an explicit pin outranks a snap, geometry kept
+render band            → pinned: zIndexBase + topZ + z    unpinned: zIndexBase + z
+snap(id, …)            → refused while pinned, so the document-level keymap is no exception
+drag / resize / arrows → BaseWindow's one `interactive` predicate goes false while pinned
+close / closeAll /
+  hydrate              → the entry is dropped where the `docks` entry is
+```
+
+`z` is always positive, so `topZ + z` puts every pinned window above every unpinned one while
+pinned windows keep their relative order. `focus()`, `activeId` and everything persisted are
+untouched: there is still one stack, and the second band exists only at render time. The snap ghost
+keeps `topZ + 1` and therefore sits under a pinned window, which is correct — nothing can be
+snapped onto one anyway.
+
+The cost is explicit and accepted: a reload brings a pinned window back unpinned and draggable, in
+exactly the way it brings a snapped one back undocked.
 
 ## Owned child windows
 

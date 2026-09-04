@@ -130,6 +130,10 @@ win.open('itemEditor', { id: 42 }, {
 })
 ```
 
+One option in that shape is **not** on the descriptor and does not persist — `fixed`, which pins
+the window above every other one. It is toggled from the header at runtime, so it lives in a
+runtime map instead; see [Pinned windows](#pinned-windows).
+
 Repeating those at every call site is the failure mode, so a component can carry its own defaults.
 Give the components map a `{ component, ... }` object instead of a bare component:
 
@@ -381,6 +385,36 @@ win.dockZone(id)                                          // the current zone, o
 
 Snap state is **runtime-only**: it is not part of the descriptor and is not persisted. After a
 reload a snapped window comes back as a plain floating window with the geometry the snap gave it.
+
+## Pinned windows
+
+`fixed: true` opens a window above every other one, wherever focus goes:
+
+```js
+win.open('miniPlayer', {}, { fixed: true })
+```
+
+A pinned window cannot be dragged, resized or snapped — the grips are gone, the header does not
+drag, arrow keys do not move it and double-clicking it does nothing. It stays closable and
+minimizable, and it appears in the taskbar when minimized like any other window.
+
+Its header carries a pin button after the ✕ (marked `data-vw-pinned` while pinned, so you can style
+it), and pressing it drops the window back into the normal band, draggable and snappable again.
+Pinning again re-pins it and drops any snap it had picked up.
+
+```js
+win.isPinned(id)          // in the pinned band right now
+win.isPinnable(id)        // has a pin to toggle — what the header button renders on
+win.setPinned(id, true)   // pin, drop any snap, keep the geometry
+```
+
+Mentioning `fixed` at all is what makes a window pin-capable, so `fixed: false` gives you the
+button without starting pinned, and a window that never mentions it is untouched — no extra button,
+no second band.
+
+Pin state is **runtime-only**, like snap state: it is not on the descriptor and is not persisted, so
+after a reload a pinned window comes back unpinned and draggable. That is deliberate — pinning is
+toggled by the user at runtime, and persisting it would mean moving the storage schema.
 
 ## Keyboard
 

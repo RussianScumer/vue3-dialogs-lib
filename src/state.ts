@@ -102,6 +102,17 @@ export function createStore(options: ResolvedOptions) {
    */
   const owners = reactive(new Map<string, string>())
   /**
+   * Pin state: **an entry means the window is pin-capable, the value means it is currently
+   * pinned.** Runtime-only beside `docks`, and for the reason that decided the shape — pinning is
+   * toggleable from the header, so it is not a capability the descriptor could carry without the
+   * schema moving. The cost is explicit: a pinned window comes back unpinned after a reload,
+   * exactly as a snapped one comes back undocked. Reactive, because the pin drives the render band.
+   *
+   * A window that never mentioned `fixed` has no entry at all, is not pin-capable, and renders
+   * exactly as it did before this existed — no extra control, no second z band.
+   */
+  const pins = reactive(new Map<string, boolean>())
+  /**
    * Functions, so they can never be persisted — same placement rationale as `docks`. Guards come
    * from mounted content and die with it.
    */
@@ -302,6 +313,7 @@ export function createStore(options: ResolvedOptions) {
     owners.delete(id)
     restoredIds.delete(id)
     docks.delete(id)
+    pins.delete(id)
     taskbarRects.delete(id)
     closeGuards.delete(id)
     closing.delete(id)
@@ -318,6 +330,7 @@ export function createStore(options: ResolvedOptions) {
     restoredIds.clear()
     owners.clear()
     docks.clear()
+    pins.clear()
     taskbarRects.clear()
     closeGuards.clear()
     closing.clear()
@@ -554,6 +567,10 @@ export function createStore(options: ResolvedOptions) {
     }
     Object.assign(d, clampSize(d.w, d.h, d))
     s.stack.push(d)
+    // Not on the descriptor, so not in `d` above: mentioning `fixed` at all is what makes the
+    // window pin-capable, and the resolved value is whether it starts pinned.
+    const fixed = opts.fixed ?? defs.fixed
+    if (fixed !== undefined) pins.set(d.id, fixed)
     if (owner !== null) {
       owners.set(d.id, owner)
       // Not `focus()`: the fresh window is already at topZ, so the early return would leave its
@@ -594,12 +611,41 @@ export function createStore(options: ResolvedOptions) {
     return docks.get(id)?.zone ?? null
   }
 
+  /** True while this window renders in the pinned band, above every unpinned one. */
+  function isPinned(id: string): boolean {
+    return pins.get(id) === true
+  }
+
+  /** True when this window has a pin to toggle — the condition the header control renders on. */
+  function isPinnable(id: string): boolean {
+    return pins.has(id)
+  }
+
+  /**
+   * Pins or unpins a window, and makes it pin-capable if it was not already: a consumer calling
+   * this is asking for the affordance as much as for the state, and refusing would leave them with
+   * a pinned window the user cannot let go of.
+   *
+   * Pinning drops any snap, the same reasoning the resize grip already uses: an explicit choice
+   * about where the window sits outranks the zone that put it there. The geometry is kept — a
+   * pinned window stays exactly where it was, it simply stops being treated as docked.
+   */
+  function setPinned(id: string, pinned: boolean): void {
+    require(id)
+    pins.set(id, pinned)
+    if (pinned) undock(id)
+  }
+
   /**
    * Snaps a window to `zone`, or `'none'` to give back the geometry it had before the first snap.
    * Re-snapping keeps the original `prev`, so left → max → none lands where the window started.
    */
   function snap(id: string, zone: SnapZone | 'none', view: Viewport): string {
     const w = require(id)
+    // A pinned window is inert to geometry, whichever path asks: the pointer and the arrow keys go
+    // through `BaseWindow`'s one `interactive` predicate, but the keymap listener is on the
+    // document and reaches the active window directly. One refusal here covers both.
+    if (isPinned(id)) return id
     const current = docks.get(id)
 
     if (zone === 'none') {
@@ -673,6 +719,7 @@ export function createStore(options: ResolvedOptions) {
     restoredIds.clear()
     owners.clear()
     docks.clear()
+    pins.clear()
     taskbarRects.clear()
     closeGuards.clear()
     closing.clear()
@@ -726,6 +773,9 @@ export function createStore(options: ResolvedOptions) {
     undock,
     undockForDrag,
     dockZone,
+    isPinned,
+    isPinnable,
+    setPinned,
     setPreview,
     clampAll,
     isRestored,

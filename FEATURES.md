@@ -240,6 +240,33 @@ not move, but reactive, so the zone can be rendered.
 
 ---
 
+## Pinned (always-on-top) windows
+
+`fixed: true` — as an `open()` option or a `WindowSpec` default — opens a window above every other
+one, and gives it a pin button in its own header to let go again.
+
+- **A second z band.** A pinned window renders at `zIndexBase + topZ + z`, an unpinned one at
+  `zIndexBase + z`. Since `z` is always positive, every pinned window outranks every unpinned one,
+  and pinned windows keep their relative order. `focus()`, `activeId` and everything persisted are
+  untouched — there is still one stack.
+- **Inert to geometry.** No drag, no resize grips, no arrow-key nudge, no maximize double-click, and
+  `snap()` refuses — which is what makes the keymap chords no exception. One `interactive`
+  predicate in `BaseWindow`, so a window can never be half pinned.
+- **Still closable and minimizable.** The ✕ and – keep working, and a minimized pinned window
+  appears in the taskbar like any other.
+- **Runtime-only, and toggleable.** Pin state lives in a reactive map beside `docks`, not on the
+  descriptor: it is toggled at runtime, so it cannot be a persisted capability without the schema
+  moving. The accepted cost is that a reload brings a pinned window back unpinned and draggable,
+  exactly as it brings a snapped one back undocked.
+- **Opt-in per window.** Mentioning `fixed` at all — `fixed: false` included — is what makes a
+  window pin-capable and gives it the button. A window that never mentions it renders exactly as it
+  did before the feature existed.
+- **Store API** — `isPinned(id)`, `isPinnable(id)`, `setPinned(id, boolean)`. No new event type: the
+  map is reactive and drives the view directly. Pinning drops any snap, the same reasoning a manual
+  resize uses, and keeps the geometry.
+
+---
+
 ## Persistence
 
 Optional, via `persist: { key, storage }`. Any object with `getItem`/`setItem`/`removeItem`
