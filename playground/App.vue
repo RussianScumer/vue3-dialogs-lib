@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watchEffect } from 'vue'
 import { WindowHost, WindowTaskbar, useWindows, useWindowOptions } from '../src'
+import { components } from './components'
 import { log, useEventLog } from './eventLog'
 import ThemeControls from './ThemeControls.vue'
 
-const win = useWindows()
+// Typed against the real components map, so `open()` checks the props it is given and types what
+// the window settles with — `itemEditor` declares a `SavedItem`, everything else is `unknown`.
+const win = useWindows<typeof components>()
 const options = useWindowOptions()
 const events = useEventLog()
 
@@ -21,14 +24,24 @@ win.on('*', (e) => {
   if (e.type === 'close') titles.delete(e.id)
 })
 
-function openItem() {
+/**
+ * The result path, in the shape a consumer writes it: open the window and await what it settled
+ * with. `open()` returns `{ id, result }`, so there is no `on('close')` plus a side channel here —
+ * and the promise settles whatever happens to the window, including a `closeAll()` from case 5.
+ */
+async function openItem() {
   const id = nextItem++
-  win.open('itemEditor', { id }, { title: `Item ${id}`, w: 420, h: 360 })
+  const saved = await win.open('itemEditor', { id }, { title: `Item ${id}`, w: 420, h: 360 }).result
+  if (saved.ok) log(`Item ${id} resolved: ${saved.data.name} (${saved.data.note.length} chars of note)`)
+  else log(`Item ${id} settled without a value: ${saved.reason}`)
 }
 
-function openSameItem() {
+async function openSameItem() {
   log("open('itemEditor', { id: 1 }) again — should dedupe")
-  win.open('itemEditor', { id: 1 }, { title: 'Item 1', w: 420, h: 360 })
+  // The deduped caller joins the window that is already open — and its answer with it, so both
+  // callers hear the same `resolve()`.
+  const saved = await win.open('itemEditor', { id: 1 }, { title: 'Item 1', w: 420, h: 360 }).result
+  log(`the deduped caller heard: ${saved.ok ? `saved ${saved.data.name}` : saved.reason}`)
 }
 
 function openLog(source: string) {
@@ -37,7 +50,7 @@ function openLog(source: string) {
 
 /** No options at all: the size and limits come from the component's spec in main.ts. */
 function openLogWithSpecDefaults() {
-  const id = win.open('logViewer', { source: 'defaults' })
+  const id = win.open('logViewer', { source: 'defaults' }).id
   const w = win.byId(id)!
   log(`spec defaults applied: ${w.w}×${w.h}, min ${w.minW}×${w.minH}, maxH ${w.maxH}`)
 }
@@ -53,7 +66,7 @@ function openFixedPanel() {
     'logViewer',
     { source: 'fixed' },
     { x: 120, y: 120, w: 380, h: 300, closable: false, minimizable: false, draggable: false, resizable: false },
-  )
+  ).id
 }
 
 function closeFixedPanel() {
@@ -98,8 +111,8 @@ function floodMaxWindows() {
 
 function snapTwo() {
   const view = { w: window.innerWidth, h: window.innerHeight }
-  const a = win.open('itemEditor', { id: nextItem++ }, { title: 'Left' })
-  const b = win.open('logViewer', { source: 'snap' }, { title: 'Right' })
+  const a = win.open('itemEditor', { id: nextItem++ }, { title: 'Left' }).id
+  const b = win.open('logViewer', { source: 'snap' }, { title: 'Right' }).id
   win.snap(a, 'left', view)
   win.snap(b, 'right', view)
   log('snapped two windows to the left and right halves')
@@ -126,6 +139,20 @@ watchEffect(() => {
 
 function reload() {
   location.reload()
+}
+
+/**
+ * A restored descriptor has no live opener — the `open()` that made it belongs to a previous page
+ * load — so its result is settled `restored` before anything can await it.
+ */
+function askRestoredResults() {
+  const all = win.s.stack
+  if (!all.length) return log('no windows open')
+  for (const w of all) {
+    void win.resultOf(w.id).then((r) => {
+      log(`resultOf(${w.title || w.name}) → ${r.ok ? 'ok' : r.reason}`)
+    })
+  }
 }
 
 function clearStorage() {
@@ -443,6 +470,41 @@ function clearStorage() {
             @click="openItem"
           >
             Open item editor
+          </button>
+        </section>
+
+        <section>
+          <h2>19 · Window results</h2>
+          <p>
+            <code>open()</code> returns <code>{{ '{ id, result }' }}</code>, and
+            <code>result</code> is a promise: <code>{{ '{ ok: true, data }' }}</code> when the
+            window resolved a value, and <code>{{ "{ ok: false, reason: 'closed' | 'restored' }" }}</code>
+            when it went away without one. It never hangs — the ✕, <code>close()</code>,
+            <code>closeAll()</code> and <code>maxWindows</code> eviction all settle it.
+          </p>
+          <p>
+            Open an item editor, type a name and press <em>Save and close</em>: the log records the
+            <code>SavedItem</code> the window resolved, typed through the components map. Close it
+            any other way and the same log line reports <code>closed</code> instead. Case 18's
+            confirm sheet is the same mechanism: its answer is its result, which is why it needs no
+            callback in its props.
+          </p>
+          <p>
+            A window that came back from storage is the one case a promise cannot honestly cover —
+            whoever was awaiting it belongs to a page load that is over — so its result is already
+            settled as <code>restored</code>.
+          </p>
+          <button
+            type="button"
+            @click="openItem"
+          >
+            Open item editor
+          </button>
+          <button
+            type="button"
+            @click="askRestoredResults"
+          >
+            resultOf() every open window
           </button>
         </section>
 

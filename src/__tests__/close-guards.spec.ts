@@ -31,7 +31,7 @@ afterEach(() => {
 describe('async close guards', () => {
   it('keeps the window while an async guard is deciding, and closes when it allows', async () => {
     const win = store()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     const answer = deferred()
     win.onBeforeClose(id, () => answer.promise)
 
@@ -47,7 +47,7 @@ describe('async close guards', () => {
 
   it('resolves false and clears the flag when the guard refuses later', async () => {
     const win = store()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     const answer = deferred()
     win.onBeforeClose(id, () => answer.promise)
 
@@ -63,7 +63,7 @@ describe('async close guards', () => {
     const answer = deferred()
     const beforeClose = vi.fn(() => answer.promise)
     const win = store(beforeClose)
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     win.minimize(id)
 
     const request = win.requestClose(id)
@@ -77,7 +77,7 @@ describe('async close guards', () => {
 
   it('joins a second request to the pending one instead of asking twice', async () => {
     const win = store()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     const answer = deferred()
     const guard = vi.fn(() => answer.promise)
     win.onBeforeClose(id, guard)
@@ -101,11 +101,11 @@ describe('async close guards', () => {
   it('treats a guard that throws as a veto, and warns in dev', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const win = store()
-    const sync = win.open('editor', { id: 1 })
+    const sync = win.open('editor', { id: 1 }).id
     win.onBeforeClose(sync, () => {
       throw new Error('boom')
     })
-    const async = win.open('editor', { id: 2 })
+    const async = win.open('editor', { id: 2 }).id
     win.onBeforeClose(async, () => Promise.reject(new Error('boom')))
 
     await expect(win.requestClose(sync)).resolves.toBe(false)
@@ -122,7 +122,7 @@ describe('async close guards', () => {
     const win = store(() => {
       throw new Error('boom')
     })
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
 
     await expect(win.requestClose(id)).resolves.toBe(false)
     expect(win.byId(id)).toBeDefined()
@@ -130,7 +130,7 @@ describe('async close guards', () => {
 
   it('close() ignores a pending guard entirely — logout must never be blockable', async () => {
     const win = store()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     const answer = deferred()
     win.onBeforeClose(id, () => answer.promise)
 
@@ -148,8 +148,8 @@ describe('async close guards', () => {
 
   it('closeAll() ignores pending guards and leaves no window closing', async () => {
     const win = store()
-    const a = win.open('editor', { id: 1 })
-    const b = win.open('editor', { id: 2 })
+    const a = win.open('editor', { id: 1 }).id
+    const b = win.open('editor', { id: 2 }).id
     const answer = deferred()
     win.onBeforeClose(a, () => answer.promise)
     win.onBeforeClose(b, () => answer.promise)
@@ -168,7 +168,7 @@ describe('async close guards', () => {
 
   it('does not persist the pending state: it is on no descriptor, and hydrate clears it', async () => {
     const win = store()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     const answer = deferred()
     win.onBeforeClose(id, () => answer.promise)
     const request = win.requestClose(id)
@@ -206,7 +206,7 @@ describe('the pending state in the view', () => {
       attachTo: document.body,
     })
     const win = useWindows()
-    const id = win.open('guarded', {})
+    const id = win.open('guarded', {}).id
     await nextTick()
 
     const buttons = () => wrapper.findAll('.vw__btn')
@@ -236,7 +236,7 @@ describe('the pending state in the view', () => {
       { global: { plugins: [plugin] }, attachTo: document.body },
     )
     const win = useWindows()
-    const id = win.open('guarded', {})
+    const id = win.open('guarded', {}).id
     await nextTick()
     expect(wrapper.find('.pending').text()).toBe('0')
 

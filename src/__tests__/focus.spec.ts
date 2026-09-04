@@ -51,7 +51,7 @@ describe('focus destinations', () => {
     const opener = outside()
     const { wrapper, win } = app(true)
     win.open('editor', { id: 1 })
-    const b = win.open('editor', { id: 2 })
+    const b = win.open('editor', { id: 2 }).id
     await nextTick()
 
     const [headA, headB] = wrapper.findAll('.vw__head').map((w) => w.element)
@@ -69,7 +69,7 @@ describe('focus destinations', () => {
   it('falls through to the taskbar when the last window is minimized', async () => {
     const opener = outside()
     const { wrapper, win } = app(true)
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     await nextTick()
 
     win.minimize(id)
@@ -84,7 +84,7 @@ describe('focus destinations', () => {
   it('skips the taskbar on close — the button it would focus is gone', async () => {
     const opener = outside()
     const { wrapper, win } = app(true)
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     await nextTick()
 
     win.close(id)
@@ -99,7 +99,7 @@ describe('focus destinations', () => {
     const opener = outside()
     const { wrapper, win } = app(true)
     win.open('editor', { id: 1 })
-    const b = win.open('editor', { id: 2 })
+    const b = win.open('editor', { id: 2 }).id
     await nextTick()
 
     const headA = wrapper.findAll('.vw__head')[0]!.element
@@ -113,7 +113,7 @@ describe('focus destinations', () => {
 
   it('leaves focus where the user put it', async () => {
     const { wrapper, win } = app(true)
-    const a = win.open('editor', { id: 1 })
+    const a = win.open('editor', { id: 1 }).id
     win.open('editor', { id: 2 })
     await nextTick()
 
@@ -129,7 +129,7 @@ describe('focus destinations', () => {
 
   it('does nothing when the chain is exhausted', async () => {
     const { wrapper, win } = app(false)
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     await nextTick()
 
     // No other window, no taskbar target, and the opener was <body> — every step is empty.

@@ -58,12 +58,13 @@ Nothing in it is a component reference, a fetched entity, or a function. That is
 ## Lifecycle of a window
 
 ```
-win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })
+win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })  → { id, result }
   │
   ├─ unknown name?            → throw immediately (typos fail loudly, not silently)
-  ├─ same name + same props?  → restore + focus the existing window, return its id
+  ├─ same name + same props?  → restore + focus the existing window, hand back its id and result
   ├─ at maxWindows?           → close the oldest
   └─ push descriptor { id, name, props, cascade geometry, z: ++topZ }
+       │                       + record the unsettled result, before the `open` event fires
        │
 WindowHost renders `visible` (= stack minus minimized)
        │
@@ -78,6 +79,7 @@ minimize(id) → descriptor.minimized = true
 restore(id)  → minimized = false, z = ++topZ → content mounts again, geometry unchanged
        │
 close(id)    → descriptor removed from the stack; everything about it is gone
+       │        → its result settles { ok: false, reason: 'closed' } if it has not answered
        │        → the frame goes `leaving`, with its content, until the motion duration elapses
 ```
 
@@ -93,6 +95,40 @@ are, and a reload during a pending question restores an ordinary window. The in-
 kept beside it and handed to any further `requestClose` for the same id, which is why an impatient
 second click cannot ask the user twice. `close()` and `closeAll()` clear both without consulting
 anything: the pending guard still answers, into a window that is already gone, and nothing throws.
+
+## Window results
+
+`open()` returns a handle rather than an id, because the id alone cannot say what the window was
+opened *for*. The answer lives in a third runtime-only map, beside the guards and for the same
+reason — it holds promises, so it could never be persisted even if it wanted to be:
+
+```
+results: Map<id, { promise, settle }>   // runtime-only; no descriptor field, no SCHEMA change
+```
+
+```
+open(...)              → deferResult(id); the handle carries the promise
+resolve(id, data)      → settle { ok: true, data }, then close(id)
+dismiss() / close(id)  → settle { ok: false, reason: 'closed' }
+closeAll(), eviction,
+  owner closing child  → the same, for every window involved
+hydrate(stack)         → each restored id gets an already-settled { ok: false, reason: 'restored' }
+```
+
+Two properties are load-bearing. **A result never hangs**: every path that removes a window from
+the stack goes through `close()`, and `close()` settles. And **a window answers once**: settling is
+a no-op on an already-settled promise, which is what lets `resolve()` settle a value and then call
+`close()` without the close overwriting it.
+
+The restored case is the one place where the descriptor model and a promise API genuinely disagree.
+A hydrated window's opener belongs to a previous page load, so there is no promise to settle and no
+caller to settle it for; the store settles it as `restored` at hydration time rather than leaving a
+promise nobody will ever answer. `resultOf(id)` reads any window's promise back, and answers
+`closed` for an id the store no longer has.
+
+The handle is deliberately not string-compatible. A handle that stringified to an id would let a
+pre-0.2 call site keep working silently in production and fail somewhere else entirely; instead it
+warns once in dev when it is coerced, and coerces to `[object Object]` otherwise.
 
 Both `minimize` and `close` unmount the frame, and an unmounted frame cannot keep the focus it was
 holding — the browser drops it on `<body>`. So `useWindowFocus` records, just before the unmount,
@@ -254,7 +290,7 @@ owner has a child      → BaseWindow sets `inert` on the owner's own <dialog>, 
 minimize(owner)        → refused, dev warning: unmounting it would strand the question
 requestClose(owner)    → refused: the child is the question, answer it first
 close(owner)           → children close first, then the owner
-ESC on a child         → requestClose(child) — dismiss, not minimize
+ESC on a child         → requestClose(child) — dismiss, not minimize; its result settles `closed`
 persistence            → owned windows are filtered out of the blob, and dropped out of one
 ```
 

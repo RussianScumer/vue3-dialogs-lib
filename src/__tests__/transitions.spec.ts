@@ -102,7 +102,7 @@ describe('the leaving lifecycle', () => {
   it('keeps a closing window in the tree for the duration, then unmounts it', async () => {
     withDuration('300ms')
     const { win } = app()
-    const id = win.open('editor')
+    const id = win.open('editor').id
     await nextTick()
     await frame()
 
@@ -129,7 +129,7 @@ describe('the leaving lifecycle', () => {
   it('unmounts a minimized window content at once and retains only its frame', async () => {
     withDuration('300ms')
     const { win } = app()
-    const id = win.open('editor')
+    const id = win.open('editor').id
     await nextTick()
     await frame()
 
@@ -150,7 +150,7 @@ describe('the leaving lifecycle', () => {
   it('makes a leaving frame inert rather than letting it reach a store that forgot it', async () => {
     withDuration('300ms')
     const { wrapper, win } = app()
-    const id = win.open('editor')
+    const id = win.open('editor').id
     await nextTick()
     await frame()
     win.close(id)
@@ -169,7 +169,7 @@ describe('the leaving lifecycle', () => {
     const { win } = app()
 
     for (let i = 0; i < 50; i++) {
-      const id = win.open('editor', { i })
+      const id = win.open('editor', { i }).id
       await nextTick()
       win.close(id)
       await nextTick()
@@ -185,7 +185,7 @@ describe('the leaving lifecycle', () => {
   it('leaves nothing behind when closeAll lands mid-transition', async () => {
     withDuration('300ms')
     const { win } = app()
-    const ids = [win.open('editor', { i: 1 }), win.open('editor', { i: 2 }), win.open('editor', { i: 3 })]
+    const ids = [win.open('editor', { i: 1 }).id, win.open('editor', { i: 2 }).id, win.open('editor', { i: 3 }).id]
     await nextTick()
     await frame()
 
@@ -204,7 +204,7 @@ describe('the leaving lifecycle', () => {
 
   it('removes a closed window in the same tick when no duration is readable', async () => {
     const { win } = app() // no stylesheet, no stub: the pre-VW-05 behaviour
-    const id = win.open('editor')
+    const id = win.open('editor').id
     await nextTick()
 
     win.close(id)
@@ -218,7 +218,7 @@ describe('the leaving lifecycle', () => {
   it('adopts the same frame back when a window is restored mid-leave', async () => {
     withDuration('300ms')
     const { win } = app()
-    const id = win.open('editor')
+    const id = win.open('editor').id
     await nextTick()
     await frame()
 
@@ -239,7 +239,7 @@ describe('the leaving lifecycle', () => {
   it('retires a frame at once when the window is closed while already leaving', async () => {
     withDuration('300ms')
     const { win } = app()
-    const id = win.open('editor')
+    const id = win.open('editor').id
     await nextTick()
     await frame()
 
@@ -273,7 +273,7 @@ describe('the minimize target', () => {
   it('turns a registered taskbar rect into fly-to properties on the leaving frame', async () => {
     withDuration('300ms')
     const { wrapper, win } = app()
-    const id = win.open('editor', {}, { x: 100, y: 100, w: 400, h: 300 })
+    const id = win.open('editor', {}, { x: 100, y: 100, w: 400, h: 300 }).id
     await nextTick()
     await frame()
 
@@ -296,7 +296,7 @@ describe('the minimize target', () => {
   it('gives a closing window no fly-to properties — it has no button to fly to', async () => {
     withDuration('300ms')
     const { wrapper, win } = app()
-    const id = win.open('editor', {}, { x: 100, y: 100, w: 400, h: 300 })
+    const id = win.open('editor', {}, { x: 100, y: 100, w: 400, h: 300 }).id
     await nextTick()
     await frame()
     win.setTaskbarRect(id, { x: 700, y: 900, w: 80, h: 20 })
@@ -311,14 +311,14 @@ describe('the minimize target', () => {
 
   it('forgets a rect with its window, and hydrate clears the lot', async () => {
     const { win } = app()
-    const id = win.open('editor')
+    const id = win.open('editor').id
     win.setTaskbarRect(id, { x: 0, y: 0, w: 10, h: 10 })
     expect(win.taskbarRect(id)).toEqual({ x: 0, y: 0, w: 10, h: 10 })
 
     win.close(id)
     expect(win.taskbarRect(id)).toBeNull()
 
-    const other = win.open('editor', { i: 2 })
+    const other = win.open('editor', { i: 2 }).id
     win.setTaskbarRect(other, { x: 0, y: 0, w: 10, h: 10 })
     win.hydrate([], 10)
     expect(win.taskbarRect(other)).toBeNull()

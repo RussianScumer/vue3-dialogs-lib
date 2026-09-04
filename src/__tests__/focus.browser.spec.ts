@@ -65,7 +65,7 @@ describe('focus destinations in a real browser', () => {
     opener()
     const { win } = app()
     win.open('editor', { tag: 'a' })
-    const b = win.open('editor', { tag: 'b' })
+    const b = win.open('editor', { tag: 'b' }).id
     await nextTick()
 
     const [headA, headB] = heads()
@@ -81,7 +81,7 @@ describe('focus destinations in a real browser', () => {
   it('hands focus to the taskbar when the last window is minimized', async () => {
     opener()
     const { win } = app()
-    const id = win.open('editor', { tag: 'a' })
+    const id = win.open('editor', { tag: 'a' }).id
     await nextTick()
 
     win.minimize(id)
@@ -96,7 +96,7 @@ describe('focus destinations in a real browser', () => {
   it('skips the taskbar on close and falls through to the opener', async () => {
     const button = opener()
     const { win } = app()
-    const id = win.open('editor', { tag: 'a' })
+    const id = win.open('editor', { tag: 'a' }).id
     await nextTick()
 
     win.close(id)
@@ -107,7 +107,7 @@ describe('focus destinations in a real browser', () => {
 
   it('leaves focus where the user put it', async () => {
     const { win } = app()
-    const a = win.open('editor', { tag: 'a' })
+    const a = win.open('editor', { tag: 'a' }).id
     win.open('editor', { tag: 'b' })
     await nextTick()
 

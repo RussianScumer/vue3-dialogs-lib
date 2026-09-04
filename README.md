@@ -87,7 +87,7 @@ Works anywhere, including outside `setup()`:
 import { useWindows } from 'vue-windows'
 
 const win = useWindows()
-win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 }) // returns the window id
+const { id, result } = win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })
 win.minimize(id)
 win.restore(id)
 win.focus(id)
@@ -97,6 +97,9 @@ win.closeAll()
 
 win.updateProps(id, { id: 43 })
 win.setMeta(id, { version: 7 })
+
+await result             // what the window settled with — see Window results
+win.resultOf(id)         // the same promise, for a window you did not open yourself
 
 win.activeId.value       // id of the top non-minimized window, or null
 const off = win.on('close', (e) => console.log(e.id)) // 'open' | 'close' | 'focus' | 'minimize' |
@@ -173,6 +176,75 @@ direct consequence of "minimized means unmounted": a minimized window closed fro
 covered only by the app-wide `beforeClose`. Put anything that must hold for a minimized window
 there.
 
+## Window results
+
+`open()` returns `{ id, result }`. `result` is a promise for what the window settled with:
+
+```ts
+type WindowResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; reason: 'closed' | 'restored' }
+```
+
+The window settles it from its own content:
+
+```vue
+<script setup>
+const { resolve, dismiss } = useWindowContext()
+
+function save(item) {
+  resolve(item)   // settles { ok: true, data: item }, then closes the window
+}
+function cancel() {
+  dismiss()       // settles { ok: false, reason: 'closed' }, then closes
+}
+</script>
+```
+
+```js
+const saved = await win.open('itemEditor', { id: 42 }).result
+if (saved.ok) refreshTheList(saved.data)
+```
+
+**A result promise never hangs.** Every path that takes a window away without an answer settles it
+as `closed`: the ✕, `close()`, `closeAll()`, `maxWindows` eviction, and an owner closing its child.
+`resolve()` answers first and the close it performs cannot overwrite that value. A guard that
+refuses a `requestClose` leaves the window open, and its result pending — the question is still on
+screen.
+
+A deduped `open()` — same name, shallow-equal props — joins the window that is already open, and
+its answer with it: one window per entity means one answer, heard by both callers.
+
+### A restored window has no live opener
+
+This is the one place where the descriptor model and a promise API genuinely disagree, and the
+library does not paper over it. A window that came back from storage was opened by a call that
+belongs to a previous page load — often a previous day. There is nobody left to answer, so its
+result is settled before anything can await it:
+
+```js
+await win.resultOf(restoredId) // { ok: false, reason: 'restored' }
+```
+
+`resultOf(id)` is also how you reach the result of a window you did not open yourself; an id the
+store no longer has answers `closed`. Nothing about a result is persisted: it lives in a
+runtime-only map beside the close guards, and the descriptor and `SCHEMA` are untouched.
+
+To type `data`, give the window's spec a `result` marker. It is type-only — the key is stripped
+before it can reach the descriptor — and it degrades to `unknown` rather than to an error:
+
+```ts
+export const components = {
+  itemEditor: {
+    component: () => import('./windows/ItemEditor.vue'),
+    result: null as unknown as SavedItem,
+  },
+}
+
+const saved = await useWindows<typeof components>().open('itemEditor', { id: 42 }).result
+saved.ok && saved.data.name // SavedItem
+```
+
 ## Inside a window's content
 
 ```vue
@@ -184,7 +256,8 @@ const props = defineProps({ id: Number, windowId: String })
 // draft state that survives minimize (unmount) and page reload
 const form = useWindowState(props.windowId, () => ({ name: '', note: '' }))
 
-const { setTitle, close, requestClose, onBeforeClose, minimize, isRestored, closing } = useWindowContext()
+const { setTitle, close, requestClose, onBeforeClose, minimize, isRestored, closing, resolve, dismiss } =
+  useWindowContext()
 setTitle(`Item ${props.id}`)
 onBeforeClose(() => !form.name || confirm('Discard the draft?'))
 </script>
@@ -213,6 +286,9 @@ win.open('itemEditor', { id: 42 })  // ok
 win.open('itemEditor', { id: 'x' }) // error: id must be a number
 win.open('nope', {})                // error: unknown window
 ```
+
+The same map types the result, when the spec declares one — see
+[Window results](#window-results).
 
 Capture it once like that and import the alias — a bare `useWindows()` has no map to check
 against. `windowId` is supplied by the host, never by the caller. A window whose props cannot be

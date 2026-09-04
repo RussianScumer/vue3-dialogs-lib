@@ -75,7 +75,7 @@ describe('window layout', () => {
 
   it('gives the scroll area up, not the footer, when the window is resized smaller', async () => {
     const { win } = app(footerSlots)
-    const id = win.open('doc', {}, { w: 320, h: 300, minH: 100 })
+    const id = win.open('doc', {}, { w: 320, h: 300, minH: 100 }).id
     await nextTick()
 
     const dialog = q<HTMLDialogElement>('dialog.vw')

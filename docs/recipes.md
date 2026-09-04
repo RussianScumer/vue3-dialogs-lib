@@ -44,15 +44,16 @@ import { WindowHost } from 'vue-windows'
 import { useWindows } from 'vue-windows'
 
 const win = useWindows()
-const id = win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })
+const { id } = win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })
 ```
 
-`open(name, props, options)` returns the window id. `options` takes `title`, `x`, `y`, `w`, `h`
-and `meta`; anything omitted cascades or falls back to 640×480.
+`open(name, props, options)` returns `{ id, result }` — the id, and a promise for what the window
+settled with (recipe 21). `options` takes `title`, `x`, `y`, `w`, `h` and `meta`; anything omitted
+cascades or falls back to 640×480.
 
 Calling it again with the same `name` and shallow-equal `props` does **not** open a second window —
-it restores and raises the existing one and returns the same id. That is what makes "one window per
-entity" free:
+it restores and raises the existing one and returns a handle with the same id. That is what makes
+"one window per entity" free:
 
 ```js
 win.open('itemEditor', { id: 42 })  // opens
@@ -400,7 +401,7 @@ const plugin = createWindows({ components: { editor: ItemEditor } })
 const wrapper = mount(App, { global: { plugins: [plugin] } })
 const win = useWindows()
 
-const id = win.open('editor', { id: 1 })
+const { id } = win.open('editor', { id: 1 })
 win.minimize(id)
 await nextTick()
 expect(wrapper.find('dialog.vw').exists()).toBe(false)   // content really unmounted
@@ -503,6 +504,24 @@ supplied by the host and must not be passed. This is a types-only feature — th
 identical, and a window whose props cannot be inferred simply falls back to
 `Record<string, unknown>`.
 
+The same map types what a window *settles with*, if its spec declares it. The marker is type-only
+and is stripped before it can reach the descriptor:
+
+```ts
+export const components = {
+  itemEditor: {
+    component: () => import('./windows/ItemEditor.vue'),
+    result: null as unknown as SavedItem, // never read; it exists to be inferred
+  },
+}
+
+const saved = await useAppWindows().open('itemEditor', { id: 42 }).result
+saved.ok && saved.data.name // SavedItem
+```
+
+A window type with no marker settles with `unknown`, exactly as un-inferable props degrade to
+`Record<string, unknown>`.
+
 ## 18 · React to window transitions
 
 ```js
@@ -570,7 +589,7 @@ A close guard can say "wait", but it needs something to ask with. Open a window 
 the one asking:
 
 ```js
-const id = win.open('confirmSheet', { message, answer }, { owner: props.windowId })
+const { result } = win.open('confirmSheet', { message }, { owner: props.windowId })
 ```
 
 An owned window renders directly above its owner and sets `inert` on the owner's `<dialog>` — and
@@ -593,26 +612,24 @@ What the library does with it, none of which you have to arrange:
 A chain may be three deep — a sheet may own a sheet — and asking for a fourth throws at `open()`,
 as an unknown owner id does.
 
-Answering is the consumer's half, and there is one rule: **a sheet can go away without answering**.
-ESC dismisses it, and closing the owner takes it down with it. Settle the promise on `close` too,
-or the guard waits forever:
+The answer is the sheet's own result (recipe 21), which is what makes this safe to await: **a
+sheet can go away without answering** — ESC dismisses it, closing the owner takes it down with it —
+and every one of those paths settles `{ ok: false }`, so an unanswered question reads as "keep the
+window" instead of hanging the guard forever.
 
 ```js
-function ask(message) {
-  return new Promise((resolve) => {
-    let off, done = false
-    const settle = (ok) => { if (!done) { done = true; off?.(); resolve(ok) } }
-    const id = win.open('confirmSheet', { message, answer: settle }, { owner: props.windowId })
-    off = win.on('close', (e) => { if (e.id === id) settle(false) })
-  })
+// inside the sheet
+const { resolve } = useWindowContext()
+// <button @click="resolve(true)">Discard</button>
+
+// inside the window that asks
+async function ask(message) {
+  const answer = await win.open('confirmSheet', { message }, { owner: props.windowId }).result
+  return answer.ok && answer.data
 }
 
 onBeforeClose(async () => !form.name || (await ask(`Discard the draft in ${descriptor.title}?`)))
 ```
-
-A function in `props` is normally the thing a descriptor may not carry. It is safe here for the
-same reason the whole window is: an owned window is never written to storage, so the callback can
-never come back dead after a reload. Nothing else in the library relaxes that rule.
 
 Where the sheet appears is yours — pass `x`/`y` from the owner's descriptor to put it over the
 window that asked, rather than into the cascade:
@@ -624,3 +641,51 @@ window that asked, rather than into the cascade:
 `win.ownerOf(id)`, `win.childrenOf(id)` and `win.hasChild(id)` answer the rest — a taskbar usually
 wants `all.filter((w) => !win.ownerOf(w.id))`, since a sheet belongs to its owner and not to the
 desktop.
+
+## 21 · Await what a window produced
+
+`open()` returns `{ id, result }`. The result is a promise the window settles from its own content:
+
+```vue
+<script setup>
+import { useWindowContext } from 'vue-windows'
+
+const { resolve, dismiss } = useWindowContext()
+
+async function save() {
+  const item = await api.save(form)
+  resolve(item)   // settles { ok: true, data: item }, then closes the window
+}
+</script>
+
+<template>
+  <button type="button" @click="save">Save</button>
+  <button type="button" @click="dismiss()">Cancel</button>
+</template>
+```
+
+```js
+const saved = await win.open('itemEditor', { id: 42 }).result
+if (saved.ok) list.replace(saved.data)
+else console.log('the user did not save:', saved.reason) // 'closed' | 'restored'
+```
+
+`resolve()` and `dismiss()` are unconditional, like `close()`: the content has just decided, so its
+own close guard has nothing left to ask about. Use `requestClose()` instead when the *user* asked
+to close and the guard should run.
+
+**The promise never hangs.** Everything that takes a window away settles it — the ✕, `close()`,
+`closeAll()`, `maxWindows` eviction, an owner closing its child. What it does not do is settle
+early: a close guard that refuses leaves the window open and the question with it.
+
+Two things worth knowing:
+
+- **A restored window settles `restored`.** Its opener belongs to a previous page load, so there is
+  nobody left to answer. `win.resultOf(id)` gives you the promise for any open window — a hydrated
+  one is already settled, and an id the store no longer has answers `closed`.
+- **Nothing about a result is persisted.** It lives in a runtime-only map beside the close guards.
+  A window can therefore resolve with anything, serializable or not — but its `props` and `state`
+  are still descriptor fields and still have to survive `JSON.stringify`.
+
+Awaiting a *guarded* close is the other half of the same idea, and is what recipe 20 does: the
+sheet's result is the guard's answer.

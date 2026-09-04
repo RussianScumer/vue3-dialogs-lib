@@ -672,7 +672,8 @@ That is the feature working, and it froze the automation channel once before it 
 
 ## VW-08 — Window results (breaking `open()`)
 
-**Roadmap:** §2 (decided: break the signature) · **Size:** M · **Depends on:** VW-07
+**Roadmap:** §2 (decided: break the signature) · **Size:** M · **Depends on:** VW-07 · **Status:**
+done on `vw-08-window-results`.
 
 ### Goal
 
@@ -715,6 +716,75 @@ of `on('close')` plus a side channel. Make the result a first-class part of the 
 ### Out of scope
 
 Passing a result *into* a window, cancellation tokens, multiple results from one window.
+
+### Notes
+
+- **The suite moved, and this is the one task where that is the deliverable.** Global constraint 6
+  says an existing test needing to change is a signal the task is out of its lane; here the change
+  *is* the lane. 179 call sites across the specs, the benches and the playground gained `.id` — a
+  mechanical rewrite of the return value, not one rewritten assertion. Nothing about what any test
+  asserts moved, which is what makes 154 jsdom tests still passing meaningful rather than
+  coincidental.
+- **The handle warns rather than works.** The roadmap ruled out a handle that stringifies to an id,
+  and the task asks for a dev warning when one is used as a string; those are the same decision
+  seen from two sides. `Symbol.toPrimitive` is defined only under `import.meta.env.DEV`, warns once
+  per module and returns the id, so a 0.1 call site is loud in development and `[object Object]` in
+  production. A handle that quietly coerced everywhere would move the failure from the call site
+  that is wrong to somewhere else entirely.
+- **`resolve()` is unconditional, like `close()`.** The alternative — route it through
+  `requestClose` — means the editor's own "you have an unsaved draft" guard interrogates the save
+  that just happened. `requestClose` stays what the *user* asking to close calls.
+- **Settling once falls out of promises, not out of a flag.** `resolve(id, data)` settles and then
+  calls `close(id)`, which settles again; the second answer is dropped because a settled promise
+  drops it. That is also why `close()` can settle unconditionally without knowing whether anything
+  answered first.
+- **The restored case is settled at hydration, not on first access.** The task says "settles
+  `restored` synchronously on first access", and a lazily-created promise would satisfy that
+  wording — but `hydrate()` already walks every restored descriptor, so registering an
+  already-settled entry there makes `resultOf()` a plain map read with no branch that could rot.
+- **A deduped `open()` joins the answer as well as the window.** It could have handed the second
+  caller a fresh promise that never settles, which is the bug this rule exists to prevent; one
+  window per entity means one answer, and both callers hear it.
+- **`resultOf(id)` is the whole API for a window you did not open.** It is what makes the restored
+  case reachable at all — there is no handle for a hydrated window — and it answers `closed` for an
+  unknown id, since asking after the fact is not a reason to hang.
+- **The `result` marker is a `WindowSpec` field that no runtime reads.** `resolveOptions()` deletes
+  it next to the async keys, so it reaches neither `defaultsFor()` nor the descriptor, and
+  `WindowResultOf<E>` infers `unknown` from an entry that never declared one — the same
+  graceful-degradation rule the prop inference already follows.
+- **The playground's confirm sheet lost its callback prop.** VW-07 had to pass `answer` as a
+  function in `props` — legal only because an owned window is never persisted — and had to settle
+  it from `on('close')` as well, or an ESC-dismissed sheet hung the guard forever. Both are gone:
+  the sheet calls `resolve(ok)`, the editor awaits `.result`, and dismissal settles `{ ok: false }`
+  by itself. Recipe 20 is rewritten around that, and the playground's components map moved into
+  `playground/components.ts` so the type test checks the real map rather than a copy of it.
+
+### Verification
+
+`npx vitest run` — 188 tests, 168 jsdom (14 new in `results.spec.ts`) and 20 browser.
+`npm run lint` and `npm run type-check` clean. No assertion rewritten; 179 call sites took `.id`.
+
+jsdom only for the new spec, and deliberately: every claim here is store bookkeeping plus one
+binding in `useWindowContext`, and none of it is measured against the UA. The compile-time half is
+`playground/typed-open.type-test.ts`, which `npm run type-check` runs — inferred (`itemEditor`
+declares `result: SavedItem`), un-inferable (a bare loader), a spec with defaults but no marker, and
+the untyped store, plus `@ts-expect-error` on passing the handle where an id belongs.
+
+Exercised by hand in the running playground under Chrome. Measured there: *Save and close* settling
+`{ ok: true, data }` with the typed `SavedItem` and the awaiting `openItem()` logging its `name` and
+note length; the close guard opening the real sheet with the editor `inert` at `z-index: 1044` under
+it at `1045`; ESC on the sheet settling `{ ok: false }`, which the guard read as "keep editing" —
+the editor kept, `inert` cleared, every control re-enabled; *Discard* closing it and the opener
+logging `closed`; two `open('itemEditor', { id: 1 })` calls deduping to one window and both hearing
+`saved Shared`; `Flood` past `maxWindows: 8` settling all three evicted editors `closed`;
+`closeAll()` settling the last one; the persisted blob carrying no `result` key and `schema: 2`; and
+after a reload, `resultOf()` on both restored windows answering `restored`. No console output but
+Vite's own.
+
+The automation tab is `hidden`, as it was for VW-05 through VW-07, so screenshots come back stale
+and the session was driven through the page's own DOM — clicks on the real buttons, `input` events
+on the real fields, a real `keydown` for ESC — with the store's answers read back out of the event
+log the playground already renders.
 
 ---
 

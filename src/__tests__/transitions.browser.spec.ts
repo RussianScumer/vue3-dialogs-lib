@@ -44,7 +44,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 describe('motion, measured', () => {
   it('retains a closing frame for the duration the stylesheet declares', async () => {
     const { win } = app()
-    const id = win.open('editor', {}, { x: 40, y: 40, w: 320, h: 240 })
+    const id = win.open('editor', {}, { x: 40, y: 40, w: 320, h: 240 }).id
     await nextTick()
 
     const dialog = dialogs()[0] as HTMLElement
@@ -68,7 +68,7 @@ describe('motion, measured', () => {
 
   it('resolves the fly-to properties on a minimizing frame', async () => {
     const { win } = app()
-    const id = win.open('editor', {}, { x: 40, y: 40, w: 320, h: 240 })
+    const id = win.open('editor', {}, { x: 40, y: 40, w: 320, h: 240 }).id
     await nextTick()
     win.setTaskbarRect(id, { x: 500, y: 600, w: 80, h: 20 })
 

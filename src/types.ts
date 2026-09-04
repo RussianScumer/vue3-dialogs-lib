@@ -156,8 +156,15 @@ export interface AsyncWindowOptions {
 }
 
 /** A component plus the defaults every window of that type should open with. */
-export interface WindowSpec extends WindowDefaults, AsyncWindowOptions {
+export interface WindowSpec<R = unknown> extends WindowDefaults, AsyncWindowOptions {
   component: WindowComponent
+  /**
+   * Type-only: what this window's `resolve()` settles its result with, so `open()` can infer
+   * `data`. Declare it with a cast — `result: null as unknown as SavedItem` — since nothing ever
+   * reads the value: `resolveOptions()` strips the key exactly as it strips the async ones, so it
+   * reaches neither `defaultsFor()` nor the descriptor.
+   */
+  result?: R
 }
 
 export type WindowEntry = WindowComponent | WindowSpec
@@ -185,6 +192,34 @@ type ExtractProps<C> = C extends abstract new (...args: never[]) => { $props: in
 
 /** `windowId` is supplied by WindowHost, never by the caller. */
 export type WindowProps<E> = Omit<ExtractProps<ResolvedComponent<E>>, 'windowId'>
+
+/**
+ * The declared result type of a window entry — the `result` marker on its `WindowSpec`, and
+ * `unknown` for a bare component, a bare loader, or a spec that never declared one. Same
+ * graceful-degradation rule as the props: a library that cannot type your result must not refuse
+ * to open the window.
+ */
+export type WindowResultOf<E> = E extends WindowSpec<infer R> ? R : unknown
+
+/**
+ * How a window ended. `closed` covers every path that takes a window away without an answer — the
+ * ✕, `close()`, `closeAll()`, `maxWindows` eviction, an owner closing its child — so a result
+ * promise never hangs. `restored` is the one honest answer for a hydrated descriptor: it came back
+ * from storage, so whoever was waiting on it belongs to a page load that is over.
+ */
+export type WindowResult<T = unknown> =
+  | { ok: true; data: T }
+  | { ok: false; reason: 'closed' | 'restored' }
+
+/**
+ * What `open()` returns. Not a string: read `.id` where a window id is expected, and `await
+ * .result` for what the window settled with. In dev the handle warns once if it is coerced to a
+ * string, which is the shape of the pre-0.2 call site.
+ */
+export interface WindowHandle<T = unknown> {
+  id: string
+  result: Promise<WindowResult<T>>
+}
 
 /**
  * Where a frame is in its visual life, exposed as `data-vw-state` on the `<dialog>`. `WindowHost`

@@ -43,8 +43,8 @@ function dialogs(): HTMLDialogElement[] {
 describe('an owned child in a real browser', () => {
   it('makes its owner refuse clicks and focus while a sibling keeps both', async () => {
     const { win } = app()
-    const sibling = win.open('editor', { tag: 'sibling' }, { x: 20, y: 20, w: 240, h: 160 })
-    const owner = win.open('editor', { tag: 'owner' }, { x: 300, y: 20, w: 240, h: 160 })
+    const sibling = win.open('editor', { tag: 'sibling' }, { x: 20, y: 20, w: 240, h: 160 }).id
+    const owner = win.open('editor', { tag: 'owner' }, { x: 300, y: 20, w: 240, h: 160 }).id
     await nextTick()
 
     const [siblingEl, ownerEl] = dialogs()
@@ -88,8 +88,8 @@ describe('an owned child in a real browser', () => {
 
   it('takes ESC itself and leaves an inert owner untouched', async () => {
     const { win } = app()
-    const owner = win.open('editor', { tag: 'owner' }, { x: 40, y: 40, w: 260, h: 180 })
-    const child = win.open('confirm', { tag: 'sheet' }, { owner, x: 80, y: 80, w: 200, h: 120 })
+    const owner = win.open('editor', { tag: 'owner' }, { x: 40, y: 40, w: 260, h: 180 }).id
+    const child = win.open('confirm', { tag: 'sheet' }, { owner, x: 80, y: 80, w: 200, h: 120 }).id
     await nextTick()
 
     const [ownerEl, childEl] = dialogs()
@@ -111,7 +111,7 @@ describe('an owned child in a real browser', () => {
 
   it('delivers no ESC at all to an owner while it is inert', async () => {
     const { win } = app()
-    const owner = win.open('editor', { tag: 'owner' }, { x: 40, y: 40, w: 260, h: 180 })
+    const owner = win.open('editor', { tag: 'owner' }, { x: 40, y: 40, w: 260, h: 180 }).id
     win.open('confirm', { tag: 'sheet' }, { owner, x: 80, y: 80, w: 200, h: 120 })
     await nextTick()
 

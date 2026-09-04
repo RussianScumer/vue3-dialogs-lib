@@ -69,7 +69,7 @@ describe('close', () => {
   let i = 0
 
   bench('open + close pair at stack size 100 (close re-filters the stack)', () => {
-    const id = pool.open('editor', { id: 3_000_000 + i++ })
+    const id = pool.open('editor', { id: 3_000_000 + i++ }).id
     pool.close(id)
   })
 

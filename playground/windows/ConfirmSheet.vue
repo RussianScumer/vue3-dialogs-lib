@@ -7,36 +7,36 @@ import { log, trackMount } from '../eventLog'
  * The question a close guard asks, as a window of its own. Opened with `{ owner: <the editor> }`,
  * so it renders above that editor, makes only that editor inert, and dies with it.
  *
- * `answer` is a function prop, which is exactly the thing a descriptor may not carry — and it is
- * safe here for the same reason the whole window is: an owned window is never persisted, so this
- * one can never come back from storage with a dead callback in its props. An ordinary window would
- * have to pass an id and look the resolver up.
+ * The answer travels back as the window's own result — `resolve(ok)` settles the promise
+ * `open()` handed the editor and closes this sheet in one move. No callback in `props`, and no
+ * subscription to `close` on the asking side: a window that goes away without answering settles
+ * `{ ok: false }` by itself, which is the "keep editing" case.
  */
-const props = defineProps<{
+defineProps<{
   message: string
-  answer: (ok: boolean) => void
   windowId: string
 }>()
 
-const { close } = useWindowContext()
+const { resolve } = useWindowContext<boolean>()
 
 onMounted(() => trackMount('ConfirmSheet', 1))
 onUnmounted(() => trackMount('ConfirmSheet', -1))
 
-// close(), not requestClose(): the sheet has answered, and there is nothing left to ask it.
+// resolve(), not close(): the sheet has answered, and the answer is the point of the window.
 function respond(ok: boolean) {
   log(`ConfirmSheet: ${ok ? 'discard' : 'keep'}`)
-  props.answer(ok)
-  close()
+  resolve(ok)
 }
 </script>
 
 <template>
   <div class="sheet">
-    <p>{{ props.message }}</p>
+    <p>{{ message }}</p>
     <p class="hint">
       ESC dismisses this window instead of minimizing it, and the editor behind it is
-      <code>inert</code> — every other window on the desktop still works.
+      <code>inert</code> — every other window on the desktop still works. Dismissing settles this
+      window's result as <code>{{ '{ ok: false, reason: \'closed\' }' }}</code>, which the guard
+      reads as “keep editing”.
     </p>
     <p class="row">
       <button

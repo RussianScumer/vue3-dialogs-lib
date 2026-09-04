@@ -102,7 +102,7 @@ describe('persist', () => {
   it('writes a debounced snapshot including draft state', async () => {
     vi.useFakeTimers()
     const { store, storage } = setup()
-    const id = store.open('editor', { id: 7 })
+    const id = store.open('editor', { id: 7 }).id
     store.byId(id)!.state = { name: 'draft' }
     await nextTick()
     expect(storage.data.get('k')).toBeUndefined()

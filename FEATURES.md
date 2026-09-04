@@ -62,8 +62,9 @@ A module-level fallback lets `useWindows()` work outside `setup()` (services, ro
 
 ### Open
 
-`open(name, props?, opts?)` returns the new window's id. Per-call `OpenOptions` override the
-component's `WindowSpec` defaults, which override the library defaults.
+`open(name, props?, opts?)` returns a handle — `{ id, result }`, see *Window results* below — not
+a bare id. Per-call `OpenOptions` override the component's `WindowSpec` defaults, which override
+the library defaults.
 
 - **Dedupe by default** — same `name` plus shallow-equal `props` restores and focuses the existing
   window instead of opening a second one. Opt out with `{ dedupe: false }`.
@@ -108,6 +109,34 @@ default ✕ and – controls are disabled. Two consequences worth relying on:
 
 The pending state is runtime-only: it is on no descriptor, never persists, and a reload during a
 pending guard brings back an ordinary window.
+
+### Window results
+
+`open()` hands back `{ id, result }`. `result` is a `Promise<WindowResult<T>>`:
+
+```ts
+type WindowResult<T> = { ok: true; data: T } | { ok: false; reason: 'closed' | 'restored' }
+```
+
+The window settles it from its own content — `resolve(data)` settles `{ ok: true, data }` and
+closes, `dismiss()` settles `closed` and closes — and the store settles it everywhere else:
+
+- **it never hangs.** The ✕, `close()`, `closeAll()`, `maxWindows` eviction and an owner closing
+  its child all settle `closed`;
+- a value answered by `resolve()` survives the close it performs — a window answers once;
+- a guard that refuses a `requestClose` leaves both the window and its result open;
+- a deduped `open()` joins the existing window *and* its answer: one window per entity, one answer,
+  both callers hear it;
+- a **restored** window settles `{ ok: false, reason: 'restored' }` before anything can await it.
+  Its opener belongs to a previous page load; this is the one place the descriptor model and a
+  promise API genuinely disagree, and the library says so rather than hanging.
+
+`resultOf(id)` is the same promise for a window the caller did not open; an id the store no longer
+has answers `closed`. Results live in a runtime-only map beside the close guards — no descriptor
+field, no `SCHEMA` change, nothing persisted (`src/state.ts`).
+
+The handle is not string-compatible on purpose. In dev it warns once when it is coerced to a
+string, which is what a pre-0.2 call site does; in production it coerces to `[object Object]`.
 
 ### Mutation API
 
@@ -247,8 +276,9 @@ should take focus when the last window is minimized.
 
 `useWindowContext()` gives content its own `descriptor`, plus `setTitle`, `minimize`, `close`,
 `requestClose`, `onBeforeClose`, `closing` (a computed, true while this window's guards are out),
-and `isRestored` (true when this mount came from storage rather
-than a fresh `open()`).
+`resolve(data)` and `dismiss()` (settle this window's result and close it), and `isRestored` (true
+when this mount came from storage rather than a fresh `open()`). `useWindowContext<T>()` types what
+`resolve` accepts.
 
 `useWindowState(windowId, factory)` returns draft state stored on the descriptor. It survives
 minimize (which unmounts the content) and, with persistence on, a page reload. Must be
@@ -291,6 +321,9 @@ resize are disabled — a floating window at that size is unusable.
 - **Typed `open()`** — `useWindows<typeof components>()` checks the name against your components
   map and the props against that component. Props stay required when the component requires them
   and optional when it does not.
+- **Typed results** — a `WindowSpec` may carry a type-only `result` marker
+  (`result: null as unknown as SavedItem`), which types `handle.result`. Nothing reads the value:
+  `resolveOptions()` strips the key exactly as it strips the async ones.
 - **Graceful degradation** — a component whose props cannot be inferred (a plain object component,
   a loader whose module type cannot be seen) falls back to `Record<string, unknown>` rather than
   becoming a type error. A library that cannot type your window must not refuse to open it.

@@ -12,7 +12,10 @@ import type {
   WindowDescriptor,
   WindowEvent,
   WindowEventType,
+  WindowHandle,
   WindowProps,
+  WindowResult,
+  WindowResultOf,
 } from './types'
 
 export type { CloseGuard } from './types'
@@ -41,6 +44,35 @@ function rectOf(d: WindowDescriptor): Rect {
  * confirm is already unusual, and the cap is what stops a bug from building a tower of them.
  */
 const MAX_OWNER_DEPTH = 3
+
+/** One shared value: a restored window's answer carries no per-window data. */
+const RESTORED: WindowResult = Object.freeze({ ok: false, reason: 'restored' })
+const CLOSED: WindowResult = Object.freeze({ ok: false, reason: 'closed' })
+
+/** Dev-only, and once per module: the tripwire below is a migration aid, not a running commentary. */
+let coercionWarned = false
+
+/**
+ * `open()`'s return value. A plain `{ id, result }` object, plus — in dev only — a `toPrimitive`
+ * that warns the first time the handle is used where a string was expected, which is exactly what
+ * a pre-0.2 call site does. In production it coerces to `[object Object]`, loudly and on purpose:
+ * a handle that quietly stringifies to an id is the back-compatible shape this release rejected.
+ */
+function makeHandle<T>(id: string, result: Promise<WindowResult<T>>): WindowHandle<T> {
+  const handle: WindowHandle<T> = { id, result }
+  if (import.meta.env?.DEV) {
+    Object.defineProperty(handle, Symbol.toPrimitive, {
+      value: () => {
+        if (!coercionWarned) {
+          coercionWarned = true
+          warn('open() returns { id, result } — read `.id` where a window id is expected')
+        }
+        return id
+      },
+    })
+  }
+  return handle
+}
 
 export function createStore(options: ResolvedOptions) {
   const s = reactive({ stack: [] as WindowDescriptor[], topZ: 10 })
@@ -85,6 +117,12 @@ export function createStore(options: ResolvedOptions) {
    * user twice. Promises, so — like `closeGuards` — this can never be persisted.
    */
   const pending = new Map<string, Promise<boolean>>()
+  /**
+   * What each window will settle with, per id. Promises again, so — like `closeGuards` and
+   * `pending` — this can never be written to storage, which is also the rule: a result belongs to
+   * the call that opened the window, and that call belongs to one page load.
+   */
+  const results = new Map<string, { promise: Promise<WindowResult>; settle: (r: WindowResult) => void }>()
   /**
    * Header elements of the mounted frames, and the consumer's opt-in taskbar destination. Elements,
    * so like `closeGuards` they can never reach storage, and outside `s` so registering one cannot
@@ -239,6 +277,9 @@ export function createStore(options: ResolvedOptions) {
     closeGuards.delete(id)
     closing.delete(id)
     pending.delete(id)
+    // Before the event, so a listener that awaits the result is not waiting on a microtask that
+    // has not been queued yet.
+    settleResult(id, CLOSED)
     emit('close', id)
   }
 
@@ -252,6 +293,9 @@ export function createStore(options: ResolvedOptions) {
     closeGuards.clear()
     closing.clear()
     pending.clear()
+    // Every outstanding result settles here: logging out must not leave a caller awaiting a window
+    // that no longer exists. `settleResult` empties the map as it goes.
+    for (const id of [...results.keys()]) settleResult(id, CLOSED)
     for (const id of ids) emit('close', id)
   }
 
@@ -300,6 +344,48 @@ export function createStore(options: ResolvedOptions) {
 
   function taskbarRect(id: string): Rect | null {
     return taskbarRects.get(id) ?? null
+  }
+
+  /** A fresh window's unsettled result, recorded so every close path can settle it. */
+  function deferResult(id: string): Promise<WindowResult> {
+    let settle!: (r: WindowResult) => void
+    const promise = new Promise<WindowResult>((res) => {
+      settle = res
+    })
+    results.set(id, { promise, settle })
+    return promise
+  }
+
+  /**
+   * Settles a window's result, once. Every path that takes a window away goes through here, which
+   * is what makes "a result promise never hangs" true rather than aspirational; settling an id
+   * that has already been answered — `resolve()` and then the `close()` it performs — is a no-op,
+   * since a settled promise ignores a second answer.
+   */
+  function settleResult(id: string, r: WindowResult): void {
+    const entry = results.get(id)
+    if (!entry) return
+    results.delete(id)
+    entry.settle(r)
+  }
+
+  /**
+   * The result promise for a window that is already open — what `open()` handed back, and the only
+   * way to reach a restored window's. An id the store has never heard of, or one whose window has
+   * already gone, settles `closed`: asking after the fact is not a reason to hang.
+   */
+  function resultOf(id: string): Promise<WindowResult> {
+    return results.get(id)?.promise ?? Promise.resolve(CLOSED)
+  }
+
+  /**
+   * Settle with a value, then close — the "editor saved the entity" path. Unconditional, like
+   * `close()`: the content has just decided, so asking its own guard whether it meant it would ask
+   * about a draft that no longer exists.
+   */
+  function resolveResult(id: string, data: unknown): void {
+    settleResult(id, { ok: true, data })
+    close(id)
   }
 
   /** Registered by mounted content; only consulted while that content is alive. */
@@ -370,7 +456,16 @@ export function createStore(options: ResolvedOptions) {
     return p
   }
 
-  function openWindow(name: string, props: Record<string, unknown> = {}, opts: OpenOptions = {}): string {
+  /**
+   * Opens a window and hands back `{ id, result }` — not an id. The result is the window's own
+   * answer: `resolve(data)` from inside it settles `{ ok: true, data }`, and every path that takes
+   * the window away without one settles `{ ok: false, reason: 'closed' }`.
+   */
+  function openWindow(
+    name: string,
+    props: Record<string, unknown> = {},
+    opts: OpenOptions = {},
+  ): WindowHandle {
     if (!options.components[name]) throw new Error(`[vue-windows] unknown window "${name}"`)
 
     const owner = opts.owner ?? null
@@ -390,7 +485,9 @@ export function createStore(options: ResolvedOptions) {
     // an entity, it is a question about one — two of them can be open at once and must be.
     if (owner === null && opts.dedupe !== false) {
       const dup = s.stack.find((w) => w.name === name && shallowEqual(w.props, props))
-      if (dup) return restore(dup.id)
+      // The deduped caller joins the window that is already open, result included: there is one
+      // window for the entity, so there is one answer, and both callers are waiting for it.
+      if (dup) return makeHandle(restore(dup.id), resultOf(dup.id))
     }
 
     // Owned windows are not the user's windows: they neither count towards the limit nor are ever
@@ -435,8 +532,10 @@ export function createStore(options: ResolvedOptions) {
       // exactly `owner.z + 1` however deep the chain goes.
       raiseGroup(groupOf(d.id))
     }
+    // Before the event: an `on('open')` listener may ask for the result, and by then it exists.
+    const result = deferResult(d.id)
     emit('open', d.id)
-    return d.id
+    return makeHandle(d.id, result)
   }
 
   function setTitle(id: string, title: string): void {
@@ -549,7 +648,14 @@ export function createStore(options: ResolvedOptions) {
     closeGuards.clear()
     closing.clear()
     pending.clear()
-    for (const w of stack) restoredIds.add(w.id)
+    for (const id of [...results.keys()]) settleResult(id, CLOSED)
+    for (const w of stack) {
+      restoredIds.add(w.id)
+      // A restored descriptor has no live opener — the call that opened it belongs to a previous
+      // page load, possibly a previous day. Its result is settled before anyone can ask, so
+      // `resultOf()` is synchronous truth rather than a promise nobody will ever settle.
+      results.set(w.id, { promise: Promise.resolve(RESTORED), settle: () => {} })
+    }
   }
 
   return {
@@ -566,6 +672,8 @@ export function createStore(options: ResolvedOptions) {
     closeAll,
     requestClose,
     isClosing,
+    resultOf,
+    resolve: resolveResult,
     ownerOf,
     childrenOf,
     hasChild,
@@ -607,5 +715,5 @@ export interface TypedWindowsApi<C extends ComponentsMap> extends Omit<WindowsAp
     ...args: object extends WindowProps<C[K]>
       ? [props?: WindowProps<C[K]>, opts?: OpenOptions]
       : [props: WindowProps<C[K]>, opts?: OpenOptions]
-  ): string
+  ): WindowHandle<WindowResultOf<C[K]>>
 }

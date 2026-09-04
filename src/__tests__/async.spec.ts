@@ -132,7 +132,7 @@ describe('async loading and error states', () => {
   it('drops the content and stays a usable window when a throwing type has no error component', async () => {
     const { wrapper, win } = app({ components: { bad: Throws } })
 
-    const id = win.open('bad', {})
+    const id = win.open('bad', {}).id
     await flush()
 
     const dialog = wrapper.find('dialog.vw')
@@ -182,7 +182,7 @@ describe('async loading and error states', () => {
     const { win } = app({
       components: { a: { component: Ok, loadingComponent: Loading, delay: 0, timeout: 10, w: 400 } },
     })
-    const d = win.byId(win.open('a', {}))!
+    const d = win.byId(win.open('a', {}).id)!
     expect(d.w).toBe(400)
     expect(Object.keys(d)).not.toContain('timeout')
     expect(Object.keys(d)).not.toContain('loadingComponent')

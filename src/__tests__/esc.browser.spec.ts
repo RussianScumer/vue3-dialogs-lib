@@ -83,7 +83,7 @@ describe('ESC in a real browser', () => {
 
   it('minimizes the active window', async () => {
     const { win } = app()
-    const id = win.open('editor', {})
+    const id = win.open('editor', {}).id
     await nextTick()
 
     expect(document.activeElement).toBe(document.querySelector('.field'))
@@ -93,7 +93,7 @@ describe('ESC in a real browser', () => {
 
   it('leaves the window alone when the content called preventDefault', async () => {
     const { win } = app()
-    const id = win.open('editor', { eatEscape: true })
+    const id = win.open('editor', { eatEscape: true }).id
     await nextTick()
 
     await userEvent.keyboard('{Escape}')
@@ -121,7 +121,7 @@ describe('ESC in a real browser', () => {
 
   it('leaves the window alone when ESC is aimed at a native picker', async () => {
     const { win } = app()
-    const id = win.open('editor', {})
+    const id = win.open('editor', {}).id
     await nextTick()
 
     // Synthetic input cannot open a native `<select>` popup — CDP `alt+ArrowDown` moves the
@@ -141,8 +141,8 @@ describe('ESC in a real browser', () => {
 
   it('does nothing when the target is in a window that is not the active one', async () => {
     const { win } = app()
-    const back = win.open('editor', { tag: 'back' })
-    const front = win.open('editor', { tag: 'front' })
+    const back = win.open('editor', { tag: 'back' }).id
+    const front = win.open('editor', { tag: 'front' }).id
     await nextTick()
     expect(win.activeId.value).toBe(front)
 
@@ -156,7 +156,7 @@ describe('ESC in a real browser', () => {
 
   it('ignores ESC on a window that is not minimizable', async () => {
     const { win } = app()
-    const id = win.open('editor', {}, { minimizable: false })
+    const id = win.open('editor', {}, { minimizable: false }).id
     await nextTick()
 
     await userEvent.keyboard('{Escape}')

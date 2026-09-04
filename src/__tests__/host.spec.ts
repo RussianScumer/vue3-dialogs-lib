@@ -59,7 +59,7 @@ describe('WindowHost', () => {
 
   it('unmounts the content while minimized — the headline claim', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     await nextTick()
 
     win.minimize(id)
@@ -76,7 +76,7 @@ describe('WindowHost', () => {
 
   it('keeps geometry across a minimize/restore round trip', async () => {
     const { win } = app()
-    const id = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 })
+    const id = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 }).id
     await nextTick()
     win.minimize(id)
     win.restore(id)
@@ -87,7 +87,7 @@ describe('WindowHost', () => {
 
   it('ESC minimizes instead of closing', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     await nextTick()
 
     // A non-modal dialog gets no UA close request, so the keydown path is the only one. The
@@ -99,7 +99,7 @@ describe('WindowHost', () => {
 
   it('leaves ESC alone when the content already handled it', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     await nextTick()
 
     const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
@@ -111,8 +111,8 @@ describe('WindowHost', () => {
 
   it('ignores ESC aimed at a window that is not the active one', async () => {
     const { wrapper, win } = app()
-    const back = win.open('editor', { id: 1 })
-    const front = win.open('editor', { id: 2 })
+    const back = win.open('editor', { id: 1 }).id
+    const front = win.open('editor', { id: 2 }).id
     await nextTick()
 
     // Tab can reach a background window without raising it; only pointerdown calls focus().
@@ -123,7 +123,7 @@ describe('WindowHost', () => {
 
   it('ignores ESC aimed at a native picker, which takes the key for itself', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     await nextTick()
 
     const dialog = wrapper.find('dialog.vw').element
@@ -145,7 +145,7 @@ describe('WindowHost', () => {
 
   it('header buttons minimize and close', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     await nextTick()
 
     const [minimizeBtn, closeBtn] = wrapper.findAll('.vw__btn')
@@ -161,8 +161,8 @@ describe('WindowHost', () => {
 
   it('pointerdown raises the window', async () => {
     const { wrapper, win } = app()
-    const a = win.open('editor', { id: 1 })
-    const b = win.open('editor', { id: 2 })
+    const a = win.open('editor', { id: 1 }).id
+    const b = win.open('editor', { id: 2 }).id
     await nextTick()
 
     await wrapper.findAll('dialog.vw')[0]!.trigger('pointerdown')
@@ -171,7 +171,7 @@ describe('WindowHost', () => {
 
   it('arrow keys on the header move the window, shift+arrow resizes', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 }, { x: 100, y: 100, w: 400, h: 300 })
+    const id = win.open('editor', { id: 1 }, { x: 100, y: 100, w: 400, h: 300 }).id
     await nextTick()
 
     const head = wrapper.find('.vw__head')
@@ -185,7 +185,7 @@ describe('WindowHost', () => {
 
   it('double-clicking the header maximizes, again restores', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 })
+    const id = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 }).id
     await nextTick()
 
     await wrapper.find('.vw__head').trigger('dblclick')
@@ -199,7 +199,7 @@ describe('WindowHost', () => {
 
   it('double-clicking a header button does not maximize', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 })
+    const id = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 }).id
     await nextTick()
 
     await wrapper.find('.vw__btn').trigger('dblclick')
@@ -226,7 +226,7 @@ describe('WindowHost', () => {
 
   it('dragging the header to an edge arms a ghost and drops the window into the zone', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 })
+    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 }).id
     await nextTick()
 
     const head = wrapper.find('.vw__head').element
@@ -254,7 +254,7 @@ describe('WindowHost', () => {
 
   it('a cancelled drag clears the ghost without snapping', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 })
+    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 }).id
     await nextTick()
 
     const head = wrapper.find('.vw__head').element
@@ -268,7 +268,7 @@ describe('WindowHost', () => {
 
   it('goes fullscreen and inert below the mobile breakpoint', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 }, { x: 100, y: 100 })
+    const id = win.open('editor', { id: 1 }, { x: 100, y: 100 }).id
     await nextTick()
 
     Object.defineProperty(window, 'innerWidth', { value: 480, configurable: true })
@@ -313,8 +313,8 @@ describe('WindowTaskbar', () => {
 describe('capabilities', () => {
   it('marks only the top window active', async () => {
     const { wrapper, win } = app()
-    const a = win.open('editor', { id: 1 }, { title: 'A' })
-    const b = win.open('editor', { id: 2 }, { title: 'B' })
+    const a = win.open('editor', { id: 1 }, { title: 'A' }).id
+    const b = win.open('editor', { id: 2 }, { title: 'B' }).id
     await nextTick()
 
     const active = () =>
@@ -350,7 +350,7 @@ describe('capabilities', () => {
 
   it('the close button asks rather than closes, and a guard can refuse', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     await nextTick()
     win.onBeforeClose(id, () => false)
 
@@ -378,7 +378,7 @@ describe('capabilities', () => {
 
   it('the south-east grip grows the window', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 })
+    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 }).id
     await nextTick()
 
     const grip = wrapper.find('[data-vw-grip="se"]').element
@@ -391,7 +391,7 @@ describe('capabilities', () => {
 
   it('the west grip moves x so the opposite edge stays put, even at the minimum width', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 })
+    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 }).id
     await nextTick()
     const east = () => win.byId(id)!.x + win.byId(id)!.w
 
@@ -410,7 +410,7 @@ describe('capabilities', () => {
 
   it('a grip resize drops the snap without moving the window back', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 })
+    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 }).id
     win.snap(id, 'left', { w: window.innerWidth, h: window.innerHeight })
     await nextTick()
     const snapped = { ...win.byId(id)! }
@@ -426,7 +426,7 @@ describe('capabilities', () => {
 
   it('keyboard resize obeys the size limits, and the flags gate both keyboard paths', async () => {
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 }, { x: 100, y: 100, w: 400, h: 300, maxW: 405 })
+    const id = win.open('editor', { id: 1 }, { x: 100, y: 100, w: 400, h: 300, maxW: 405 }).id
     await nextTick()
 
     const head = wrapper.find('.vw__head')
@@ -434,7 +434,7 @@ describe('capabilities', () => {
     expect(win.byId(id)!.w).toBe(405) // clamped to maxW, not 410
 
     win.closeAll()
-    const fixed = win.open('editor', { id: 2 }, { x: 100, y: 100, draggable: false, resizable: false })
+    const fixed = win.open('editor', { id: 2 }, { x: 100, y: 100, draggable: false, resizable: false }).id
     await nextTick()
     const head2 = wrapper.find('.vw__head')
     await head2.trigger('keydown', { key: 'ArrowRight' })
@@ -449,7 +449,7 @@ describe('capabilities', () => {
       attachTo: document.body,
     })
     const win = useWindows()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     await nextTick()
 
     const dialog = wrapper.find('dialog.vw').element as HTMLElement
@@ -472,7 +472,7 @@ describe('capabilities', () => {
       attachTo: document.body,
     })
     const win = useWindows()
-    const id = win.open('guarded', {})
+    const id = win.open('guarded', {}).id
     await nextTick()
 
     await expect(win.requestClose(id)).resolves.toBe(false) // mounted: the guard refuses
@@ -488,7 +488,7 @@ describe('capabilities', () => {
 
   it('honours minW when the window opens', async () => {
     const { win } = app()
-    const id = win.open('editor', { id: 1 }, { w: 100, minW: 320 })
+    const id = win.open('editor', { id: 1 }, { w: 100, minW: 320 }).id
     await nextTick()
     expect(win.byId(id)!.w).toBe(320)
   })
@@ -502,7 +502,7 @@ describe('focus', () => {
     expect(document.activeElement).toBe(opener)
 
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     await nextTick()
 
     // The content has nothing tabbable, so the focusable header takes it.
@@ -597,7 +597,7 @@ describe('focus', () => {
     opener.focus()
 
     const { wrapper, win } = app()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     await nextTick()
     const head = wrapper.find('.vw__head').element
     expect(document.activeElement).toBe(head)

@@ -38,6 +38,9 @@ export function resolveOptions(options: WindowsOptions): ResolvedOptions {
       Object.assign(async, { [key]: rest[key] })
       delete rest[key]
     }
+    // The `result` marker exists only so `open()` can infer what the window settles with; whatever
+    // value carries it is never read, and must not travel on towards the descriptor.
+    delete rest.result
     defaults[name] = rest
     asyncOptions[name] = async
   }

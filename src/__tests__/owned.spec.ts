@@ -69,9 +69,9 @@ afterEach(() => {
 describe('owned child windows', () => {
   it('renders directly above its owner and keeps the pair together on focus', () => {
     const win = store()
-    const other = win.open('editor', { id: 0 })
-    const owner = win.open('editor', { id: 1 })
-    const child = win.open('confirm', {}, { owner })
+    const other = win.open('editor', { id: 0 }).id
+    const owner = win.open('editor', { id: 1 }).id
+    const child = win.open('confirm', {}, { owner }).id
 
     expect(win.ownerOf(child)).toBe(owner)
     expect(win.byId(child)!.z).toBe(win.byId(owner)!.z + 1)
@@ -91,9 +91,9 @@ describe('owned child windows', () => {
 
   it('is closable, is not minimizable, and skips dedupe', () => {
     const win = store()
-    const owner = win.open('editor', { id: 1 })
-    const a = win.open('confirm', { q: 1 }, { owner, closable: false, minimizable: true })
-    const b = win.open('confirm', { q: 1 }, { owner })
+    const owner = win.open('editor', { id: 1 }).id
+    const a = win.open('confirm', { q: 1 }, { owner, closable: false, minimizable: true }).id
+    const b = win.open('confirm', { q: 1 }, { owner }).id
 
     expect(win.byId(a)).toMatchObject({ closable: true, minimizable: false })
     expect(b).not.toBe(a) // same name, shallow-equal props: an ordinary open would have deduped
@@ -105,7 +105,7 @@ describe('owned child windows', () => {
   it('sets inert on its owner and on nothing else', async () => {
     const { win } = app()
     win.open('editor', { id: 0 })
-    const owner = win.open('editor', { id: 1 })
+    const owner = win.open('editor', { id: 1 }).id
     await nextTick()
 
     const [siblingEl, ownerEl] = dialogs()
@@ -121,16 +121,16 @@ describe('owned child windows', () => {
 
   it('clears inert exactly back to what it was when the child closes', async () => {
     const { win } = app()
-    const owner = win.open('editor', { id: 1 })
-    const preset = win.open('editor', { id: 2 })
+    const owner = win.open('editor', { id: 1 }).id
+    const preset = win.open('editor', { id: 2 }).id
     await nextTick()
 
     // A consumer who set inert themselves must get it back, not lose it to the library.
     const [ownerEl, presetEl] = dialogs()
     presetEl!.setAttribute('inert', '')
 
-    const a = win.open('confirm', { q: 1 }, { owner })
-    const b = win.open('confirm', { q: 2 }, { owner: preset })
+    const a = win.open('confirm', { q: 1 }, { owner }).id
+    const b = win.open('confirm', { q: 2 }, { owner: preset }).id
     await nextTick()
     expect(ownerEl!.hasAttribute('inert')).toBe(true)
 
@@ -143,12 +143,12 @@ describe('owned child windows', () => {
 
   it('keeps the owner inert while any of its children is still open', async () => {
     const { win } = app()
-    const owner = win.open('editor', { id: 1 })
+    const owner = win.open('editor', { id: 1 }).id
     await nextTick()
     const ownerEl = dialogs()[0]!
 
-    const a = win.open('confirm', { q: 1 }, { owner })
-    const b = win.open('confirm', { q: 2 }, { owner })
+    const a = win.open('confirm', { q: 1 }, { owner }).id
+    const b = win.open('confirm', { q: 2 }, { owner }).id
     await nextTick()
 
     win.close(a)
@@ -162,9 +162,9 @@ describe('owned child windows', () => {
 
   it('closes the child with the owner, and leaves the owner when the child goes', () => {
     const win = store()
-    const owner = win.open('editor', { id: 1 })
-    const child = win.open('confirm', {}, { owner })
-    const grandchild = win.open('confirm', { q: 2 }, { owner: child })
+    const owner = win.open('editor', { id: 1 }).id
+    const child = win.open('confirm', {}, { owner }).id
+    const grandchild = win.open('confirm', { q: 2 }, { owner: child }).id
 
     win.close(child)
     expect(win.byId(child)).toBeUndefined()
@@ -172,7 +172,7 @@ describe('owned child windows', () => {
     expect(win.byId(owner)).toBeDefined()
     expect(win.hasChild(owner)).toBe(false)
 
-    const second = win.open('confirm', {}, { owner })
+    const second = win.open('confirm', {}, { owner }).id
     win.close(owner)
     expect(win.s.stack).toHaveLength(0)
     expect(win.ownerOf(second)).toBeNull()
@@ -181,8 +181,8 @@ describe('owned child windows', () => {
   it('emits close for the child before the owner', () => {
     const win = store()
     const seen: string[] = []
-    const owner = win.open('editor', { id: 1 })
-    const child = win.open('confirm', {}, { owner })
+    const owner = win.open('editor', { id: 1 }).id
+    const child = win.open('confirm', {}, { owner }).id
     win.on('close', (e) => void seen.push(e.id))
 
     win.close(owner)
@@ -192,8 +192,8 @@ describe('owned child windows', () => {
   it('refuses to minimize or requestClose an owner while its child is open', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const win = store()
-    const owner = win.open('editor', { id: 1 })
-    const child = win.open('confirm', {}, { owner })
+    const owner = win.open('editor', { id: 1 }).id
+    const child = win.open('confirm', {}, { owner }).id
 
     win.minimize(owner)
     expect(win.byId(owner)!.minimized).toBe(false)
@@ -210,12 +210,12 @@ describe('owned child windows', () => {
 
   it('joins the request whose own guard opened the child, rather than refusing it', async () => {
     const win = store()
-    const owner = win.open('editor', { id: 1 })
+    const owner = win.open('editor', { id: 1 }).id
     let settle: (ok: boolean) => void = () => {}
     let child = ''
     // The shape the feature exists for: the guard asks its question in a window of its own.
     win.onBeforeClose(owner, () => {
-      child = win.open('confirm', {}, { owner })
+      child = win.open('confirm', {}, { owner }).id
       return new Promise<boolean>((resolve) => {
         settle = resolve
       })
@@ -235,18 +235,18 @@ describe('owned child windows', () => {
 
   it('brings a minimized owner back when a child is opened on it', () => {
     const win = store()
-    const owner = win.open('editor', { id: 1 })
+    const owner = win.open('editor', { id: 1 }).id
     win.minimize(owner)
 
-    const child = win.open('confirm', {}, { owner })
+    const child = win.open('confirm', {}, { owner }).id
     expect(win.byId(owner)!.minimized).toBe(false)
     expect(win.byId(child)!.z).toBe(win.byId(owner)!.z + 1)
   })
 
   it('does not count towards maxWindows and never evicts to make room', () => {
     const win = store({ maxWindows: 8 })
-    const owner = win.open('editor', { id: 1 })
-    const others = Array.from({ length: 6 }, (_, i) => win.open('editor', { id: i + 2 }))
+    const owner = win.open('editor', { id: 1 }).id
+    const others = Array.from({ length: 6 }, (_, i) => win.open('editor', { id: i + 2 }).id)
 
     for (let i = 0; i < 20; i++) win.open('confirm', { q: i }, { owner })
 
@@ -258,9 +258,9 @@ describe('owned child windows', () => {
 
   it('evicts the oldest unowned window, never a child, when the limit is reached', () => {
     const win = store({ maxWindows: 2 })
-    const first = win.open('editor', { id: 1 })
-    const child = win.open('confirm', {}, { owner: first })
-    const second = win.open('editor', { id: 2 })
+    const first = win.open('editor', { id: 1 }).id
+    const child = win.open('confirm', {}, { owner: first }).id
+    const second = win.open('editor', { id: 2 }).id
 
     win.open('editor', { id: 3 })
     // `first` was the oldest root; its child goes with it, and nothing else is touched.
@@ -271,12 +271,12 @@ describe('owned child windows', () => {
 
   it('throws at call time for an unknown owner and for a chain that is too deep', () => {
     const win = store()
-    expect(() => win.open('confirm', {}, { owner: 'nope' })).toThrow(/unknown owner/)
+    expect(() => win.open('confirm', {}, { owner: 'nope' }).id).toThrow(/unknown owner/)
 
-    const root = win.open('editor', { id: 1 })
+    const root = win.open('editor', { id: 1 }).id
     let last = root
-    for (let i = 0; i < 3; i++) last = win.open('confirm', { q: i }, { owner: last })
-    expect(() => win.open('confirm', { q: 9 }, { owner: last })).toThrow(/owner chain/)
+    for (let i = 0; i < 3; i++) last = win.open('confirm', { q: i }, { owner: last }).id
+    expect(() => win.open('confirm', { q: 9 }, { owner: last }).id).toThrow(/owner chain/)
     expect(win.s.stack).toHaveLength(4)
   })
 
@@ -290,7 +290,7 @@ describe('owned child windows', () => {
     const win = createStore(options)
     setupPersist(win, options)
 
-    const owner = win.open('editor', { id: 1 })
+    const owner = win.open('editor', { id: 1 }).id
     win.open('confirm', {}, { owner })
     await nextTick()
     vi.advanceTimersByTime(300)
@@ -323,14 +323,14 @@ describe('owned child windows', () => {
 
   it('forgets ownership on closeAll and on hydrate', () => {
     const win = store()
-    const owner = win.open('editor', { id: 1 })
-    const child = win.open('confirm', {}, { owner })
+    const owner = win.open('editor', { id: 1 }).id
+    const child = win.open('confirm', {}, { owner }).id
 
     win.closeAll()
     expect(win.ownerOf(child)).toBeNull()
 
-    const again = win.open('editor', { id: 1 })
-    const kid = win.open('confirm', {}, { owner: again })
+    const again = win.open('editor', { id: 1 }).id
+    const kid = win.open('confirm', {}, { owner: again }).id
     win.hydrate([win.byId(again)!], 12)
     expect(win.ownerOf(kid)).toBeNull()
     expect(win.hasChild(again)).toBe(false)
@@ -338,8 +338,8 @@ describe('owned child windows', () => {
 
   it('dismisses the child on ESC instead of minimizing it, and gives focus back to the owner', async () => {
     const { win } = app()
-    const owner = win.open('editor', { id: 1 })
-    const child = win.open('confirm', {}, { owner })
+    const owner = win.open('editor', { id: 1 }).id
+    const child = win.open('confirm', {}, { owner }).id
     await nextTick()
 
     const [ownerEl, childEl] = dialogs()
@@ -354,7 +354,7 @@ describe('owned child windows', () => {
 
   it('leaves the window alone when ESC is pressed on a window that is not a child', async () => {
     const { win } = app()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     await nextTick()
 
     dialogs()[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
