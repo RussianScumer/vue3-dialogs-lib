@@ -259,8 +259,9 @@ docks: Map<id, { zone, prev }>     // runtime-only, so the descriptor and SCHEMA
 ```
 drag moves           → zoneFromPointer(pointer, viewport, snap) → store.preview → WindowHost ghost
 drag released        → snap(id, zone): stash `prev` once, assign snapRect(zone), focus
-drag starts on a
-  snapped window     → undockForDrag: pre-snap size back, placed under the cursor
+drag passes 4px on a
+  snapped window     → undockForDrag: pre-snap size back, placed under the cursor. On the
+                       movement, never on the press, so a click cannot un-maximize
 double-click header  → snap(id, dockZone === 'max' ? 'none' : 'max')
 pinned window        → every one of these is refused; see Pinned windows
 corner resize        → undock(id): keep the new size, forget the zone

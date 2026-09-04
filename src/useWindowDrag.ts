@@ -23,6 +23,8 @@ interface DragOptions {
 export function useWindowDrag(handleRef: Ref<HTMLElement | null>, d: WindowDescriptor, options: DragOptions) {
   let start: { px: number; py: number; x: number; y: number; pointerId: number } | null = null
   let armed: SnapZone | null = null
+  /** Has this gesture passed SLOP yet? Undocking happens once, on the crossing, never before. */
+  let dragging = false
 
   function snapping(): boolean {
     return Boolean(options.snap?.enabled) && options.enabled()
@@ -39,13 +41,26 @@ export function useWindowDrag(handleRef: Ref<HTMLElement | null>, d: WindowDescr
     if ((e.target as Element | null)?.closest('[data-vw-nodrag]')) return
     e.preventDefault()
     options.onStart?.()
-    options.onUndock?.(e.clientX)
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     start = { px: e.clientX, py: e.clientY, x: d.x, y: d.y, pointerId: e.pointerId }
+    dragging = false
   }
 
   function onMove(e: PointerEvent) {
     if (!start || e.pointerId !== start.pointerId) return
+    if (!dragging) {
+      // Below the threshold this is still a click, and a click must not undock: it is what makes a
+      // double-click on a maximized header see 'max' twice and toggle back.
+      if (Math.abs(e.clientX - start.px) < SLOP && Math.abs(e.clientY - start.py) < SLOP) return
+      dragging = true
+      const was = { x: d.x, w: d.w }
+      options.onUndock?.(e.clientX)
+      // If that undocked, the window has been narrowed and re-placed horizontally under the pointer:
+      // re-seed x from where both now are, or this same move would drag it straight off that
+      // placement. Only x — undocking leaves y alone, so y keeps the origin from the press and the
+      // threshold costs the drag no vertical distance.
+      if (d.x !== was.x || d.w !== was.w) start = { ...start, px: e.clientX, x: d.x }
+    }
     d.x = clampX(start.x + e.clientX - start.px, d.w, options.view, options.bounds)
     d.y = clampY(start.y + e.clientY - start.py, d.h, options.view, options.bounds)
     if (snapping()) arm(zoneFromPointer(e.clientX, e.clientY, options.view, options.snap!))
@@ -56,6 +71,7 @@ export function useWindowDrag(handleRef: Ref<HTMLElement | null>, d: WindowDescr
     const el = e.currentTarget as HTMLElement
     if (el.hasPointerCapture(start.pointerId)) el.releasePointerCapture(start.pointerId)
     start = null
+    dragging = false
     const zone = armed
     arm(null) // a ghost left behind by a cancelled drag would never go away
     if (zone && e.type !== 'pointercancel') options.onDrop?.(zone)
@@ -92,6 +108,8 @@ export function useWindowDrag(handleRef: Ref<HTMLElement | null>, d: WindowDescr
 }
 
 const STEP = 10
+/** Pointer slop, in px: movement under this is a click, not a drag. */
+const SLOP = 4
 
 /**
  * Arrow keys move the window, shift+arrows resize it — pointer-only would strand keyboard users.

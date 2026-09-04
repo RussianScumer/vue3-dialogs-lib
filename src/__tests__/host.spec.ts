@@ -277,10 +277,38 @@ describe('WindowHost', () => {
     await nextTick()
     expect(wrapper.find('.vw-ghost').exists()).toBe(false)
 
-    // Dragging it away again gives the floating size back.
+    // Dragging it away again gives the floating size back — on the move, not on the press.
     pointer(head, 'pointerdown', 2, 100, 10)
+    expect(win.dockZone(id)).toBe('left')
+    pointer(head, 'pointermove', 2, 140, 10)
     expect(win.dockZone(id)).toBeNull()
     expect(win.byId(id)).toMatchObject({ w: 400, h: 300 })
+    // Placed under the pointer by undockForDrag, and the move that undocked does not shift it again.
+    expect(win.byId(id)!.x).toBe(Math.round(140 - 400 * (140 / Math.round(window.innerWidth / 2))))
+    pointer(head, 'pointerup', 2, 140, 10)
+  })
+
+  it('a click on a maximized header does not undock it, and a double-click restores', async () => {
+    const { wrapper, win } = app()
+    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 }).id
+    await nextTick()
+    const head = wrapper.find('.vw__head')
+    const el = head.element
+
+    win.snap(id, 'max', { w: window.innerWidth, h: window.innerHeight })
+    const maxed = { ...win.byId(id)! }
+
+    // A plain click, and sub-threshold jitter within it, leave the window maximized.
+    pointer(el, 'pointerdown', 1, 400, 20)
+    pointer(el, 'pointermove', 1, 402, 21)
+    pointer(el, 'pointerup', 1, 402, 21)
+    expect(win.dockZone(id)).toBe('max')
+    expect(win.byId(id)).toMatchObject({ x: maxed.x, y: maxed.y, w: maxed.w, h: maxed.h })
+
+    // The reported flow: press, release, then the double-click the pair produces restores.
+    await head.trigger('dblclick')
+    expect(win.dockZone(id)).toBeNull()
+    expect(win.byId(id)).toMatchObject({ x: 300, y: 300, w: 400, h: 300 })
   })
 
   it('a cancelled drag clears the ghost without snapping', async () => {

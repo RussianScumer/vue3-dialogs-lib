@@ -1090,7 +1090,8 @@ Per-window `zIndexBase`, pinning from the taskbar, a reserved screen region for 
 
 ## VW-12 — Undock on drag, not on click
 
-**Roadmap:** none — reported bug · **Size:** S · **Depends on:** nothing
+**Roadmap:** none — reported bug · **Size:** S · **Depends on:** nothing · **Status:** done on
+`vw-12-undock-on-drag`.
 
 ### Goal
 
