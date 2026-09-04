@@ -28,6 +28,12 @@ const interactive = () => !mobile.value && !leaving.value
 const canDrag = () => interactive() && d.draggable
 const canResize = computed(() => interactive() && d.resizable)
 const active = computed(() => win.activeId.value === d.id)
+/**
+ * A `requestClose` is out with the guards. The default controls stand down until it settles: a
+ * second ✕ only joins the same request, but minimize would unmount the content — and with it the
+ * very guard that is still being awaited.
+ */
+const closing = computed(() => win.isClosing(d.id))
 const visual = computed<WindowVisualState>(() => props.state ?? 'open')
 /** Retained for the animation only: the store has already let go, so nothing here may be clicked. */
 const leaving = computed(() => visual.value === 'leaving')
@@ -231,6 +237,7 @@ function onHeadDblclick(e: MouseEvent) {
           class="vw__btn"
           type="button"
           data-vw-nodrag
+          :disabled="closing"
           @click="win.minimize(d.id)"
         >
           –
@@ -240,6 +247,7 @@ function onHeadDblclick(e: MouseEvent) {
           class="vw__btn"
           type="button"
           data-vw-nodrag
+          :disabled="closing"
           @click="win.requestClose(d.id)"
         >
           ✕

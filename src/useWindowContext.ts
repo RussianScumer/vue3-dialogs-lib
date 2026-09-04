@@ -1,4 +1,4 @@
-import { inject, onScopeDispose, provide } from 'vue'
+import { computed, inject, onScopeDispose, provide } from 'vue'
 import { useWindows } from './createWindows'
 import { WINDOW_CTX_KEY, type WindowContext } from './injection'
 import type { WindowDescriptor } from './types'
@@ -11,6 +11,7 @@ export function provideWindowContext(d: WindowDescriptor): WindowContext {
     minimize: () => void win.minimize(d.id),
     close: () => win.close(d.id),
     requestClose: () => win.requestClose(d.id),
+    closing: computed(() => win.isClosing(d.id)),
     onBeforeClose: (guard) => {
       // Registered from the content's setup, so it dies with the content — which is exactly the
       // documented limitation: a minimized window has no guard of its own.

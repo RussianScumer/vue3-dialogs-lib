@@ -74,7 +74,8 @@ Mount the host once, above the router outlet:
 
 `WindowTaskbar` renders no markup of its own — the consumer owns the visual completely. The slot
 gets `all` (every window), `windows` (only the minimized ones), `active` (the top window's id or
-`null`), and `restore` / `focus` / `minimize` / `close` / `requestClose`. `registerFocusTarget` is
+`null`), `closing(id)`, and `restore` / `focus` / `minimize` / `close` / `requestClose`.
+`registerFocusTarget` is
 optional: bind it as a template ref and the taskbar becomes where focus goes when the last window
 is minimized, instead of the element that opened it.
 
@@ -150,6 +151,23 @@ const { onBeforeClose } = useWindowContext()
 onBeforeClose(() => !form.dirty || confirm('Discard the draft?'))
 ```
 
+Either guard may be async, which is the whole reason a guard exists — show a confirm, await the
+answer:
+
+```js
+onBeforeClose(async () => {
+  if (!form.dirty) return true
+  return await askTheUser() // a window of your own, a toast, anything that resolves
+})
+```
+
+While a guard is deciding the window is *closing*: `win.isClosing(id)`, the `closing` computed on
+`useWindowContext()`, and a `closing(id)` slot prop on `WindowTaskbar`. The default ✕ and –
+controls disable themselves for that stretch. A second `requestClose` in the meantime joins the
+first — same promise, guard run once, the user asked once — and a guard that throws counts as a
+veto and warns in dev. None of this touches the descriptor: reload mid-question and the window
+comes back ordinary.
+
 Both must pass. **The per-window guard only exists while the content is mounted**, which is a
 direct consequence of "minimized means unmounted": a minimized window closed from the taskbar is
 covered only by the app-wide `beforeClose`. Put anything that must hold for a minimized window
@@ -166,7 +184,7 @@ const props = defineProps({ id: Number, windowId: String })
 // draft state that survives minimize (unmount) and page reload
 const form = useWindowState(props.windowId, () => ({ name: '', note: '' }))
 
-const { setTitle, close, requestClose, onBeforeClose, minimize, isRestored } = useWindowContext()
+const { setTitle, close, requestClose, onBeforeClose, minimize, isRestored, closing } = useWindowContext()
 setTitle(`Item ${props.id}`)
 onBeforeClose(() => !form.name || confirm('Discard the draft?'))
 </script>

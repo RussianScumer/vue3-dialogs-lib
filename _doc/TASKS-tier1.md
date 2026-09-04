@@ -439,7 +439,7 @@ hidden tab throttles the timers that would measure them.
 
 ## VW-06 — Async close guards
 
-**Roadmap:** §3 · **Size:** M · **Depends on:** VW-05
+**Roadmap:** §3 · **Size:** M · **Depends on:** VW-05 · **Status:** done on `vw-06-async-close-guards`.
 
 ### Goal
 
@@ -479,6 +479,59 @@ which is the only reason a close guard exists.
 
 Rendering the confirm dialog itself — that is §4, and it is blocked. Until then the playground
 uses `window.confirm` to exercise the async path.
+
+### Notes
+
+- **The guards were already awaited.** `requestClose` was `async` and `await`ed both guards before
+  this task, so nothing about "a guard may return a promise" needed writing. What was missing is
+  everything that makes an *awaited* guard usable: a pending state to render, one guard run per
+  question, and a defined answer when the guard throws.
+- **Two structures, not one.** `closing` is a reactive `Set` beside `docks` — what the view reads —
+  and `pending` is a plain `Map` of the in-flight promise, which is what re-entrancy joins. A single
+  reactive map keyed by id would have had to hold promises inside a `reactive()` proxy, and awaiting
+  a proxied thenable is a subtlety with nothing to gain.
+- **The flag is what says whether there is anything to join.** A window with no guards at all never
+  suspends: `runGuards` runs to its `finally` synchronously, so by the time `requestClose` could
+  record the promise the request is already over. Recording it then would leave a `pending` entry
+  nothing ever removes. `if (closing.has(id))` is that check, and it is why every existing
+  synchronous caller still settles in the same microtask it always did.
+- **A throw is a veto, not a close.** The alternative — let the error propagate out of
+  `requestClose` — leaves the caller with a rejected promise and the window in an undefined state.
+  Treating an unanswered question as permission is the destructive reading, so a throwing guard
+  keeps the window and warns. That warning is the library's first `console.warn`; it is dev-only
+  (`import.meta.env.DEV`) and addressed at the developer, so constraint 4 is intact.
+- **`close()` mid-pending is not a special case.** It clears both structures, and the guard that is
+  still out answers into a window that no longer exists — `close(id)` inside `runGuards` finds
+  nothing and returns. The promise settles with whatever the guard said, which is honest: it is the
+  answer to a question that stopped mattering.
+- **Minimize is disabled too, not only close.** Minimizing unmounts the content, and the content is
+  where the pending guard lives — the frame would drop the very function that is being awaited.
+- **The taskbar exposes `closing(id)`, a function rather than a ref**, matching `setTaskbarRect`
+  and `registerFocusTarget`: the slot is per-window and a function reading the reactive set tracks
+  correctly in the consumer's own `v-for`.
+
+### Verification
+
+`npx vitest run` — 154 tests, 137 jsdom (11 new in `close-guards.spec.ts`) and 17 browser.
+`npm run lint` and `npm run type-check` clean. Existing specs untouched.
+
+jsdom only, and deliberately: everything here is store logic and one `:disabled` binding, and the
+one thing a real UA could add — that a disabled button really refuses the click — is the UA's own
+contract, not the library's.
+
+Exercised by hand in the running playground under Chrome. `window.confirm` was replaced in the
+page with a recording stub for the session: a native dialog blocks the automation channel, and the
+question being asked is the playground's stand-in for VW-07's owned window anyway — what is being
+measured is the state around it. Measured there: the ✕ and – disabled while the guard is out, the
+footer button reading `Closing…`, the taskbar button dimmed with `…` in place of its ✕, and the
+content's own hint switching to "Guard is deciding"; one `confirm` for three clicks on ✕ during the
+same request; refuse keeps the window and re-enables every control; accept closes it and the frame
+retires; `closeAll()` while a guard is pending leaves zero `<dialog>` elements and the guard's late
+answer lands harmlessly. No console output but Vite's own.
+
+The tab throttles timers — the same `document.hidden` condition VW-05 ran into — so a 600ms guard
+and a 180ms leave both take about five times as long there. It changes nothing about the order of
+events, which is what this task is about; the timing claims are the specs'.
 
 ---
 

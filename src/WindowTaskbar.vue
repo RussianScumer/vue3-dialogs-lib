@@ -22,6 +22,12 @@ defineSlots<{
     restore: (id: string) => string
     close: (id: string) => void
     requestClose: (id: string) => Promise<boolean>
+    /**
+     * True while a `requestClose` for that window is still waiting on its guards — render a
+     * spinner, or disable the button, rather than letting the user click it again. The second
+     * click is harmless either way: it joins the first request instead of asking twice.
+     */
+    closing: (id: string) => boolean
     focus: (id: string) => string
     minimize: (id: string) => string
     /**
@@ -71,6 +77,7 @@ function registerFocusTarget(el: Element | ComponentPublicInstance | null): void
     :restore="win.restore"
     :close="win.close"
     :request-close="win.requestClose"
+    :closing="win.isClosing"
     :focus="win.focus"
     :minimize="win.minimize"
     :register-focus-target="registerFocusTarget"

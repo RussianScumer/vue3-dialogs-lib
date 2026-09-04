@@ -87,6 +87,13 @@ content), then the app-wide `beforeClose` option. Only the second one can see a 
 window, whose content is unmounted and whose guard therefore no longer exists. The ✕ button calls
 `requestClose`; `maxWindows` eviction calls `close`.
 
+Both guards are awaited, so a window sits in a *closing* state for as long as they take. That state
+is a reactive set beside `docks` — runtime-only, so the descriptor and the schema stay where they
+are, and a reload during a pending question restores an ordinary window. The in-flight promise is
+kept beside it and handed to any further `requestClose` for the same id, which is why an impatient
+second click cannot ask the user twice. `close()` and `closeAll()` clear both without consulting
+anything: the pending guard still answers, into a window that is already gone, and nothing throws.
+
 Both `minimize` and `close` unmount the frame, and an unmounted frame cannot keep the focus it was
 holding — the browser drops it on `<body>`. So `useWindowFocus` records, just before the unmount,
 whether focus was inside that window, and if it was, walks a chain: the window now on top, by the

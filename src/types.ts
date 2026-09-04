@@ -191,6 +191,13 @@ export interface WindowEvent {
   id: string
 }
 
+/**
+ * A guard registered by a mounted window's content. It may be async — `requestClose()` awaits it,
+ * and the window counts as `closing` for as long as it is pending, which is what lets a consumer
+ * show a confirm and answer later. Returning false, or throwing, keeps the window open.
+ */
+export type CloseGuard = () => boolean | Promise<boolean>
+
 /** Returning false keeps the window open. Only consulted by `requestClose()`. */
 export type BeforeCloseGuard = (d: WindowDescriptor) => boolean | Promise<boolean>
 

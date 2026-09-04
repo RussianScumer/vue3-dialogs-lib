@@ -333,11 +333,14 @@ function clearStorage() {
         <section>
           <h2>12 · Refusing to close</h2>
           <p>
-            Type into an item editor's <em>Name</em> and its own guard refuses the ✕ — that guard is registered by the
+            Type into an item editor's <em>Name</em> and its own guard takes over the ✕: it is <em>async</em>, so it
+            spends 600ms pretending to check for unsaved changes and then asks with a <code>confirm</code>. While it
+            is out the window is <code>closing</code> — its controls, the footer buttons and the taskbar ✕ all stand
+            down, and a second click joins the same request instead of asking twice. That guard is registered by the
             content, so minimizing the window unmounts it along with everything else. A minimized window is covered
             only by the app-wide <code>beforeClose</code>, which is why closing a minimized dirty draft from the
             taskbar is refused too. <code>close()</code>, <code>closeAll()</code> and <code>maxWindows</code> eviction
-            never consult either.
+            never consult either, pending guard or not.
           </p>
           <button
             type="button"
@@ -492,23 +495,25 @@ function clearStorage() {
       <div class="winfoot">
         <button
           type="button"
-          :disabled="!descriptor.minimizable"
+          :disabled="!descriptor.minimizable || win.isClosing(descriptor.id)"
           @click="win.minimize(descriptor.id)"
         >
           Minimize
         </button>
         <button
           type="button"
-          :disabled="!descriptor.closable"
+          :disabled="!descriptor.closable || win.isClosing(descriptor.id)"
           @click="win.requestClose(descriptor.id)"
         >
-          Close
+          {{ win.isClosing(descriptor.id) ? 'Closing…' : 'Close' }}
         </button>
       </div>
     </template>
   </WindowHost>
 
-  <WindowTaskbar v-slot="{ all, active, restore, focus, requestClose, registerFocusTarget, setTaskbarRect }">
+  <WindowTaskbar
+    v-slot="{ all, active, restore, focus, requestClose, closing, registerFocusTarget, setTaskbarRect }"
+  >
     <div
       :ref="registerFocusTarget"
       class="taskbar"
@@ -523,12 +528,19 @@ function clearStorage() {
         :ref="(el) => setTaskbarRect(w.id, el)"
         type="button"
         class="taskbar__item"
-        :class="{ 'is-active': w.id === active, 'is-min': w.minimized }"
+        :class="{ 'is-active': w.id === active, 'is-min': w.minimized, 'is-closing': closing(w.id) }"
         @click="w.minimized ? restore(w.id) : focus(w.id)"
       >
         {{ w.title || w.name }}
+        <!-- A second click would join the pending request rather than ask twice, but showing that
+             the question is already out is the point of the slot prop. -->
         <span
-          v-if="w.closable"
+          v-if="w.closable && closing(w.id)"
+          class="taskbar__close"
+          aria-hidden="true"
+        >…</span>
+        <span
+          v-else-if="w.closable"
           class="taskbar__close"
           role="button"
           aria-label="Close"
@@ -556,6 +568,7 @@ button { margin-right: 8px; margin-bottom: 4px; }
 .log { list-style: none; padding: 0; font-size: 12px; max-height: 320px; overflow: auto; }
 .log li { padding: 2px 0; border-bottom: 1px solid rgba(127, 127, 127, 0.15); }
 .log span { color: #9ca3af; margin-right: 6px; }
+.taskbar__item.is-closing { opacity: 0.6; }
 .taskbar {
   position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 8px;
   padding: 6px 10px; background: #26262b; color: #e5e7eb; z-index: 2147483000; font: 13px system-ui, sans-serif;

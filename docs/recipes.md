@@ -201,7 +201,8 @@ marked — use `all` and `active` instead:
 </WindowTaskbar>
 ```
 
-`requestClose` runs the guards; `close` does not.
+`requestClose` runs the guards; `close` does not. Add `closing` to the slot props to show that a
+guard is still deciding — `<span v-if="closing(w.id)">…</span>` in place of the ✕.
 
 `registerFocusTarget` is the opt-in for keyboard users. Minimizing a window unmounts it, so its
 focus has to go somewhere: normally to the next window's header, but when it was the last window
@@ -431,6 +432,22 @@ createWindows({
   beforeClose: (d) => !d.state?.name || confirm(`Discard the draft in ${d.title}?`),
 })
 ```
+
+A guard may be async, and `requestClose` awaits it — which is what makes "ask, then decide"
+possible at all:
+
+```js
+const { onBeforeClose, closing } = useWindowContext()
+
+onBeforeClose(async () => {
+  if (!form.name) return true
+  return await confirmSomehow(`Discard the draft in ${descriptor.title}?`)
+})
+```
+
+`closing` is a computed that is true while that question is out, for a pending state on your own
+buttons; the library's default ✕ and – disable themselves. Clicking ✕ again joins the same request
+rather than asking a second time, and a guard that throws keeps the window open.
 
 Guards run on `requestClose(id)` and on the ✕ button. They are deliberately *not* run by
 `close(id)`, `closeAll()`, or `maxWindows` eviction — a logout must not be blockable, and the

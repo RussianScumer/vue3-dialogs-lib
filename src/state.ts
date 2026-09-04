@@ -2,6 +2,7 @@ import { computed, reactive, shallowRef } from 'vue'
 import { DEFAULT_MIN_H, DEFAULT_MIN_W, cascade, clampDescriptor, clampSize, snapRect } from './geometry'
 import type {
   Bounds,
+  CloseGuard,
   ComponentsMap,
   OpenOptions,
   Rect,
@@ -14,8 +15,7 @@ import type {
   WindowProps,
 } from './types'
 
-/** A guard registered by a mounted window's content; see requestClose. */
-export type CloseGuard = () => boolean | Promise<boolean>
+export type { CloseGuard } from './types'
 
 function shallowEqual(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
   const ka = Object.keys(a)
@@ -25,6 +25,11 @@ function shallowEqual(a: Record<string, unknown>, b: Record<string, unknown>): b
 
 function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `w-${Math.random().toString(36).slice(2)}-${Date.now()}`
+}
+
+/** Dev-only: the library ships no user-facing strings, and a bug in a guard is for the developer. */
+function warn(message: string, err?: unknown): void {
+  if (import.meta.env?.DEV) console.warn(`[vue-windows] ${message}`, err)
 }
 
 function rectOf(d: WindowDescriptor): Rect {
@@ -56,6 +61,17 @@ export function createStore(options: ResolvedOptions) {
    * from mounted content and die with it.
    */
   const closeGuards = new Map<string, CloseGuard>()
+  /**
+   * The windows whose guards are still deciding. Runtime-only like `docks` and reactive so a
+   * consumer can render a pending state, but a Set rather than a descriptor field: a reload during
+   * a pending guard must bring back an ordinary window, not one stuck mid-close.
+   */
+  const closing = reactive(new Set<string>())
+  /**
+   * The in-flight `requestClose` per id, so a second call joins the first instead of asking the
+   * user twice. Promises, so — like `closeGuards` — this can never be persisted.
+   */
+  const pending = new Map<string, Promise<boolean>>()
   /**
    * Header elements of the mounted frames, and the consumer's opt-in taskbar destination. Elements,
    * so like `closeGuards` they can never reach storage, and outside `s` so registering one cannot
@@ -139,6 +155,8 @@ export function createStore(options: ResolvedOptions) {
     docks.delete(id)
     taskbarRects.delete(id)
     closeGuards.delete(id)
+    closing.delete(id)
+    pending.delete(id)
     emit('close', id)
   }
 
@@ -149,6 +167,8 @@ export function createStore(options: ResolvedOptions) {
     docks.clear()
     taskbarRects.clear()
     closeGuards.clear()
+    closing.clear()
+    pending.clear()
     for (const id of ids) emit('close', id)
   }
 
@@ -207,20 +227,57 @@ export function createStore(options: ResolvedOptions) {
     }
   }
 
+  /** True while this window's guards are still deciding — the pending state of a `requestClose`. */
+  function isClosing(id: string): boolean {
+    return closing.has(id)
+  }
+
   /**
-   * The guarded close. Runs the window's own guard, then the app-wide one — which is the only one
-   * a minimized window has, its content being unmounted. Resolves false when either vetoes.
+   * Runs the window's own guard, then the app-wide one — which is the only one a minimized window
+   * has, its content being unmounted. A guard that throws is a veto: an unanswered question is not
+   * permission, and closing the window would be the destructive reading of a bug.
    */
-  async function requestClose(id: string): Promise<boolean> {
+  async function runGuards(id: string, w: WindowDescriptor): Promise<boolean> {
+    let ok = true
+    try {
+      const own = closeGuards.get(id)
+      if (own && !(await own())) ok = false
+      else if (options.beforeClose && !(await options.beforeClose(w))) ok = false
+    } catch (err) {
+      warn(`a close guard for "${id}" threw; the window stays open`, err)
+      ok = false
+    } finally {
+      closing.delete(id)
+      pending.delete(id)
+    }
+    if (ok) close(id)
+    return ok
+  }
+
+  /**
+   * The guarded close. Resolves false when either guard vetoes, and the window is `closing` for as
+   * long as they take, so the consumer can disable its own close affordance.
+   *
+   * Re-entrant by joining, not by refusing: a second call for the same id — an impatient second
+   * click, a taskbar button and the ✕ racing — gets the promise the first one is already awaiting.
+   * Running the guard twice would mean asking the user twice, and a `confirm` would appear again
+   * behind the one still on screen.
+   */
+  function requestClose(id: string): Promise<boolean> {
+    const inFlight = pending.get(id)
+    if (inFlight) return inFlight
+
     const w = byId(id)
-    if (!w) return true
+    if (!w) return Promise.resolve(true)
 
-    const own = closeGuards.get(id)
-    if (own && !(await own())) return false
-    if (options.beforeClose && !(await options.beforeClose(w))) return false
-
-    close(id)
-    return true
+    closing.add(id)
+    const p = runGuards(id, w)
+    // A window with no guards at all never suspends: `runGuards` ran to its end, and its `finally`
+    // has already cleared the flag by the time this line is reached. Recording the promise then
+    // would leave an entry nothing will ever remove, so the flag is what says whether there is
+    // still something to join.
+    if (closing.has(id)) pending.set(id, p)
+    return p
   }
 
   function openWindow(name: string, props: Record<string, unknown> = {}, opts: OpenOptions = {}): string {
@@ -368,6 +425,8 @@ export function createStore(options: ResolvedOptions) {
     docks.clear()
     taskbarRects.clear()
     closeGuards.clear()
+    closing.clear()
+    pending.clear()
     for (const w of stack) restoredIds.add(w.id)
   }
 
@@ -384,6 +443,7 @@ export function createStore(options: ResolvedOptions) {
     close,
     closeAll,
     requestClose,
+    isClosing,
     onBeforeClose,
     registerHeader,
     headerOf,

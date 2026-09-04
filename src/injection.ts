@@ -1,4 +1,4 @@
-import type { InjectionKey } from 'vue'
+import type { ComputedRef, InjectionKey } from 'vue'
 import type { WindowsApi } from './state'
 import type { ResolvedOptions, Viewport, WindowDescriptor } from './types'
 
@@ -15,6 +15,11 @@ export interface WindowContext {
   close(): void
   /** Runs this window's guard, then the app-wide one. False means the window stayed open. */
   requestClose(): Promise<boolean>
+  /**
+   * True while a `requestClose` for this window is waiting on its guards — the pending state to
+   * render on a confirm button. Runtime-only: it is not on the descriptor and never persists.
+   */
+  closing: ComputedRef<boolean>
   /**
    * Veto a requestClose while this content is mounted — the unsaved-draft hook. Unregisters
    * automatically, so a minimized (and therefore unmounted) window is covered only by the

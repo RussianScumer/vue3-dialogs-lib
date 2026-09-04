@@ -97,6 +97,18 @@ Per-window guards are registered from mounted content via `onBeforeClose()` and 
 scope dispose. A minimized window therefore has no guard of its own and is covered only by the
 app-wide `beforeClose`, which is consulted for every window including minimized ones.
 
+Both guards may be **async**: `requestClose` awaits them, so a consumer can ask a question and
+answer later. While they are deciding the window is *closing* — `isClosing(id)` on the store, a
+`closing` computed on the window context, a `closing(id)` slot prop on `WindowTaskbar` — and the
+default ✕ and – controls are disabled. Two consequences worth relying on:
+
+- a second `requestClose` for the same window joins the pending one and gets the same promise; the
+  guard runs once, so the user is never asked twice;
+- a guard that throws is a veto, with a dev-mode warning. An unanswered question is not permission.
+
+The pending state is runtime-only: it is on no descriptor, never persists, and a reload during a
+pending guard brings back an ordinary window.
+
 ### Mutation API
 
 `setTitle`, `setGeometry` (re-clamped against the window's size limits), `updateProps` (re-renders
@@ -225,8 +237,8 @@ the taskbar clickable.
 ### `WindowTaskbar`
 
 Renderless — the consumer owns the visual completely. The default slot receives `windows`
-(minimized only), `all`, `active`, and the `restore`, `close`, `requestClose`, `focus`, `minimize`
-actions, plus `registerFocusTarget` — bind it as `:ref="registerFocusTarget"` on the element that
+(minimized only), `all`, `active`, `closing(id)` (true while that window's guards are deciding),
+and the `restore`, `close`, `requestClose`, `focus`, `minimize` actions, plus `registerFocusTarget` — bind it as `:ref="registerFocusTarget"` on the element that
 should take focus when the last window is minimized.
 
 ---
@@ -234,7 +246,8 @@ should take focus when the last window is minimized.
 ## Inside a window's content
 
 `useWindowContext()` gives content its own `descriptor`, plus `setTitle`, `minimize`, `close`,
-`requestClose`, `onBeforeClose`, and `isRestored` (true when this mount came from storage rather
+`requestClose`, `onBeforeClose`, `closing` (a computed, true while this window's guards are out),
+and `isRestored` (true when this mount came from storage rather
 than a fresh `open()`).
 
 `useWindowState(windowId, factory)` returns draft state stored on the descriptor. It survives
