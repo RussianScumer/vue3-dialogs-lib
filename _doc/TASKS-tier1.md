@@ -790,7 +790,7 @@ log the playground already renders.
 
 ## VW-09 — Keyboard snapping and window switching
 
-**Roadmap:** §6 · **Size:** M · **Depends on:** VW-04
+**Roadmap:** §6 · **Size:** M · **Depends on:** VW-04 · **Status:** done on `vw-09-keyboard-snapping`.
 
 ### Goal
 
@@ -837,6 +837,75 @@ put it on the left half. And there is no way to move focus between windows witho
 ### Out of scope
 
 Chord sequences, per-window keymaps, a shortcuts cheatsheet UI.
+
+### Notes
+
+- **The listener is on the window element, not the document.** ESC already works that way, and the
+  same reasoning applies twice over here: the event's own window is the one that snaps, so the
+  handler needs no notion of "which window did the user mean", and a library that binds `Meta+Arrow`
+  at the document would be reaching outside its own markup for a shortcut it cannot know is free.
+  The cost is that the chords only fire while focus is inside a window — which is what recipe 22's
+  page-wide hotkey is for, and why `focusNext`/`focusPrev` are on the store regardless.
+- **The plain arrow nudge had to learn about modifiers.** `onWindowKeydown` read `e.key` alone, so
+  `Meta+ArrowLeft` on a focused header moved the window 10px *and* snapped it — and the 10px landed
+  first, which meant the dock recorded the nudged rect as the geometry to give back. It now ignores
+  any arrow carrying `Meta`, `Ctrl` or `Alt`; `Shift` stays its own, since that is the resize
+  modifier.
+- **The quarters are a ring, because four arrows onto four corners has no natural mapping.**
+  The arrow names the edge you travel along to reach the next corner clockwise from the top-left:
+  up to the top-left, right to the top-right, down to the bottom-right, left to the bottom-left.
+  Any assignment here is a convention rather than a deduction, which is the sharpest argument for
+  the per-action overrides the task asks for.
+- **Snap keystrokes need `draggable` *and* `resizable`.** The pointer path reaches a snap through a
+  drag, so it only ever checks `draggable`; the done-when list asks for a non-resizable window to
+  ignore the keystrokes, and a snap does resize the window. The keyboard is therefore the stricter
+  of the two by exactly one flag, deliberately.
+- **Modifiers are compared exactly, not as a subset.** `Meta+ArrowUp` and `Meta+Shift+ArrowUp` are
+  different actions on adjacent keys; a subset match would have made the quarter fall through to
+  maximize the moment a consumer unbound it.
+- **A chord matches `event.key` or `event.code`.** `Alt` turns `` ` `` into a dead key on several
+  layouts, so `Alt+Backquote` written against `key` alone would be unreachable exactly where the
+  binding matters. `Backquote` is the default for that reason, and either spelling works.
+- **Editable targets are found with `closest`, not `isContentEditable`.** A keystroke in rich text
+  is delivered to whatever inline element the caret sits in rather than to the editable root, and
+  the property is one of the things jsdom does not implement — so the spec could never have seen
+  the guard work.
+- **`focusNext` skips a window that owns a child.** An owner is `inert` while its question is on
+  screen, and a real UA refuses to focus anything inside an inert subtree, so cycling onto one
+  would leave focus on nothing. The child directly above it is the reachable half of that pair.
+  Minimized windows are skipped for the older reason: they have no frame to focus.
+
+### Verification
+
+`npx vitest run` — 206 tests, 186 jsdom (18 new in `keymap.spec.ts`) and 20 browser. `npm run lint`
+and `npm run type-check` clean. Existing specs untouched.
+
+jsdom only for the new spec, following VW-06 and VW-08: the keymap is option resolution, one
+comparison per keystroke and a `snap()` call the pointer path already makes. The one claim worth
+sharing with the UA — that a header really takes focus — is already pinned in
+`focus.browser.spec.ts` by VW-04. `Meta+ArrowLeft` is asserted against `snapRect('left', …)` from
+`geometry.ts`, which is verification 11's own function, so the keyboard and pointer paths cannot
+drift apart without one of the two specs failing.
+
+Exercised by hand in the running playground under Chrome. Measured there, in a 2048×792 viewport
+with `snap.insets.bottom: 36`: `Meta+←` giving 1024×756 at 0,0, `Meta+Shift+↑` the 1024×378
+top-left quarter, `Meta+Shift+↓` the bottom-right at 1024,378, `Meta+↑` maximizing to 2048×756 and
+`Meta+↓` returning the window to its pre-snap 420×360 at 68,68; the same chord in the editor's own
+`<input>` changing nothing; `Alt+`` ` `` walking all four windows by `z` and wrapping, with
+`document.activeElement` landing on each header in turn and `Alt+Shift+`` ` `` reversing; a
+minimized window dropping out of the ring; the fixed panel — neither draggable nor resizable —
+ignoring the chords entirely; an editor with an open confirm sheet skipped while `inert`, the sheet
+itself in the ring, and the sheet still dismissible with the owner un-inerted afterwards; the plain
+arrow still nudging 10px and `Shift`+arrow still resizing, with `Meta`+arrow doing neither; and
+after a reload the persisted blob still at `schema: 2` with the same twenty descriptor keys and no
+trace of a keymap. No console output but Vite's own.
+
+The automation tab is `hidden`, as it has been since VW-05, and this time that cost more than stale
+screenshots: the extension's key channel delivered nothing at all to the page — a plain `ArrowLeft`
+never arrived, let alone a modified one — so the session was driven with `KeyboardEvent`s dispatched
+onto the real elements. What that cannot prove is the one thing no test can: whether the host OS
+lets `Meta`+arrow reach the browser in the first place. That is precisely why the bindings are
+overridable.
 
 ---
 

@@ -240,6 +240,35 @@ export function createStore(options: ResolvedOptions) {
     return id
   }
 
+  /**
+   * Move focus to the next window by `z`, wrapping — the keyboard's answer to clicking a window.
+   * Shipped whether or not the keymap is on: a consumer building their own shortcuts needs it.
+   *
+   * Minimized windows are skipped because they have no frame to focus, and so is a window that
+   * owns a child: its own frame is inert, and the child sitting directly above it is the reachable
+   * half of that pair. Focusing raises the window, so repeated `focusNext()` walks the whole stack
+   * rather than bouncing between the top two.
+   */
+  function cycleFocus(step: 1 | -1): string | null {
+    const order = s.stack.filter((w) => !w.minimized && !hasChild(w.id)).sort((a, b) => a.z - b.z)
+    if (order.length === 0) return null
+    const from = order.findIndex((w) => w.id === activeId.value)
+    // No active window in the ring — an inert owner is on top — so start from the end.
+    const at = from === -1 ? order.length - 1 : from
+    const next = order[(at + step + order.length) % order.length]!
+    focus(next.id)
+    headers.get(next.id)?.focus?.()
+    return next.id
+  }
+
+  function focusNext(): string | null {
+    return cycleFocus(1)
+  }
+
+  function focusPrev(): string | null {
+    return cycleFocus(-1)
+  }
+
   function minimize(id: string): string {
     const w = require(id)
     if (!w.minimizable || w.minimized) return id
@@ -687,6 +716,8 @@ export function createStore(options: ResolvedOptions) {
     minimize,
     restore,
     focus,
+    focusNext,
+    focusPrev,
     setTitle,
     setGeometry,
     updateProps,

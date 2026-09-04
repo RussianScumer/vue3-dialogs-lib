@@ -689,3 +689,58 @@ Two things worth knowing:
 
 Awaiting a *guarded* close is the other half of the same idea, and is what recipe 20 does: the
 sheet's result is the guard's answer.
+
+## 22 · Move the keyboard shortcuts out of the way
+
+The snap and switch chords are on by default. `Meta`+arrow is what Windows itself uses, which is
+also why it is the first thing to collide with a real window manager — GNOME, KDE and a few macOS
+setups take it before the page ever sees it. Move the bindings rather than forking:
+
+```js
+app.use(createWindows({
+  components,
+  keymap: {
+    bindings: {
+      snapLeft: 'Ctrl+Alt+ArrowLeft',
+      snapRight: 'Ctrl+Alt+ArrowRight',
+      snapMax: 'Ctrl+Alt+ArrowUp',
+      snapNone: 'Ctrl+Alt+ArrowDown',
+      snapTopLeft: null,          // unbind the quarters you do not want
+      snapTopRight: null,
+      snapBottomLeft: null,
+      snapBottomRight: null,
+    },
+  },
+}))
+```
+
+An action takes one chord, an array of them, or `null` to unbind it. Anything not mentioned keeps
+its default, and `keymap: { enabled: false }` removes the lot — including the ones you never
+rebound.
+
+Switching windows stays available either way, so you can put it on your own shortcut:
+
+```js
+const win = useWindows()
+
+useEventListener(window, 'keydown', (e) => {
+  if (e.key !== 'Tab' || !e.ctrlKey) return
+  e.preventDefault()
+  if (e.shiftKey) win.focusPrev()
+  else win.focusNext()
+})
+```
+
+`focusNext()` raises the window it lands on and focuses its header, and returns the id — or `null`
+when there is nothing to focus. Minimized windows are skipped, and so is a window that owns a
+child: an owner is `inert` while its question is open, and the child directly above it is the half
+of that pair the keyboard can reach.
+
+Two things the library will not do here:
+
+- **Nothing is bound at the document.** The listener is on the window element, so a shortcut only
+  fires when focus is inside a window — a page-wide hotkey is yours to add, as above.
+- **A keystroke inside a text field is the text field's.** `<input>`, `<textarea>` and
+  `contenteditable` never reach the keymap, because `Meta`+`←` is line-start on macOS and taking it
+  is not a trade worth making. Content that wants a key for itself calls `preventDefault()`, the
+  same escape hatch ESC has in recipe 10.

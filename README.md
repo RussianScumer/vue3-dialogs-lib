@@ -39,6 +39,10 @@ app.use(createWindows({
   mobileBreakpoint: 768,                 // below this: fullscreen, no drag/resize
   zIndexBase: 0,                         // added to every window's z, to clear your own overlays
   beforeClose: (d) => confirm(`Close ${d.title}?`), // consulted by requestClose(), see below
+  keymap: {                              // Meta+arrow snapping, Alt+` switching; on by default
+    enabled: true,                       // false removes every binding, store API unaffected
+    bindings: { snapLeft: 'Ctrl+Alt+ArrowLeft' }, // per action: a chord, several, or null
+  },
   async: {                               // fallback loading/error states for every window type
     loadingComponent: WindowLoading,     // per-type overrides live on the component's spec
     errorComponent: WindowError,         // also used when a window's content throws
@@ -377,6 +381,49 @@ win.dockZone(id)                                          // the current zone, o
 
 Snap state is **runtime-only**: it is not part of the descriptor and is not persisted. After a
 reload a snapped window comes back as a plain floating window with the geometry the snap gave it.
+
+## Keyboard
+
+With the header focused, arrow keys move the window by 10px and `Shift`+arrows resize it. From
+anywhere inside a window there is a keymap as well:
+
+| Chord | Action |
+| --- | --- |
+| `Meta`+`←` / `→` / `↑` / `↓` | `snapLeft`, `snapRight`, `snapMax`, `snapNone` |
+| `Meta`+`Shift`+`↑` / `→` / `↓` / `←` | the quarters, clockwise from the top-left |
+| `Alt`+`` ` `` / `Alt`+`Shift`+`` ` `` | `focusNext`, `focusPrev` |
+
+The snap chords go through the same `snap(id, zone, view)` a drop does, so they respect
+`snap.enabled`, `snap.insets`, the window's `draggable`/`resizable` flags and the inertness below
+`mobileBreakpoint`. A keystroke inside an `<input>`, `<textarea>` or `contenteditable` belongs to
+the text field and never reaches the window.
+
+`Meta`+arrow collides with a real OS window manager on some platforms, so every binding moves:
+
+```js
+keymap: {
+  bindings: {
+    snapLeft: 'Ctrl+Alt+ArrowLeft',      // one chord replaces the default
+    snapMax: ['Meta+ArrowUp', 'F11'],    // or several
+    snapNone: null,                      // or none at all
+  },
+}
+```
+
+A chord is modifiers plus a key, in any order and any case: `Meta`/`Cmd`/`Super`/`Win`, `Ctrl`,
+`Alt`/`Option`, `Shift`. The key is matched against both `event.key` and `event.code`, so
+`Backquote` and `` ` `` name the same physical key — which matters where `Alt` turns it into a dead
+key. Modifiers must match exactly, so rebinding a half never swallows the quarter above it.
+
+Switching ships whether or not the keymap does:
+
+```js
+win.focusNext()   // next non-minimized window by z, wrapping; focuses its header, returns the id
+win.focusPrev()
+```
+
+Both skip minimized windows and any window that currently owns a child, since an owner's frame is
+`inert` while its question is on screen.
 
 The ghost is a `.vw-ghost` element styled through `--vtd-ghost-bg`, `--vtd-ghost-outline` and
 `--vtd-ghost-radius`.

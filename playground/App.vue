@@ -289,6 +289,13 @@ function clearStorage() {
             Snapping keeps clear of the taskbar (<code>snap.insets.bottom</code>), and snapped windows follow the
             viewport when you resize the browser.
           </p>
+          <p>
+            From anywhere inside a window: <kbd>Meta</kbd>+arrow snaps left, right, maximized or back to the pre-snap
+            geometry, <kbd>Meta</kbd>+<kbd>Shift</kbd>+arrow takes the four quarters clockwise from the top-left, and
+            <kbd>Alt</kbd>+<kbd>`</kbd> cycles focus between windows (<kbd>Shift</kbd> reverses it). Inside a text
+            field the keystroke belongs to the field. Every binding is movable through
+            <code>keymap.bindings</code>, and <code>keymap: { enabled: false }</code> removes them all.
+          </p>
           <button
             type="button"
             @click="snapTwo"

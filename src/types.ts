@@ -122,6 +122,54 @@ export interface ResolvedSnap {
   insets: SnapInsets
 }
 
+/**
+ * What a keyboard shortcut can do. The four snap zones the pointer path can reach in one gesture,
+ * the four quarters, and the two switching actions. `focusNext`/`focusPrev` are on the store
+ * regardless of the keymap; these names exist so a consumer can rebind or unbind them.
+ */
+export type KeymapAction =
+  | 'snapLeft'
+  | 'snapRight'
+  | 'snapMax'
+  | 'snapNone'
+  | 'snapTopLeft'
+  | 'snapTopRight'
+  | 'snapBottomLeft'
+  | 'snapBottomRight'
+  | 'focusNext'
+  | 'focusPrev'
+
+/**
+ * A parsed chord. `key` is matched case-insensitively against both `event.key` and `event.code`,
+ * so `Backquote` and `` ` `` both name the same physical key — which matters because Alt turns it
+ * into a dead key on some layouts. Every modifier is compared exactly: `Meta+ArrowLeft` does not
+ * fire for `Meta+Shift+ArrowLeft`.
+ */
+export interface KeyChord {
+  key: string
+  meta: boolean
+  ctrl: boolean
+  alt: boolean
+  shift: boolean
+}
+
+export interface KeymapOptions {
+  /** false ships `focusNext`/`focusPrev` on the store and binds no keys at all. */
+  enabled?: boolean
+  /**
+   * Per-action override: one chord (`'Ctrl+Alt+ArrowLeft'`), several, or `null` to unbind just
+   * that action. `Meta+Arrow` collides with a real OS window manager on some platforms, which is
+   * why this exists.
+   */
+  bindings?: Partial<Record<KeymapAction, string | string[] | null>>
+}
+
+export interface ResolvedKeymap {
+  enabled: boolean
+  /** Parsed once at install, so a keystroke is a comparison rather than a string split. */
+  bindings: Record<KeymapAction, KeyChord[]>
+}
+
 export interface StorageLike {
   getItem(key: string): string | null
   setItem(key: string, value: string): void
@@ -259,6 +307,8 @@ export interface WindowsOptions {
   beforeClose?: BeforeCloseGuard
   /** Fallback loading/error handling for every window that does not set its own. */
   async?: AsyncWindowOptions
+  /** Keyboard shortcuts for snapping and window switching. On by default, every binding movable. */
+  keymap?: KeymapOptions
 }
 
 export interface ResolvedOptions {
@@ -270,6 +320,7 @@ export interface ResolvedOptions {
   mobileBreakpoint: number
   zIndexBase: number
   beforeClose: BeforeCloseGuard | null
+  keymap: ResolvedKeymap
   /** Memoized component resolution; loader functions become async components. */
   resolve(name: string): Component
   /** The `WindowSpec` defaults for a name, or an empty object. */

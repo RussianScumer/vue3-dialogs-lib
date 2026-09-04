@@ -30,6 +30,15 @@ Notable changes to `vue-windows`. Dates are release dates; unreleased work sits 
 
 ### Added
 
+- A keyboard keymap: `Meta`+arrow snaps, `Meta`+`Shift`+arrow takes the quarters, and
+  `` Alt+` `` / `` Alt+Shift+` `` switch windows. On by default and every binding movable through
+  `keymap.bindings`, since `Meta`+arrow collides with a real OS window manager on some platforms;
+  `keymap: { enabled: false }` removes the lot. A keystroke inside an `<input>`, `<textarea>` or
+  `contenteditable` never reaches it. Snapping goes through the same `snap(id, zone, view)` a drop
+  does, and obeys the same flags, insets and `mobileBreakpoint` inertness.
+- `focusNext()` / `focusPrev()` on the store, whatever the keymap is set to: the next non-minimized
+  window by `z`, wrapping, focusing its header. A window that owns a child is skipped, since its
+  own frame is `inert` while the question is open.
 - `resolve(data)` and `dismiss()` on `useWindowContext()`, and `resultOf(id)` / `resolve(id, data)`
   on the store, for a window you did not open yourself.
 - A type-only `result` marker on `WindowSpec`, so `useWindows<typeof components>()` types
@@ -50,6 +59,8 @@ Notable changes to `vue-windows`. Dates are release dates; unreleased work sits 
 - ESC is a real `keydown` listener rather than the `<dialog>` `cancel` event, which never fires for
   a non-modal dialog. It stands down for `defaultPrevented`, for a background window, and for a
   focused native picker.
+- An arrow key carrying `Meta`, `Ctrl` or `Alt` no longer nudges the window 10px on its way to the
+  keymap. `Shift`+arrow still resizes, as before.
 
 ## 0.1.0
 

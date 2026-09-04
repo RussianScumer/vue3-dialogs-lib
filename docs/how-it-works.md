@@ -42,9 +42,9 @@ Nothing in it is a component reference, a fetched entity, or a function. That is
 |---|---|
 | `state.ts` | The reactive store: the stack, `open`/`close`/`minimize`/`restore`/`focus`, dedupe, eviction, clamping. No DOM except the header registry focus hand-off needs. |
 | `createWindows.ts` | Plugin factory. Resolves options, creates one store per app, provides both, wires persistence. |
-| `options.ts` | Defaults, per-type async loading options, and memoized `resolve(name)` that turns loader functions into async components. |
+| `options.ts` | Defaults, per-type async loading options, the parsed keymap, and memoized `resolve(name)` that turns loader functions into async components. |
 | `WindowHost.vue` | Renders one `BaseWindow` per **non-minimized** descriptor, holds a leaving frame for the motion duration, and re-clamps on viewport resize. |
-| `BaseWindow.vue` | The `<dialog>`: geometry, header, drag handle, ESC, focus-on-pointerdown, `data-vw-state`, per-window context. |
+| `BaseWindow.vue` | The `<dialog>`: geometry, header, drag handle, ESC, the keymap, focus-on-pointerdown, `data-vw-state`, per-window context. |
 | `WindowTaskbar.vue` | Renderless. Exposes the minimized set to the consumer's own markup, `registerFocusTarget` for opting into focus on minimize, and `setTaskbarRect` for opting into the fly-to-button animation. |
 | `useWindowDrag.ts` | Pointer-events drag + arrow-key move/resize, and the snap zone armed by a drag. |
 | `useWindowResize.ts` | The eight resize grips: pointer maths, size limits, and the edges that move `x`/`y`. |

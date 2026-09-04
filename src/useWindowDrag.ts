@@ -96,10 +96,14 @@ const STEP = 10
 /**
  * Arrow keys move the window, shift+arrows resize it — pointer-only would strand keyboard users.
  * Both respect the window's own flags and limits, so the keyboard can do neither more nor less
- * than the pointer.
+ * than the pointer. A modified arrow is the keymap's, not this path's.
  */
 export function onWindowKeydown(e: KeyboardEvent, d: WindowDescriptor, options: DragOptions): void {
   if (!options.enabled()) return
+  // Shift is the resize modifier and belongs here; the rest belong to the keymap, which reads the
+  // same arrows on the way up. Nudging by 10px first would leave a snap recording the nudged rect
+  // as the geometry to give back.
+  if (e.metaKey || e.ctrlKey || e.altKey) return
   const delta = { ArrowLeft: [-STEP, 0], ArrowRight: [STEP, 0], ArrowUp: [0, -STEP], ArrowDown: [0, STEP] }[e.key]
   if (!delta) return
   const [dx, dy] = delta as [number, number]

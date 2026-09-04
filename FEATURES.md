@@ -183,6 +183,23 @@ With the header focused: arrow keys move the window by 10px, `Shift`+arrows resi
 the window's `draggable`/`resizable` flags and its size limits, so the keyboard can do neither more
 nor less than the pointer.
 
+From anywhere inside a window, a keymap covers what the pointer can do and the pointer alone cannot:
+
+| Chord | What it does |
+| --- | --- |
+| `Meta`+`←` / `→` / `↑` / `↓` | snap left, right, maximize, back to the pre-snap geometry |
+| `Meta`+`Shift`+arrow | the four quarters, walked clockwise from the top-left |
+| `Alt`+`` ` `` / `Alt`+`Shift`+`` ` `` | focus the next / previous window by `z`, wrapping |
+
+The snap chords call the same `snap(id, zone, view)` the drop path calls, so the keyboard cannot
+land anywhere the pointer cannot, and they obey the same gates: `snap.enabled`, the window's own
+flags, and the inertness below `mobileBreakpoint`. A keystroke aimed at an `<input>`, `<textarea>`
+or `contenteditable` is the text field's — on macOS `Meta`+`←` is line-start.
+
+Every binding is movable and `keymap: { enabled: false }` removes all of them, because `Meta`+arrow
+collides with a real OS window manager on some platforms. `focusNext()` / `focusPrev()` are on the
+store either way, for a consumer building their own shortcuts.
+
 ---
 
 ## Snapping
