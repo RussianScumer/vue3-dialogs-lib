@@ -105,6 +105,27 @@ describe('focus destinations in a real browser', () => {
     expect(document.activeElement).toBe(button)
   })
 
+  it('a click on a background window takes focus as well as the top of the stack', async () => {
+    const { win } = app()
+    const a = win.open('editor', { tag: 'a' }).id
+    win.open('editor', { tag: 'b' })
+    await nextTick()
+
+    const [headA, headB] = heads()
+    expect(document.activeElement).toBe(headB)
+
+    // A real pointerdown on the header, which is where the drag handle calls preventDefault() —
+    // the reason the raised window and the focused window used to be allowed to disagree. jsdom
+    // cannot prove this: its focus() is unconditional and it has no default action to suppress.
+    headA!.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, pointerId: 1 }),
+    )
+    await nextTick()
+
+    expect(win.activeId.value).toBe(a)
+    expect(document.activeElement).toBe(headA)
+  })
+
   it('leaves focus where the user put it', async () => {
     const { win } = app()
     const a = win.open('editor', { tag: 'a' }).id

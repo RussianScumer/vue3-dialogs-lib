@@ -198,11 +198,17 @@ GNOME takes `Alt`+`` ` `` for switch-group, and macOS Chrome reads `Cmd`+`←` a
 above the browser — it cannot be detected, warned about or overridden — so the second column is one
 modifier away from everything a desktop reserves, and is what the feature actually runs on.
 
+**Every chord acts on the active window** — the top non-minimized one, the same `activeId` that
+carries `data-vw-active` — from wherever focus is on the page. One listener on the document, in the
+plugin's effect scope, removed when the app unmounts. Clicking a window both raises it and focuses
+it, so the window on top is the window the keyboard is talking to.
+
 The snap chords call the same `snap(id, zone, view)` the drop path calls, so the keyboard cannot
 land anywhere the pointer cannot, and they obey the same gates: `snap.enabled`, the window's own
 flags, and the inertness below `mobileBreakpoint`. A keystroke aimed at an `<input>`, `<textarea>`
 or `contenteditable` is the text field's — on macOS `Meta`+`←` is line-start, and `Ctrl`+`Shift`+
-arrow is word-select.
+arrow is word-select — and content that calls `preventDefault()` keeps the key, since the listener
+is on the bubble phase.
 
 Every binding is movable, an override replaces both chords for its action, and
 `keymap: { enabled: false }` removes all of them. `focusNext()` / `focusPrev()` are on the store

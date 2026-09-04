@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { defineComponent, h, nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import { createWindows, useWindows } from '../createWindows'
@@ -19,7 +19,14 @@ const Content = defineComponent({
   },
 })
 
-/** The store comes from the mounted app: this file mounts one per test. */
+/**
+ * The store comes from the mounted app: this file mounts one per test. Each one is unmounted
+ * afterwards, which matters more here than elsewhere — the keymap is a document listener that
+ * lives in the plugin's effect scope, so an app left mounted would keep answering the next test's
+ * keystrokes.
+ */
+let mounted: ReturnType<typeof mount> | null = null
+
 function app(options: Partial<WindowsOptions> = {}) {
   const plugin = createWindows({ components: { editor: Content }, ...options })
   const wrapper = mount(
@@ -30,7 +37,18 @@ function app(options: Partial<WindowsOptions> = {}) {
     }),
     { global: { plugins: [plugin] }, attachTo: document.body },
   )
+  mounted = wrapper
   return { wrapper, win: (wrapper.vm as unknown as { win: WindowsApi }).win }
+}
+
+afterEach(() => {
+  mounted?.unmount()
+  mounted = null
+})
+
+/** The keymap listens on the document, so this is how a user with no window focused presses it. */
+function press(init: Record<string, unknown>): void {
+  document.body.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
 }
 
 const view = () => ({ w: window.innerWidth, h: window.innerHeight })
@@ -282,6 +300,109 @@ describe('keymap — window switching', () => {
   })
 })
 
+describe('keymap — which window it acts on', () => {
+  it('acts on the active window when focus is outside every window', async () => {
+    const { win } = app()
+    const background = win.open('editor', { id: 1 }, { x: 10, y: 10, w: 300, h: 200 }).id
+    const active = win.open('editor', { id: 2 }, { x: 20, y: 20, w: 300, h: 200 }).id
+    await nextTick()
+    // The state a user is in after clicking a window's body text, or the page background: no
+    // window holds focus, and a per-window listener would never have seen the key.
+    document.body.focus()
+
+    press({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, shiftKey: true })
+
+    expect(win.dockZone(active)).toBe('left')
+    expect(win.dockZone(background)).toBeNull()
+  })
+
+  it('acts on the active window even when the key comes from a background one', async () => {
+    const { wrapper, win } = app()
+    const background = win.open('editor', { id: 1 }).id
+    const active = win.open('editor', { id: 2 }).id
+    await nextTick()
+
+    // Dispatched from inside the background window — the shape of "clicking a header raised B but
+    // left focus in A". The top window is the one that snaps.
+    await wrapper.findAll('dialog.vw')[0]!.trigger('keydown', { key: 'ArrowLeft', metaKey: true })
+
+    expect(win.dockZone(active)).toBe('left')
+    expect(win.dockZone(background)).toBeNull()
+  })
+
+  it('follows the active window as it changes', async () => {
+    const { win } = app()
+    const a = win.open('editor', { id: 1 }).id
+    const b = win.open('editor', { id: 2 }).id
+    await nextTick()
+
+    win.focus(a)
+    press({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, shiftKey: true })
+    expect(win.dockZone(a)).toBe('left')
+    expect(win.dockZone(b)).toBeNull()
+
+    win.focus(b)
+    press({ key: 'ArrowRight', code: 'ArrowRight', ctrlKey: true, shiftKey: true })
+    expect(win.dockZone(b)).toBe('right')
+    expect(win.dockZone(a)).toBe('left') // untouched
+  })
+
+  it('skips a minimized window: the active one is the top of what is still on screen', async () => {
+    const { win } = app()
+    const a = win.open('editor', { id: 1 }).id
+    const b = win.open('editor', { id: 2 }).id
+    await nextTick()
+
+    win.minimize(b)
+    await nextTick()
+    press({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, shiftKey: true })
+
+    expect(win.dockZone(a)).toBe('left')
+    expect(win.dockZone(b)).toBeNull()
+  })
+
+  it('does nothing with no window open, and does not throw', async () => {
+    app()
+    await nextTick()
+    expect(() => press({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, shiftKey: true })).not.toThrow()
+  })
+
+  it('ignores a keystroke in an editable outside every window', async () => {
+    const { win } = app()
+    const id = win.open('editor', { id: 1 }, { x: 100, y: 90, w: 400, h: 300 }).id
+    await nextTick()
+
+    const outside = document.createElement('input')
+    document.body.appendChild(outside)
+    outside.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'ArrowLeft',
+        code: 'ArrowLeft',
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    )
+    outside.remove()
+
+    expect(win.dockZone(id)).toBeNull()
+    expect(win.byId(id)).toMatchObject({ x: 100, y: 90, w: 400, h: 300 })
+  })
+
+  it('takes its listener with it when the app unmounts', async () => {
+    const { wrapper, win } = app()
+    const id = win.open('editor', { id: 1 }).id
+    await nextTick()
+
+    wrapper.unmount()
+    mounted = null
+    press({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, shiftKey: true })
+
+    expect(win.dockZone(id)).toBeNull()
+  })
+})
+
 describe('keymap — configuration', () => {
   it('keymap: { enabled: false } restores today’s behaviour exactly', async () => {
     const { wrapper, win } = app({ keymap: { enabled: false } })
@@ -295,6 +416,8 @@ describe('keymap — configuration', () => {
     await dialog.trigger('keydown', { key: '!', code: 'Digit1', ctrlKey: true, shiftKey: true })
     await dialog.trigger('keydown', { ...BACKQUOTE, altKey: true })
     await dialog.trigger('keydown', { ...BACKQUOTE, ctrlKey: true })
+    // Nothing is bound at the document either.
+    press({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, shiftKey: true })
 
     expect(win.dockZone(id)).toBeNull()
     expect(win.byId(id)).toMatchObject({ x: 100, y: 90, w: 400, h: 300 })

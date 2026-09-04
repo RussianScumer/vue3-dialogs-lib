@@ -840,12 +840,25 @@ Chord sequences, per-window keymaps, a shortcuts cheatsheet UI.
 
 ### Notes
 
-- **The listener is on the window element, not the document.** ESC already works that way, and the
-  same reasoning applies twice over here: the event's own window is the one that snaps, so the
-  handler needs no notion of "which window did the user mean", and a library that binds `Meta+Arrow`
-  at the document would be reaching outside its own markup for a shortcut it cannot know is free.
-  The cost is that the chords only fire while focus is inside a window — which is what recipe 22's
-  page-wide hotkey is for, and why `focusNext`/`focusPrev` are on the store regardless.
+- **The listener started on the window element and had to move to the document.** The first version
+  bound `keydown` to each `<dialog>`, reasoning that the event's own window is the one that snaps,
+  so the handler needs no notion of "which window did the user mean". That holds for exactly one
+  window. With two it fails twice over, and both were reproduced in the playground before the fix:
+  a `<dialog>` is not focusable and neither is most window content, so clicking a window's body
+  text or the page background puts focus on `<body>` and **no chord fires at all**; and the drag
+  handle's `preventDefault()` on pointerdown suppresses the focus change, so clicking a background
+  window's header raised it while focus stayed behind — and the chord snapped the window the user
+  had just clicked *away* from. The keymap is now one document listener in the plugin's effect
+  scope, beside the viewport tracker and SSR-guarded the same way, and **every chord acts on the
+  active window** — the same `activeId` behind `data-vw-active` and the focus chain. One rule where
+  there were two, and the one a window manager follows. Bubble phase, never capture, so recipe 10's
+  `preventDefault()` escape hatch and a consumer's own handlers both still come first.
+- **Clicking a window now focuses it, which is the same bug seen from the other side.** *Raised*
+  and *focused* were allowed to disagree, and the keymap was only the loudest symptom: ESC and
+  ordinary typing went to the window the user had clicked away from too. `onPointerdown` focuses
+  the header when focus is not already inside that window — not unconditionally, or a click on a
+  field in the focused window would bounce focus up to the header. The UA's own focus-on-mousedown
+  still runs afterwards, so clicking a field still focuses the field.
 - **The plain arrow nudge had to learn about modifiers.** `onWindowKeydown` read `e.key` alone, so
   `Meta+ArrowLeft` on a focused header moved the window 10px *and* snapped it — and the 10px landed
   first, which meant the dock recorded the nudged rect as the geometry to give back. It now ignores
@@ -892,8 +905,14 @@ Chord sequences, per-window keymaps, a shortcuts cheatsheet UI.
 
 ### Verification
 
-`npx vitest run` — 208 tests, 188 jsdom (20 new in `keymap.spec.ts`) and 20 browser. `npm run lint`
-and `npm run type-check` clean. Existing specs untouched.
+`npx vitest run` — 218 tests, 197 jsdom (27 in `keymap.spec.ts`, 2 new in `host.spec.ts`) and 21
+browser (1 new in `focus.browser.spec.ts`). `npm run lint` and `npm run type-check` clean. Existing
+specs untouched.
+
+`keymap.spec.ts` unmounts its app in an `afterEach`, which matters here in a way it did not before:
+the keymap is a document listener living in the plugin's effect scope, so an app left mounted would
+answer the next test's keystrokes. That teardown is also what the "takes its listener with it when
+the app unmounts" assertion measures.
 
 jsdom only for the new spec, following VW-06 and VW-08: the keymap is option resolution, one
 comparison per keystroke and a `snap()` call the pointer path already makes. The one claim worth
@@ -914,6 +933,15 @@ itself in the ring, and the sheet still dismissible with the owner un-inerted af
 arrow still nudging 10px and `Shift`+arrow still resizing, with `Meta`+arrow doing neither; and
 after a reload the persisted blob still at `schema: 2` with the same twenty descriptor keys and no
 trace of a keymap. No console output but Vite's own.
+
+The multi-window fix was measured in a third session, with three windows open at 2560×990: a
+`pointerdown` on the background window's header making it both `data-vw-active` and the holder of
+`document.activeElement`, and `Ctrl+Shift+←` then snapping *that* window rather than the one that
+had held focus; the same chord fired with focus blurred to `<body>` — the case that previously did
+nothing at all — snapping the active window right; `Ctrl+Shift+←` inside the editor's own field
+still leaving every window alone; `` Ctrl+` `` cycling all three from `<body>`; and ESC, unchanged
+in code, now minimizing the window just clicked, since it is the focused one at last. No console
+output but Vite's own.
 
 The fallback chords were measured the same way, in a second session at 2560×990: `Ctrl+Shift+←/→`
 giving the 1280-wide halves, `Ctrl+Shift+↑` the full 2560 width, `Ctrl+Shift+1…4` the four 1280×477

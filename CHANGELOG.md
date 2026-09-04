@@ -37,7 +37,8 @@ Notable changes to `vue-windows`. Dates are release dates; unreleased work sits 
   replaces both chords for its action — and `keymap: { enabled: false }` removes the lot. A
   keystroke inside an `<input>`, `<textarea>` or `contenteditable` never reaches it. Snapping goes
   through the same `snap(id, zone, view)` a drop does, and obeys the same flags, insets and
-  `mobileBreakpoint` inertness.
+  `mobileBreakpoint` inertness. Chords act on the **active** window from wherever focus is, through
+  one document listener in the plugin's effect scope.
 - `focusNext()` / `focusPrev()` on the store, whatever the keymap is set to: the next non-minimized
   window by `z`, wrapping, focusing its header. A window that owns a child is skipped, since its
   own frame is `inert` while the question is open.
@@ -63,6 +64,9 @@ Notable changes to `vue-windows`. Dates are release dates; unreleased work sits 
   focused native picker.
 - An arrow key carrying `Meta`, `Ctrl` or `Alt` no longer nudges the window 10px on its way to the
   keymap. `Shift`+arrow still resizes, as before.
+- Clicking a window now focuses it as well as raising it. The drag handle's `preventDefault()` on
+  pointerdown had suppressed the focus change, so a click could raise one window while the keyboard
+  went on talking to another — visible as ESC, typing and the keymap acting on the wrong window.
 
 ## 0.1.0
 

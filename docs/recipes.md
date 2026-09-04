@@ -745,11 +745,17 @@ when there is nothing to focus. Minimized windows are skipped, and so is a windo
 child: an owner is `inert` while its question is open, and the child directly above it is the half
 of that pair the keyboard can reach.
 
-Two things the library will not do here:
+Three things worth knowing about how the chords are delivered:
 
-- **Nothing is bound at the document.** The listener is on the window element, so a shortcut only
-  fires when focus is inside a window — a page-wide hotkey is yours to add, as above.
+- **One listener, on the document, acting on the active window.** Not one per window: a `<dialog>`
+  is not focusable and neither is most window content, so a per-window listener goes deaf the
+  moment the user clicks a window's body text or the page background. Whatever is on top — the
+  window carrying `data-vw-active` — is what a chord acts on, wherever focus happens to be.
 - **A keystroke inside a text field is the text field's.** `<input>`, `<textarea>` and
-  `contenteditable` never reach the keymap, because `Meta`+`←` is line-start on macOS and taking it
-  is not a trade worth making. Content that wants a key for itself calls `preventDefault()`, the
-  same escape hatch ESC has in recipe 10.
+  `contenteditable` never reach the keymap, anywhere on the page, because `Meta`+`←` is line-start
+  on macOS and `Ctrl`+`Shift`+arrow is word-select everywhere. Content that wants any other key for
+  itself calls `preventDefault()`, the same escape hatch ESC has in recipe 10 — the listener is on
+  the bubble phase, so your own handlers run first.
+- **It is scoped to the app, not to the page's lifetime.** The listener lives in the plugin's
+  effect scope alongside the viewport tracker, so `app.unmount()` takes it with it, and nothing is
+  bound at all when there is no DOM.

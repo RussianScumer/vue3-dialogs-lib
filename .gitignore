@@ -38,3 +38,6 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# Claude Code worktrees and local agent state
+.claude/

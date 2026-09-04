@@ -402,11 +402,18 @@ reuse the arrows there, since `Ctrl`+`Shift`+arrow is already a half, so they ar
 reading order — matched by `event.code`, because `Shift`+`1` is `!` on one layout and something else
 on the next.
 
+**Chords act on the active window** — the top non-minimized one, the one carrying `data-vw-active`
+— no matter where focus is. The keymap is a single `keydown` listener on the document, created in
+the plugin's effect scope beside the viewport tracker and removed when the app unmounts; it is
+inert without a DOM, so SSR is unaffected. Clicking a window raises *and* focuses it, so the window
+on top is the one the keyboard is talking to.
+
 The snap chords go through the same `snap(id, zone, view)` a drop does, so they respect
 `snap.enabled`, `snap.insets`, the window's `draggable`/`resizable` flags and the inertness below
 `mobileBreakpoint`. A keystroke inside an `<input>`, `<textarea>` or `contenteditable` belongs to
 the text field and never reaches the window — `Meta`+`←` is line-start on macOS, and
-`Ctrl`+`Shift`+arrow is word-select everywhere.
+`Ctrl`+`Shift`+arrow is word-select everywhere. The listener is on the bubble phase, so content
+that calls `preventDefault()` keeps its key and your own handlers can pre-empt the library.
 
 Every binding moves, and an override replaces **both** default chords for that action, so you never
 inherit a collision you did not ask for:

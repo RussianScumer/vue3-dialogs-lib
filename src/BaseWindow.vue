@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onErrorCaptured, onMounted, ref, watch } from 'vue'
 import { useWindows, useWindowOptions } from './createWindows'
-import { KEYMAP_ZONES, isSnapAction, matchKeymap } from './options'
 import { onWindowKeydown, useWindowDrag } from './useWindowDrag'
 import { RESIZE_DIRS, RESIZE_STYLES, useWindowResize } from './useWindowResize'
 import { useWindowFocus } from './useWindowFocus'
@@ -230,45 +229,21 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 /**
- * A keystroke inside a text field belongs to the text field: on macOS `Meta+ArrowLeft` is
- * line-start, and a window manager that eats it is a window manager the user switches off.
- */
-function editable(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null
-  if (!el) return false
-  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return true
-  // `closest`, not `isContentEditable`: a keystroke in rich text is delivered to whatever inline
-  // element the caret is in, not to the editable root — and the property is one of the things jsdom
-  // does not implement, so a spec could never see it.
-  return !!el.closest?.('[contenteditable]:not([contenteditable="false"])')
-}
-
-/**
- * The keymap, on the window element rather than the header, so the shortcuts work wherever focus
- * is inside the window — which is also what makes the event's own window the one that snaps.
+ * Clicking a window raises it *and* takes focus, so the window on top is the window the keyboard
+ * is talking to. They used to be allowed to disagree: the drag handle calls `preventDefault()` on
+ * pointerdown, which suppresses the focus change, so clicking a header raised a window while focus
+ * stayed behind in the last one — and ESC, typing and the keymap all went to the wrong place.
  *
- * Snapping goes through the same `snap(id, zone, view)` the drop path calls, so the keyboard can
- * never land somewhere the pointer cannot, and it respects the same gates: `snap.enabled`, the
- * window's own flags and the inertness below `mobileBreakpoint`. Both flags, since a snap moves the
- * window *and* resizes it.
+ * Only when focus is not already inside this window, so a click on a field in the focused window
+ * does not bounce focus up to the header. On a fresh click the header takes it first and the UA's
+ * own focus-on-mousedown then lands on whatever focusable element was clicked, so clicking a field
+ * still focuses the field.
  */
-function onKeymap(e: KeyboardEvent) {
-  if (e.defaultPrevented || editable(e.target)) return
-  const action = matchKeymap(e, options.keymap)
-  if (!action) return
-  if (!isSnapAction(action)) {
-    e.preventDefault()
-    win[action]()
-    return
-  }
-  if (!options.snap.enabled || !canDrag() || !d.resizable) return
-  e.preventDefault()
-  win.snap(d.id, KEYMAP_ZONES[action], view)
-}
-
-/** Raising a leaving window would ask the store about an id it has already forgotten. */
 function onPointerdown() {
-  if (!leaving.value) win.focus(d.id)
+  // Raising a leaving window would ask the store about an id it has already forgotten.
+  if (leaving.value) return
+  win.focus(d.id)
+  if (!el.value?.contains(document.activeElement)) handle.value?.focus()
 }
 
 /** Double-click on the title bar toggles maximize, as it does on Windows. */
@@ -289,7 +264,6 @@ function onHeadDblclick(e: MouseEvent) {
     :data-vw-error="failure ? '' : undefined"
     :data-vw-state="visual"
     @keydown.escape="onEscape"
-    @keydown="onKeymap"
     @pointerdown="onPointerdown"
   >
     <header

@@ -169,6 +169,37 @@ describe('WindowHost', () => {
     expect(win.byId(a)!.z).toBeGreaterThan(win.byId(b)!.z)
   })
 
+  it('pointerdown focuses the window it raises', async () => {
+    const { wrapper, win } = app()
+    const a = win.open('editor', { id: 1 }).id
+    win.open('editor', { id: 2 })
+    await nextTick()
+
+    const heads = wrapper.findAll('.vw__head')
+    await heads[0]!.trigger('pointerdown')
+
+    // Raised and focused must not be allowed to disagree: the keymap, ESC and typing all follow
+    // the active window, and clicking a header used to raise one window while focus stayed in
+    // another. The browser half of this is in focus.browser.spec.ts.
+    expect(win.activeId.value).toBe(a)
+    expect(document.activeElement).toBe(heads[0]!.element)
+  })
+
+  it('leaves focus alone when it is already inside the clicked window', async () => {
+    const { wrapper, win } = app()
+    win.open('editor', { id: 1 })
+    await nextTick()
+
+    const field = document.createElement('input')
+    wrapper.find('.vw__body').element.appendChild(field)
+    field.focus()
+    await wrapper.find('.vw__body').trigger('pointerdown')
+
+    // A click inside the focused window must not bounce focus up to the header.
+    expect(document.activeElement).toBe(field)
+    field.remove()
+  })
+
   it('arrow keys on the header move the window, shift+arrow resizes', async () => {
     const { wrapper, win } = app()
     const id = win.open('editor', { id: 1 }, { x: 100, y: 100, w: 400, h: 300 }).id
