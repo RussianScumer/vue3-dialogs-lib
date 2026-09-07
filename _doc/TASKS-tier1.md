@@ -1009,7 +1009,8 @@ Merging, CRDTs, `BroadcastChannel` live sync, server-backed sessions, leader ele
 
 ## VW-11 — Fixed (always-on-top) windows
 
-**Roadmap:** Tier 2 "`alwaysOnTop`", promoted · **Size:** M · **Depends on:** VW-12 (see sequencing)
+**Roadmap:** Tier 2 "`alwaysOnTop`", promoted · **Size:** M · **Depends on:** VW-12 (see sequencing) ·
+**Status:** done on `vw-11-fixed-windows`.
 
 ### Goal
 
@@ -1085,6 +1086,29 @@ A fixed window stays **closable and minimizable**. Only drag, resize and snap ar
 
 Per-window `zIndexBase`, pinning from the taskbar, a reserved screen region for pinned windows,
 "always on top of *these* windows" partial ordering.
+
+### Notes
+
+- **An entry in `pins` is the capability; the value is the state.** A window that never mentions
+  `fixed` gets no entry, no pin button and no new `.vw__btn` — which is what keeps the existing
+  "hides the controls a window does not have" assertion honest. `fixed: false` is the deliberate
+  middle: pin-capable, currently unpinned.
+- **Runtime-only, and the cost is paid knowingly.** Pinning is toggled by the user at runtime, so
+  the descriptor could only carry it by moving `SCHEMA`. A pinned window therefore comes back
+  unpinned after a reload, exactly as a snapped one comes back undocked — the same trade snap state
+  already makes, in the same place beside `docks`.
+- **One `interactive` predicate, not a second notion of it.** Drag, resize, the header's arrow keys
+  and the maximize double-click all read it, plus a refusal inside `snap()` itself — which is what
+  covers the document-level keymap chords VW-09 added, since those never touch `BaseWindow`'s
+  handlers.
+- **The pin button is appended after close, deliberately.** The existing tests index `.vw__btn`
+  positionally, so a control inserted anywhere else would have rewritten assertions this task has no
+  business rewriting.
+
+### Verification
+
+`npx vitest run` — 231 tests, 210 jsdom (13 new in `pinned.spec.ts`) and 21 browser. `npm run lint`
+and `npm run type-check` clean. Existing specs untouched.
 
 ---
 
