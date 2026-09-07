@@ -6,7 +6,7 @@ import { useWindows } from './createWindows'
  */
 export function useWindowState<T extends object>(windowId: string, factory: () => T): T {
   const w = useWindows().byId(windowId)
-  if (!w) throw new Error(`[vue-windows] useWindowState: no window "${windowId}"`)
+  if (!w) throw new Error(`[vue3-dialogs-lib] useWindowState: no window "${windowId}"`)
   if (w.state == null) w.state = factory()
   return w.state as T
 }

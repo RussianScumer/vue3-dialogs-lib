@@ -125,7 +125,7 @@ function chordsFor(value: string | string[] | null | undefined, fallback: string
   for (const chord of list) {
     const parsed = parseChord(chord)
     if (parsed) out.push(parsed)
-    else if (import.meta.env?.DEV) console.warn(`[vue-windows] unreadable key binding "${chord}"`)
+    else if (import.meta.env?.DEV) console.warn(`[vue3-dialogs-lib] unreadable key binding "${chord}"`)
   }
   return out
 }
@@ -215,7 +215,7 @@ export function resolveOptions(options: WindowsOptions): ResolvedOptions {
       if (cached) return cached
 
       const entry = components[name]
-      if (!entry) throw new Error(`[vue-windows] unknown window "${name}"`)
+      if (!entry) throw new Error(`[vue3-dialogs-lib] unknown window "${name}"`)
       const source = isSpec(entry) ? entry.component : entry
 
       // A bare function is a loader — plain functional components must be wrapped

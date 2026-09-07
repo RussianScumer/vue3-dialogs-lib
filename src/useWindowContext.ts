@@ -33,6 +33,6 @@ export function provideWindowContext(d: WindowDescriptor): WindowContext {
  */
 export function useWindowContext<T = unknown>(): WindowContext<T> {
   const ctx = inject(WINDOW_CTX_KEY, null)
-  if (!ctx) throw new Error('[vue-windows] useWindowContext() called outside a window')
+  if (!ctx) throw new Error('[vue3-dialogs-lib] useWindowContext() called outside a window')
   return ctx
 }

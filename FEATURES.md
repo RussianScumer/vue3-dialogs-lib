@@ -1,6 +1,6 @@
 # Features
 
-What `vue-windows` does today, as implemented in `src/`. Every entry maps to code in this
+What `@korneevec/vue3-dialogs-lib` does today, as implemented in `src/`. Every entry maps to code in this
 repository; nothing here is planned or aspirational.
 
 For the reasoning behind these choices see [docs/how-it-works.md](./docs/how-it-works.md), and for
@@ -399,7 +399,7 @@ resize are disabled — a floating window at that size is unusable.
 ## Styling
 
 - **Structure is inline** — the library is fully functional with no stylesheet imported.
-- **Optional baseline** at `vue-windows/style.css`, cosmetics only.
+- **Optional baseline** at `@korneevec/vue3-dialogs-lib/style.css`, cosmetics only.
 - **Theming through `--vtd-*` custom properties** — font, radius, border, shadow, backgrounds,
   foregrounds, padding, accent, button hover, ghost fill/outline, and active-window border/shadow.
   Each is read through a private `--_vtd-*` holding the default, so setting one on `:root`, a theme

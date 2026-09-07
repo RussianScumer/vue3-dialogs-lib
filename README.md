@@ -1,4 +1,4 @@
-# vue-windows
+# @korneevec/vue3-dialogs-lib
 
 A window manager for Vue 3, built on the native `<dialog>` element, with no runtime dependency
 beyond Vue itself.
@@ -19,7 +19,7 @@ hidden), and with persistence on it survives a page reload.
 ## Install
 
 ```sh
-npm install vue-windows
+npm install @korneevec/vue3-dialogs-lib
 ```
 
 Vue 3.5 or newer is the only requirement — it is a peer dependency, and the library has no runtime
@@ -27,8 +27,8 @@ dependency of its own. The stylesheet is optional: without it the windows are un
 functional.
 
 ```js
-import { createWindows } from 'vue-windows'
-import 'vue-windows/style.css' // optional baseline
+import { createWindows } from '@korneevec/vue3-dialogs-lib'
+import '@korneevec/vue3-dialogs-lib/style.css' // optional baseline
 
 app.use(createWindows({
   components: {                          // name -> component (async loader recommended)
@@ -96,7 +96,7 @@ is minimized, instead of the element that opened it.
 Works anywhere, including outside `setup()`:
 
 ```js
-import { useWindows } from 'vue-windows'
+import { useWindows } from '@korneevec/vue3-dialogs-lib'
 
 const win = useWindows()
 const { id, result } = win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })
@@ -265,7 +265,7 @@ saved.ok && saved.data.name // SavedItem
 
 ```vue
 <script setup>
-import { useWindowState, useWindowContext } from 'vue-windows'
+import { useWindowState, useWindowContext } from '@korneevec/vue3-dialogs-lib'
 
 const props = defineProps({ id: Number, windowId: String })
 

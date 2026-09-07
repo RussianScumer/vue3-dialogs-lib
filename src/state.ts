@@ -32,7 +32,7 @@ function newId(): string {
 
 /** Dev-only: the library ships no user-facing strings, and a bug in a guard is for the developer. */
 function warn(message: string, err?: unknown): void {
-  if (import.meta.env?.DEV) console.warn(`[vue-windows] ${message}`, err)
+  if (import.meta.env?.DEV) console.warn(`[vue3-dialogs-lib] ${message}`, err)
 }
 
 function rectOf(d: WindowDescriptor): Rect {
@@ -175,7 +175,7 @@ export function createStore(options: ResolvedOptions) {
 
   function require(id: string): WindowDescriptor {
     const w = byId(id)
-    if (!w) throw new Error(`[vue-windows] no window "${id}"`)
+    if (!w) throw new Error(`[vue3-dialogs-lib] no window "${id}"`)
     return w
   }
 
@@ -208,7 +208,7 @@ export function createStore(options: ResolvedOptions) {
     const seen = new Set<string>([id])
     let cur = owners.get(id)
     while (cur) {
-      if (seen.has(cur)) throw new Error(`[vue-windows] owner cycle at "${cur}"`)
+      if (seen.has(cur)) throw new Error(`[vue3-dialogs-lib] owner cycle at "${cur}"`)
       seen.add(cur)
       chain.push(cur)
       cur = owners.get(cur)
@@ -508,16 +508,16 @@ export function createStore(options: ResolvedOptions) {
     props: Record<string, unknown> = {},
     opts: OpenOptions = {},
   ): WindowHandle {
-    if (!options.components[name]) throw new Error(`[vue-windows] unknown window "${name}"`)
+    if (!options.components[name]) throw new Error(`[vue3-dialogs-lib] unknown window "${name}"`)
 
     const owner = opts.owner ?? null
     if (owner !== null) {
       // Unknown owner throws at call time, exactly as an unknown name does: both are the caller
       // asking for something that does not exist.
-      if (!byId(owner)) throw new Error(`[vue-windows] unknown owner window "${owner}"`)
+      if (!byId(owner)) throw new Error(`[vue3-dialogs-lib] unknown owner window "${owner}"`)
       // `ancestorsOf` throws on a cycle; the cap is what keeps a confirm-on-a-confirm finite.
       if (ancestorsOf(owner).length + 1 > MAX_OWNER_DEPTH) {
-        throw new Error(`[vue-windows] owner chain deeper than ${MAX_OWNER_DEPTH} windows`)
+        throw new Error(`[vue3-dialogs-lib] owner chain deeper than ${MAX_OWNER_DEPTH} windows`)
       }
       // A sheet with no owner on screen is orphaned UI, so the owner comes back with it.
       if (require(owner).minimized) restore(owner)

@@ -14,9 +14,9 @@ export default defineConfig({
     copyPublicDir: false,
     lib: {
       entry: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
-      name: 'VueWindows',
+      name: 'Vue3DialogsLib',
       formats: ['es'],
-      fileName: () => 'vue-windows.js',
+      fileName: () => 'vue3-dialogs-lib.js',
     },
     rollupOptions: {
       external: ['vue'],

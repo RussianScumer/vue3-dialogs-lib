@@ -25,6 +25,6 @@ export function createViewport(): Viewport {
 /** Internal: reads the tracker the plugin provided. Only ever called from inside a window. */
 export function useViewport(): Viewport {
   const view = inject(VIEWPORT_KEY, null)
-  if (!view) throw new Error('[vue-windows] plugin not installed — call app.use(createWindows({ ... })) first')
+  if (!view) throw new Error('[vue3-dialogs-lib] plugin not installed — call app.use(createWindows({ ... })) first')
   return view
 }

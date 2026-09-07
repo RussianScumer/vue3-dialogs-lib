@@ -1,5 +1,5 @@
 {
-  "name": "vue-windows",
+  "name": "@korneevec/vue3-dialogs-lib",
   "version": "0.2.0",
   "type": "module",
   "scripts": {
@@ -48,18 +48,21 @@
   "files": [
     "dist"
   ],
-  "main": "./dist/vue-windows.js",
-  "module": "./dist/vue-windows.js",
+  "main": "./dist/vue3-dialogs-lib.js",
+  "module": "./dist/vue3-dialogs-lib.js",
   "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
-      "import": "./dist/vue-windows.js"
+      "import": "./dist/vue3-dialogs-lib.js"
     },
     "./style.css": "./dist/style.css",
     "./package.json": "./package.json"
   },
   "peerDependencies": {
     "vue": "^3.5.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

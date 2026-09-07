@@ -1,6 +1,6 @@
 # Changelog
 
-Notable changes to `vue-windows`. Dates are release dates; unreleased work sits at the top.
+Notable changes to `@korneevec/vue3-dialogs-lib`. Dates are release dates; unreleased work sits at the top.
 
 ## 0.2.0 — 2026-09-07
 

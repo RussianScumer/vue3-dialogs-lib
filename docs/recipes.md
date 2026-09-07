@@ -8,8 +8,8 @@ Every snippet below is a complete, working use case. The playground (`npm run de
 ```js
 // main.js
 import { createApp } from 'vue'
-import { createWindows } from 'vue-windows'
-import 'vue-windows/style.css' // optional baseline
+import { createWindows } from '@korneevec/vue3-dialogs-lib'
+import '@korneevec/vue3-dialogs-lib/style.css' // optional baseline
 import App from './App.vue'
 
 createApp(App)
@@ -34,14 +34,14 @@ createApp(App)
 </template>
 
 <script setup>
-import { WindowHost } from 'vue-windows'
+import { WindowHost } from '@korneevec/vue3-dialogs-lib'
 </script>
 ```
 
 ## 2 · Open a window
 
 ```js
-import { useWindows } from 'vue-windows'
+import { useWindows } from '@korneevec/vue3-dialogs-lib'
 
 const win = useWindows()
 const { id } = win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })
@@ -67,7 +67,7 @@ win.open('itemEditor', { id: 43 })  // a different entity, a second window
 
 ```js
 // notifications.js
-import { useWindows } from 'vue-windows'
+import { useWindows } from '@korneevec/vue3-dialogs-lib'
 
 export function onServerAlert(alert) {
   useWindows().open('logViewer', { source: alert.source }, { title: `Alert ${alert.id}` })
@@ -80,7 +80,7 @@ export function onServerAlert(alert) {
 
 ```vue
 <script setup>
-import { useWindowContext } from 'vue-windows'
+import { useWindowContext } from '@korneevec/vue3-dialogs-lib'
 
 const props = defineProps({ id: Number, windowId: String })
 const { setTitle, minimize, close, descriptor, isRestored } = useWindowContext()
@@ -101,7 +101,7 @@ Minimized means unmounted, so local `ref`s are gone. Put the draft on the descri
 
 ```vue
 <script setup>
-import { useWindowState } from 'vue-windows'
+import { useWindowState } from '@korneevec/vue3-dialogs-lib'
 
 const props = defineProps({ windowId: String })
 
@@ -124,7 +124,7 @@ content fetches for itself. On a restored mount, the server may have moved on:
 ```vue
 <script setup>
 import { onMounted, ref } from 'vue'
-import { useWindowContext, useWindowState } from 'vue-windows'
+import { useWindowContext, useWindowState } from '@korneevec/vue3-dialogs-lib'
 
 const props = defineProps({ id: Number, windowId: String })
 const form = useWindowState(props.windowId, () => ({ name: '' }))
@@ -220,7 +220,7 @@ descriptor and apply to every window:
 
 ```vue
 <script setup>
-import { WindowHost, useWindows } from 'vue-windows'
+import { WindowHost, useWindows } from '@korneevec/vue3-dialogs-lib'
 
 const win = useWindows()
 </script>
@@ -351,7 +351,7 @@ Writes are debounced ~300ms, so a network adapter is not hammered per keystroke.
 ## 12 · Close everything on logout
 
 ```js
-import { useWindows } from 'vue-windows'
+import { useWindows } from '@korneevec/vue3-dialogs-lib'
 
 export function logout() {
   useWindows().closeAll()             // drafts of the previous user are gone
@@ -394,7 +394,7 @@ function tile() {
 The store is DOM-free, so most assertions need no browser:
 
 ```js
-import { createWindows, useWindows } from 'vue-windows'
+import { createWindows, useWindows } from '@korneevec/vue3-dialogs-lib'
 import { mount } from '@vue/test-utils'
 
 const plugin = createWindows({ components: { editor: ItemEditor } })
@@ -481,7 +481,7 @@ on the descriptor, they survive a reload with the window.
 
 ```ts
 // windows.ts
-import { useWindows } from 'vue-windows'
+import { useWindows } from '@korneevec/vue3-dialogs-lib'
 
 export const components = {
   itemEditor: () => import('./windows/ItemEditor.vue'), // defineProps<{ id: number }>()
@@ -648,7 +648,7 @@ desktop.
 
 ```vue
 <script setup>
-import { useWindowContext } from 'vue-windows'
+import { useWindowContext } from '@korneevec/vue3-dialogs-lib'
 
 const { resolve, dismiss } = useWindowContext()
 

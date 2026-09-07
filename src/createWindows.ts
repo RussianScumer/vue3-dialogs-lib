@@ -44,7 +44,7 @@ export function createWindows(userOptions: WindowsOptions): Plugin {
 }
 
 function notInstalled(): never {
-  throw new Error('[vue-windows] plugin not installed — call app.use(createWindows({ ... })) first')
+  throw new Error('[vue3-dialogs-lib] plugin not installed — call app.use(createWindows({ ... })) first')
 }
 
 /**

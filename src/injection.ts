@@ -2,10 +2,10 @@ import type { ComputedRef, InjectionKey } from 'vue'
 import type { WindowsApi } from './state'
 import type { ResolvedOptions, Viewport, WindowDescriptor } from './types'
 
-export const WINDOWS_KEY: InjectionKey<WindowsApi> = Symbol('vue-windows')
-export const OPTIONS_KEY: InjectionKey<ResolvedOptions> = Symbol('vue-windows:options')
+export const WINDOWS_KEY: InjectionKey<WindowsApi> = Symbol('vue3-dialogs-lib')
+export const OPTIONS_KEY: InjectionKey<ResolvedOptions> = Symbol('vue3-dialogs-lib:options')
 /** One viewport tracker per app, created by the plugin — see useViewport. */
-export const VIEWPORT_KEY: InjectionKey<Viewport> = Symbol('vue-windows:viewport')
+export const VIEWPORT_KEY: InjectionKey<Viewport> = Symbol('vue3-dialogs-lib:viewport')
 
 export interface WindowContext<T = unknown> {
   descriptor: WindowDescriptor
@@ -44,4 +44,4 @@ export interface WindowContext<T = unknown> {
   isRestored: boolean
 }
 
-export const WINDOW_CTX_KEY: InjectionKey<WindowContext> = Symbol('vue-windows:window')
+export const WINDOW_CTX_KEY: InjectionKey<WindowContext> = Symbol('vue3-dialogs-lib:window')
