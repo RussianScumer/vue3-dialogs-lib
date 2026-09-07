@@ -963,7 +963,8 @@ desktop is a human's job, and is still open.
 
 ## VW-10 — Cross-tab persistence safety
 
-**Roadmap:** §9 · **Size:** M · **Depends on:** nothing (land last; touches `persist.ts` only)
+**Roadmap:** §9 · **Size:** M · **Depends on:** nothing (land last; touches `persist.ts` only) ·
+**Status:** done on `vw-10-cross-tab-persistence`.
 
 ### Goal
 
@@ -1004,6 +1005,56 @@ is not**.
 ### Out of scope
 
 Merging, CRDTs, `BroadcastChannel` live sync, server-backed sessions, leader election.
+
+### Notes
+
+- **The token is in the envelope, and `SCHEMA` stays at 2.** `writer` sits beside `schema`, `topZ`
+  and `stack`, never on a descriptor. `read()` ignores keys it does not know, so a blob written by
+  the previous version reads fine here and a blob written here reads fine there — which is the whole
+  reason constraint 1 survives a task that changes what is written.
+- **Unreadable is foreign.** A cleared key (`e.key === null`), unparseable text and a blob from a
+  version that wrote no token are all treated as a foreign write. None of them came from this tab's
+  last write, and that is the only question being asked; guessing charitably here is how a session
+  gets eaten.
+- **Stopping clears the pending debounce.** Without that, a write scheduled *before* the foreign
+  event lands ~300ms *after* it and overwrites exactly the data the stop exists to protect. The flag
+  alone is not enough.
+- **Nothing resumes on its own — not on focus, not on the next mutation.** `info.resume()` is the
+  only path back, and it re-reads and hydrates before it clears the flag, so a resumed tab is
+  showing the snapshot it is about to start writing over. That is also why the README says plainly
+  that `resume()` replaces this tab's windows and drafts: adopting is a choice, not a repair.
+- **A throwing consumer is caught.** `onExternalChange` runs in a `storage` listener; letting it
+  throw would leave the listener's own bookkeeping half-done and is a failure mode the consumer
+  cannot see. The tab is stopped before the callback runs, so the protection holds either way.
+- **`onScopeDispose` is guarded by `getCurrentScope()`.** The plugin installs inside its own scope,
+  but `persist.spec.ts` calls `setupPersist()` bare — asking for teardown there would only warn, and
+  a library that warns in its own test suite has taught its users to ignore warnings.
+- **No adapter detection.** Only `localStorage` emits `storage` events; every other adapter simply
+  never reaches this path. Sniffing for one to warn about the difference would be a user-facing
+  string about a situation the consumer chose deliberately (constraint 4).
+
+### Verification
+
+`npx vitest run` — 241 tests, 220 jsdom (9 new in `persist-crosstab.spec.ts`) and 21 browser.
+`npm run lint` and `npm run type-check` clean. Existing specs untouched, `persist.spec.ts` and
+`ssr.spec.ts` included.
+
+jsdom only, following VW-06, VW-08 and VW-09: a `StorageEvent` is dispatched the same way in either
+project, and nothing here is measured against the UA. The spec runs `setupPersist` inside an
+explicit `effectScope` because the plugin does, and the unmount assertion goes through the real
+plugin and `app.unmount()`.
+
+Exercised by hand with two playground tabs on `playground:windows` under Chrome. Measured there:
+tab A opening a window and tab B logging one stop line per foreign write, including one for a
+`removeItem` in A; B then opening a window of its own and writing nothing at all, with the blob
+still carrying A's token and A's two ids; `__vwResume()` in B hydrating it to A's two windows and
+its next change writing under B's own token; A, symmetric, stopping and going quiet the moment B
+wrote; and a reload of A coming back live — no stop line, and its next change written under a fresh
+token. No console output but Vite's own.
+
+The playground reports through the event log and exposes `__vwResume()` on `window` rather than
+calling `confirm()`: a native dialog blocks the automation channel, and the default this task exists
+to defend is that nothing happens until the consumer asks for it.
 
 ---
 
