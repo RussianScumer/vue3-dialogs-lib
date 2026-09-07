@@ -39,5 +39,7 @@ __screenshots__/
 # Vite
 *.timestamp-*-*.mjs
 
-# Claude Code worktrees and local agent state
-.claude/
+# Claude Code: commit skills and shared settings, ignore worktrees and local state
+.claude/*
+!.claude/skills/
+!.claude/settings.json
