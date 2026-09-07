@@ -356,10 +356,35 @@ On load, a descriptor whose `name` is no longer registered is dropped, and one m
 older schema, or a hand-edited blob — is repaired from that component's defaults rather than
 thrown away. A snapshot from a schema too old to read is dropped whole.
 
-> **One key, one tab.** Two tabs sharing a `persist.key` both write the full snapshot, so the last
-> writer wins and can destroy the other tab's windows and drafts. Reloading a foreign snapshot
-> mid-edit would be worse, so the library does not try. Use `sessionStorage` for per-tab windows,
-> or a key that includes a tab id.
+### Two tabs on one key
+
+Every blob carries the token of the tab that wrote it. When a `storage` event brings a value this
+tab did not write — another tab on the same key, or anything else writing there — the receiving tab
+**stops persisting** and stays stopped. That is the default and needs no configuration: a stale tab
+is recoverable, a tab that overwrites another tab's session is not. Reloading a foreign snapshot
+mid-edit would be worse still, so the library never does it on its own.
+
+`onExternalChange` is where you decide what to do about it:
+
+```ts
+persist: {
+  key: 'app:windows',
+  storage: localStorage,
+  onExternalChange(info) {
+    // Already stopped writing by the time this runs. Ignore it and this tab goes stale,
+    // prompt and reload, or adopt the other tab's snapshot:
+    info.resume() // re-reads `info.key`, hydrates the store, resumes persisting
+  },
+},
+```
+
+Regaining focus does **not** resume writing — resuming is how the data loss happens. Only
+`resume()` or a page reload does. Note that `resume()` hydrates, so it replaces this tab's windows
+with the other tab's; unsaved draft state in `useWindowState` goes with them.
+
+Only `localStorage` emits `storage` events. A different adapter — IndexedDB, server-backed —
+silently keeps today's last-writer-wins behaviour, with no warning and no detection. Use
+`sessionStorage` for per-tab windows, or a key that includes a tab id, and none of this applies.
 
 ## Snapping
 
@@ -513,7 +538,9 @@ reachable while the user resizes the window down.
   screen reader. Fixing it needs strings, and the library ships none by design; a consumer with an
   i18n setup can do it in a few lines off `win.on('minimize')`.
 - **A minimized window has no guard of its own** — see [Closing, and guards](#closing-and-guards).
-- **One persist key per tab** — see [Persistence](#persistence).
+- **Two tabs on one persist key do not merge.** The second writer is detected and the receiving tab
+  stops writing rather than losing a session — see [Persistence](#persistence) — but nothing is
+  merged, and a tab that ignores `onExternalChange` is stale until it reloads.
 - Resize grips sit in the outermost 4px of the window, which is where a body scrollbar also lands.
 
 ## Non-goals

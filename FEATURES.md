@@ -49,9 +49,9 @@ still movable, minimizable and closable.
 ### Plugin install, single instance per app
 
 `app.use(createWindows({ ... }))` provides the store, resolved options and the viewport tracker
-through injection keys (`src/injection.ts`). The viewport listener and persistence watcher run in
-a detached `effectScope` owned by the app and are stopped on `app.onUnmount`
-(`src/createWindows.ts`).
+through injection keys (`src/injection.ts`). The viewport listener, the keymap listener, the
+persistence watcher and its cross-tab `storage` listener run in a detached `effectScope` owned by
+the app and are stopped on `app.onUnmount` (`src/createWindows.ts`).
 
 A module-level fallback lets `useWindows()` work outside `setup()` (services, route guards), while
 `inject()` still wins inside components — so multiple app instances and SSR stay correct.
@@ -284,6 +284,12 @@ satisfies `StorageLike` — `localStorage`, `sessionStorage`, or your own adapte
 - **Never load-bearing** — every storage read and write is wrapped; private mode, quota errors and
   blocked storage degrade to no persistence rather than a crash.
 - **Restored windows are re-clamped** to the current viewport on hydration.
+- **Cross-tab safe by default** — every blob carries the writing tab's token in its envelope (not on
+  a descriptor, so `SCHEMA` does not move). A `storage` event carrying anything this tab did not
+  write stops that tab from persisting, permanently: regaining focus does not resume it, only
+  `onExternalChange(info)` → `info.resume()`, which re-reads and hydrates first. Ignoring the
+  report leaves the tab stale, which is the safe half of the trade. Adapters other than
+  `localStorage` emit no `storage` events and silently keep the old last-writer-wins behaviour.
 
 ---
 

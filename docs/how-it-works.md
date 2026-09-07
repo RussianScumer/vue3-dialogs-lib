@@ -53,7 +53,7 @@ Nothing in it is a component reference, a fetched entity, or a function. That is
 | `useWindowContext.ts` | Per-window control surface via provide/inject. |
 | `useViewport.ts` | The app's one viewport tracker, created by the plugin. One resize listener, however many windows. SSR-safe. |
 | `useKeymap.ts` | The app's one keymap listener, created by the plugin. On the document, acting on the active window. SSR-safe. |
-| `persist.ts` | Snapshot, schema check, hydration filtering, debounced writes. |
+| `persist.ts` | Snapshot, schema check, hydration filtering, debounced writes, cross-tab detection. |
 | `geometry.ts` | Cascade placement, clamping and snap-zone maths — pure functions. |
 
 ## Lifecycle of a window
@@ -353,7 +353,9 @@ install → read(storage[key])
             ├─ missing / unparsable / wrong `schema`      → ignore, start empty
             ├─ descriptor whose `name` is not registered  → dropped
             └─ survivors: clamp to the current viewport, hydrate, mark as restored
-watch(stack, deep) → debounce 300ms → storage[key] = { schema, topZ, stack }
+watch(stack, deep) → debounce 300ms → storage[key] = { schema, topZ, stack, writer }
+storage event on key → writer !== ours → stop writing, onExternalChange(info)
+                                          └─ info.resume() → re-read, hydrate, write again
 ```
 
 On a schema mismatch the snapshot is *migrated* where it can be — every capability field a
@@ -373,10 +375,32 @@ or from a fresh `open()`.
 Bump `SCHEMA` in `persist.ts` whenever the descriptor shape changes; a stale blob hydrating into
 new code is the likeliest source of hard-to-reproduce bugs in this design.
 
+### Cross-tab safety
+
+`writer` is a token minted once per `setupPersist` call and written in the blob's **envelope**, not
+on a descriptor: the descriptor shape is unchanged, so `SCHEMA` does not move for it, an old blob
+with no token reads fine, and old code ignores the key. It answers exactly one question — did this
+tab's last write produce the value that just arrived?
+
+A `storage` event whose value is not this tab's own is a foreign write. Anything unreadable counts
+as foreign too, including a cleared key (`e.key === null`) and a blob written by a version that had
+no token: none of them came from here, which is the whole question. The receiving tab sets a
+`stopped` flag, clears the pending debounce so a write scheduled *before* the foreign one cannot
+land *after* it, and reports through `onExternalChange`. A consumer that throws is caught — it must
+not take the listener down.
+
+The flag is never cleared on its own. Resuming on focus, or on the next mutation, is precisely how
+one session eats another, so only `info.resume()` clears it, and it hydrates from storage first.
+
+Only `localStorage` fires `storage` events; every other adapter simply never reaches this path, with
+no warning and no capability detection. The listener is added in the plugin's `effectScope` and
+removed with it, beside the viewport tracker and the keymap.
+
 ## Wiring and SSR
 
-The viewport tracker and the persistence watcher are created inside a detached `effectScope` that
-the plugin stops from `app.onUnmount`, so neither outlives the app that owns it.
+The viewport tracker, the keymap listener, the persistence watcher and its `storage` listener are
+created inside a detached `effectScope` that the plugin stops from `app.onUnmount`, so none of them
+outlives the app that owns it.
 
 `createWindows()` builds one store per app and provides it under a symbol key; `useWindows()` is
 `inject` with a fallback to the most recently installed app so it also works outside `setup()`
