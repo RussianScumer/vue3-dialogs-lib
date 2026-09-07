@@ -187,9 +187,27 @@ export interface StorageLike {
   removeItem(key: string): void
 }
 
+/**
+ * A write to the persist key that this tab did not make — another tab sharing the key, or anything
+ * else writing to the same storage. `resume()` is the only way back: it re-reads the blob, hydrates
+ * the store from it and starts persisting again. Ignoring the info leaves this tab stale, which is
+ * the safe default — a stale tab beats a tab that overwrites another tab's session.
+ */
+export interface ExternalChangeInfo {
+  key: string
+  /** The blob the other writer left, or `null` if the key was removed or cleared. */
+  newValue: string | null
+  resume(): void
+}
+
 export interface PersistOptions {
   key: string
   storage: StorageLike
+  /**
+   * Called once per foreign write to `key`, after this tab has already stopped persisting. Only
+   * `localStorage` emits the `storage` events this is built on; any other adapter never fires it.
+   */
+  onExternalChange?: (info: ExternalChangeInfo) => void
 }
 
 /** A component, or a loader function returning one (`() => import('./X.vue')`). */

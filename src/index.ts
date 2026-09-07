@@ -14,6 +14,7 @@ export type {
   BeforeCloseGuard,
   Bounds,
   ComponentsMap,
+  ExternalChangeInfo,
   KeyChord,
   KeymapAction,
   KeymapOptions,
