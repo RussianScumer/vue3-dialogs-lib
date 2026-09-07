@@ -18,6 +18,14 @@ hidden), and with persistence on it survives a page reload.
 
 ## Install
 
+```sh
+npm install vue-windows
+```
+
+Vue 3.5 or newer is the only requirement — it is a peer dependency, and the library has no runtime
+dependency of its own. The stylesheet is optional: without it the windows are unstyled but fully
+functional.
+
 ```js
 import { createWindows } from 'vue-windows'
 import 'vue-windows/style.css' // optional baseline
@@ -558,3 +566,4 @@ npm run bench        # performance benchmarks
 npm run type-check
 npm run build        # library build (dist/)
 ```
+
