@@ -1060,7 +1060,8 @@ to defend is that nothing happens until the consumer asks for it.
 
 ## VW-11 — Fixed (always-on-top) windows
 
-**Roadmap:** Tier 2 "`alwaysOnTop`", promoted · **Size:** M · **Depends on:** VW-12 (see sequencing)
+**Roadmap:** Tier 2 "`alwaysOnTop`", promoted · **Size:** M · **Depends on:** VW-12 (see sequencing) ·
+**Status:** done on `vw-11-fixed-windows`.
 
 ### Goal
 
@@ -1137,6 +1138,61 @@ A fixed window stays **closable and minimizable**. Only drag, resize and snap ar
 Per-window `zIndexBase`, pinning from the taskbar, a reserved screen region for pinned windows,
 "always on top of *these* windows" partial ordering.
 
+### Notes
+
+- **An entry in `pins` means pin-capable; its value means currently pinned.** A window opened
+  without `fixed` gets no entry at all, so `isPinnable(id)` is false, the header renders the same
+  two controls it always did, and the existing "hides the controls a window does not have"
+  assertion never sees a third button. `setPinned()` on an ordinary window creates the entry rather
+  than refusing — a consumer that pins from its own UI should not have to have said `fixed` at
+  `open()` time.
+- **Runtime-only, and the cost is paid knowingly.** Pinning is toggled by the user at runtime, so
+  the descriptor could only carry it by moving `SCHEMA`. A pinned window therefore comes back
+  unpinned after a reload, exactly as a snapped one comes back undocked — the same trade snap state
+  already makes, in the same place beside `docks`.
+- **One predicate, not two.** `interactive()` in `BaseWindow.vue` already meant "not mobile, not
+  leaving"; pinning is the third clause on that same function, so drag, resize, the double-click
+  toggle and the arrow-key nudge all go inert together. Introducing a second notion of
+  "interactive" is how one of the four ends up disagreeing with the rest. `snap()` refuses on its
+  own as well, which is what covers the document-level keymap chords VW-09 added — those never
+  reach `BaseWindow`'s handlers.
+- **The pin attribute is present only while pinned** (`:data-vw-pinned="pinned || undefined"`), so
+  the styling hook is an attribute selector rather than a value comparison. The button itself stays
+  rendered in both states — it is what gets the window back.
+- **The pin button is appended after close, deliberately.** The existing tests index `.vw__btn`
+  positionally, so a control inserted anywhere else would have rewritten assertions this task has
+  no business rewriting.
+- **Pinning drops the dock, unpinning does not restore it.** `setPinned(id, true)` calls
+  `undock(id)`, which keeps the geometry where it is and forgets the zone: an explicit pin outranks
+  a snap, the same reasoning the resize grip already uses. A window that is unpinned afterwards is
+  a plain floating window at the size the snap gave it.
+
+### Verification
+
+`npx vitest run` — 241 tests, 220 jsdom (13 in `pinned.spec.ts`) and 21 browser. `npm run lint` and
+`npm run type-check` clean. Existing specs untouched.
+
+jsdom only for the new spec, following VW-06 and VW-09: the band is one `zIndex` string, the
+inertness is one predicate, and neither is measured against the UA. The one thing that is — that a
+window really renders above another — is a computed `z-index` comparison, which jsdom answers from
+the same inline style the browser would.
+
+Exercised by hand in the running playground under Chrome, in a 2048-wide viewport. Measured there:
+a `fixed` window at `z-index: 1031` (`zIndexBase` 1000 + `topZ` 16 + its own `z` 15) staying above a
+plain window opened *and focused after it* at 1016; the pinned frame rendering three controls
+(`–`, `✕`, `▲`, the pin appended last and carrying `data-vw-pinned`) and zero resize grips against
+the plain window's two controls and eight grips; a header drag, a double-click and an arrow key
+each leaving it at exactly `260,60 380×240` with `dockZone` null; the pin button unpinning it back
+to `z-index: 1017` with its eight grips returned, a drag then moving it to `380,180` and
+`snap(id, 'left')` giving `0,0 1280×520` with `dockZone` `left`; `setPinned(id, true)` re-pinning to
+`z-index: 1034`, dropping the dock to null without moving the window, and taking the grips away
+again; minimize and close still working while pinned, with the window reaching the taskbar as
+`Log: pinned ✕` and coming back still pinned; and the persisted envelope holding only
+`schema`, `topZ`, `stack` and `writer`, with the descriptor keys unchanged and no `fixed` anywhere
+in the blob. After a reload the window came back **unpinned and not pin-capable** — no pin button,
+eight grips, `draggable: true` — which is the accepted cost recorded in the decision above, not a
+defect. No console output but Vite's own.
+
 ---
 
 ## VW-12 — Undock on drag, not on click
@@ -1196,6 +1252,21 @@ lifecycle list)
 ### Out of scope
 
 Changing what double-click does, persisting snap zones, drag inertia.
+
+### Verification
+
+`npx vitest run` — 241 tests, 220 jsdom and 21 browser. `npm run lint` and `npm run type-check`
+clean. The two new assertions live in `host.spec.ts` next to the existing drag coverage and use the
+`pointer()` helper already there; the `undockForDrag` unit tests in `state.spec.ts` are untouched.
+
+Exercised by hand in the running playground under Chrome. Measured there, on a window maximized by
+double-clicking its header (`dockZone` `max`, `0,0 2560×520`): a `pointerdown` + `pointerup` on the
+header with no movement leaving both the zone and the geometry exactly as they were; the same with
+2px of jitter between them, which is under the 4px threshold, also leaving them alone; a real
+double-click then restoring the pre-snap `700,300 380×240` and clearing the zone — the reported bug,
+which could previously maximize but never restore; and a drag that crosses the threshold still
+undocking, with the window at `562,60 380×240` under a pointer at `680,68`, so the header offset the
+undock establishes survives the `onMove` that performs it. No console output but Vite's own.
 
 ---
 
