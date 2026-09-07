@@ -2,7 +2,7 @@
 
 Notable changes to `vue-windows`. Dates are release dates; unreleased work sits at the top.
 
-## Unreleased — 0.2.0
+## 0.2.0 — 2026-09-07
 
 ### Breaking
 
@@ -30,6 +30,22 @@ Notable changes to `vue-windows`. Dates are release dates; unreleased work sits 
 
 ### Added
 
+- Cross-tab safety for `persist`. A tab that sees another tab write its storage key stops
+  persisting rather than racing it: last-writer-wins is how a session gets eaten, and a stale tab is
+  the cheaper failure. The write is identified by a per-tab token in the blob's envelope beside
+  `schema` and `topZ` — never on a descriptor, so `SCHEMA` does not move and blobs are readable in
+  both directions. `onExternalChange(info)` reports it once per foreign write and hands over
+  `info.resume()`, the only way back: it re-reads and hydrates before it resumes writing, so
+  adopting the other tab's session is a deliberate choice that replaces this tab's windows and
+  drafts. Only `localStorage` emits `storage` events; every other adapter behaves exactly as before,
+  with no warning.
+- Fixed (always-on-top) windows: `fixed: true` as a `WindowSpec` default or an `open()` option
+  renders the window in a second `z` band above every unpinned one, and makes it inert to drag,
+  resize, snap, the double-click toggle and the arrow-key nudge. It stays closable and minimizable,
+  and a pin toggle in its own header — appended after the close control, hooked with
+  `data-vw-pinned` — lets the user let go of it. `isPinned(id)`, `isPinnable(id)` and
+  `setPinned(id, on)` are on the store. The pin is runtime-only, like a snap zone: nothing is
+  persisted, and a reload returns the window unpinned and draggable.
 - A keyboard keymap, with two chords per action: the familiar `Meta`+arrow / `Meta`+`Shift`+arrow /
   `` Alt+` `` and, because a desktop has usually taken those before the browser sees them,
   `Ctrl`+`Shift`+arrow for the halves, `Ctrl`+`Shift`+`1`…`4` for the quarters in reading order and
@@ -58,6 +74,17 @@ Notable changes to `vue-windows`. Dates are release dates; unreleased work sits 
 - A `footer` slot on `BaseWindow` over a scrolling `.vw__body`.
 
 ### Fixed
+
+- A single click on a maximized window's header no longer restores it. Undocking moved from
+  `pointerdown` to the first `pointermove` past a 4px threshold, so a click raises the window and
+  nothing else, and a double-click toggles maximize in both directions — it could previously
+  maximize but never restore, because the first `pointerdown` had already cleared the zone.
+- `npm run build` emits declarations again. The declaration-only pass reads `src/` without the root
+  `env.d.ts`, so the `import.meta.env.DEV` guards behind the dev-mode warnings failed it with
+  TS2339; `tsconfig.lib.json` now names Vite's client types directly. The failure also took
+  `build-css` with it, so `dist/` shipped without `style.css`.
+- The published package no longer carries declarations for the benchmark suite —
+  `tsconfig.lib.json` excluded `src/**/__tests__/*` but not `src/**/__bench__/*`.
 
 - ESC is a real `keydown` listener rather than the `<dialog>` `cancel` event, which never fires for
   a non-modal dialog. It stands down for `defaultPrevented`, for a background window, and for a
