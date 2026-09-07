@@ -36,12 +36,18 @@ whether it works.
    cosmetics only. A task that makes the library depend on the baseline sheet is wrong.
 8. **Tests colocated** in `src/__tests__/`. DOM-level work goes in vitest browser mode
    (Playwright provider), not jsdom — `HTMLDialogElement` support there is unreliable.
+9. **Three gates before a task is done**, in order: `npm run lint` and `npm run type-check`; then
+   `npx vitest run` across both projects; then the change exercised by hand in the running
+   playground (`npm run dev`), in a real browser. The specs and the browser session catch different
+   things — a spec proves the logic against the UA, a playground session is what puts it through
+   real pointer input, real window stacking and the consumer's own markup. A task that has only
+   passed the first two is not finished.
 
 ---
 
 ## VW-01 — Audit the ESC path
 
-**Roadmap:** §10 · **Size:** S · **Blocks:** VW-05, VW-06
+**Roadmap:** §10 · **Size:** S · **Blocks:** VW-05, VW-06 · **Status:** done on `vw-01-esc-audit`.
 
 ### Goal
 
@@ -79,11 +85,38 @@ ESC-to-close fire only for dialogs opened with `showModal()`. This library uses 
 
 Any change to what ESC *does* (minimize stays minimize). Focus movement — that is VW-04.
 
+### Audit findings
+
+Measured in Chromium against the playground, before any code changed:
+
+- `@cancel` is dead. A `.show()` dialog received zero `cancel` and zero `close` events on ESC;
+  `cancel` and ESC-to-close are `showModal()` behaviour. The handler is deleted.
+- ESC already minimized the active window through the existing `keydown` listener, so the listener
+  stayed where it was and only gained guards.
+- **A native picker does not set `defaultPrevented`.** With a `<select>` focused, the ESC keydown
+  reached the page with `defaultPrevented === false` and the window minimized. The task's
+  "assert it rather than assume it" resolves against the assumption, so the guard is on the element
+  type: `<select>` and the picker `<input>` types never minimize, popup open or not.
+- **"Popup is open" is not an assertable state.** Synthetic key input cannot open a native
+  `<select>` popup — `alt+ArrowDown` followed by `ArrowDown` moved the selection from `a` to `b`,
+  which only happens with the list closed. This holds for CDP-driven input generally, vitest browser
+  mode included, so no test can distinguish an open picker from a focused one.
+
+### Verification
+
+`npx vitest run` runs both projects: 99 jsdom tests and 7 browser tests, 106 total. The browser
+project needs `npx playwright install chromium chromium-headless-shell` once.
+
+Two things the browser spec cannot prove, and does not pretend to: a native picker's popup cannot be
+opened by driven input, so the picker assertion is on the element type; and the picker guard's own
+justification is pinned by a separate test asserting `defaultPrevented === false`, which will fail
+loudly if Chromium ever starts marking that keydown handled — at which point the guard can go.
+
 ---
 
 ## VW-02 — Body scroll and sticky footer
 
-**Roadmap:** §5 · **Size:** S · **Blocks:** nothing (but unblocks realistic demo content)
+**Roadmap:** §5 · **Size:** S · **Blocks:** nothing (but unblocks realistic demo content) · **Status:** done on `vw-02-body-scroll-footer`.
 
 ### Goal
 
@@ -117,54 +150,96 @@ and takes the action buttons with it.
 
 Scroll shadows, overscroll behaviour, virtualisation.
 
+### Notes
+
+- `.vw__body` already carried `overflow: auto` and `flex: 1 1 auto; min-height: 0` inline, so the
+  scroll half of this task was in place; the change is the footer row, its class hook and the docs.
+- The frame stays a flex column rather than becoming a grid — header `0 0 auto`, body `1 1 auto`
+  with `min-height: 0`, footer `0 0 auto` is the same `auto / 1fr / auto` behaviour with no
+  restructuring of the existing header and body styles.
+- The `footer` slot is host-level, like `header` and `controls`: it applies to every window and
+  receives the descriptor, so a consumer branches on `descriptor.name` for a per-type footer.
+- Measured in `src/__tests__/layout.browser.spec.ts`, not jsdom: `clientHeight`, `scrollHeight` and
+  `getBoundingClientRect()` are all zero there. The spec runs with no stylesheet imported, and
+  with `mobileBreakpoint: 0` because the test browser is narrower than the 768px default and a
+  mobile window is fullscreen — a different layout question.
+- The footer-bottom assertion is against the dialog's `clientHeight`, not its outer rect: the UA
+  gives `<dialog>` a 3px border that the library does not clear.
+
+### Verification
+
+`npx vitest run` — 109 tests, 99 jsdom and 10 browser (3 new). Existing specs untouched.
+
 ---
 
 ## VW-03 — Async loading and error states
 
-**Roadmap:** §7 · **Size:** M · **Blocks:** nothing
+**Roadmap:** §7 · **Size:** S · **Blocks:** nothing · **Status:** done on `vw-03-async-error-states`.
 
 ### Goal
 
-A bare loader function is wrapped in `defineAsyncComponent` with no `loadingComponent` or
-`errorComponent`, so a slow chunk is an empty window and a failed chunk is an empty window
-forever. And a content component that throws currently propagates up through `WindowHost` and can
-take every other window with it.
+A window's component is a chunk. Today a slow one is an empty frame with a title, a failed one is
+the same empty frame forever, and a component that throws on mount takes `WindowHost` — and every
+other open window — down with it.
 
 ### Do
 
-- `WindowSpec` accepts `loadingComponent`, `errorComponent`, `delay`, `timeout`; `createWindows`
-  accepts the same four as global defaults. Per-component wins. Pass them straight through to
-  `defineAsyncComponent`. Resolution stays memoized.
-- `onErrorCaptured` in `BaseWindow.vue`: a throwing content component renders the resolved
-  `errorComponent` (or nothing plus a dev warning) **inside its own frame**, returns `false` to
-  stop propagation, and leaves every other window untouched. The window stays draggable,
-  resizable and closable in the error state — the user must be able to get rid of it.
-- The error component receives `{ error, retry, windowId }`; `retry` re-mounts the content by
-  bumping a local key.
+- `loadingComponent` / `errorComponent` / `delay` / `timeout` accepted per component on
+  `WindowSpec`, and app-wide as `createWindows({ async })`, per-type winning key by key. Passed
+  straight to `defineAsyncComponent` in `options.resolve()`.
+- These configure the component, not the window: not accepted in `OpenOptions`, stripped from the
+  spec before it becomes `defaultsFor(name)`, never on the descriptor (global constraint 2).
+- `onErrorCaptured` in `BaseWindow`: the body renders the type's `errorComponent` with the error as
+  an `error` prop, the frame keeps its header and controls, and the error does not propagate.
+- `data-vw-error` on the `<dialog>` so the state is styleable without the library shipping a string.
+- `playground/`: a slow chunk, a chunk that never arrives, and a component that throws on mount.
 
 ### Files
 
-`src/options.ts`, `src/types.ts`, `src/BaseWindow.vue`, `src/__tests__/`
+`src/types.ts`, `src/options.ts`, `src/BaseWindow.vue`, `src/__tests__/async.spec.ts` (new),
+`playground/`, `FEATURES.md`, `README.md`, `docs/recipes.md`, `docs/how-it-works.md`
 
 ### Done when
 
-- A component whose loader rejects renders the error state, and the other open windows still
-  render and still respond to drag.
-- A component that throws in `setup()` does the same.
-- `retry` re-runs the loader and mounts on success.
-- Resolution memoization is unchanged — assert a loader is called once for two windows of the same
-  name.
-- No new descriptor field; error state is local to `BaseWindow`.
+- A pending loader renders `loadingComponent`; the content replaces it when the loader settles.
+- A rejecting loader, and a loader that outlives `timeout`, both render `errorComponent` with the
+  error.
+- A content component that throws on mount renders the error state inside its own frame while every
+  other window keeps rendering — roadmap verification 21.
+- A throwing type with no `errorComponent` is an empty body and a still-closable window.
+- The async keys reach neither `defaultsFor()` nor the descriptor.
 
 ### Out of scope
 
-Retry backoff, offline detection, Suspense.
+Retry UI, a default error component, error events on the store, `Suspense`.
+
+### Notes
+
+- **The error must not propagate.** Returning nothing from `onErrorCaptured` was tried first, to
+  keep `app.config.errorHandler` and Vue's own logging in the loop. It fails the headline
+  requirement: an error thrown in a content component's `setup` reaches `WindowHost` mid-patch and
+  aborts the whole `v-for`, so the measured result was one dialog rendered instead of two. The hook
+  returns `false`, and the error is delivered to the error component as a prop instead — that is
+  the consumer's reporting hook.
+- The same `errorComponent` covers both failures — a chunk that never arrived, and a chunk that
+  arrived and threw — because the difference is not one the user can act on. `errorComponentFor()`
+  is on `ResolvedOptions` for exactly this: `BaseWindow` reads what `resolve()` already handed to
+  `defineAsyncComponent`.
+- With no `errorComponent` registered the body is empty rather than carrying library text, per
+  global constraint 4. `data-vw-error` is the hook that makes that state addressable.
+- jsdom, not browser mode: nothing here is measured against the UA. The specs mount several apps in
+  one file, so they read the store out of the mounted app rather than through `useWindows()`'s
+  module-level fallback, which only ever points at one of them.
+
+### Verification
+
+`npx vitest run` — 116 tests, 106 jsdom (7 new) and 10 browser. Existing specs untouched.
 
 ---
 
 ## VW-04 — Focus destinations on minimize and close
 
-**Roadmap:** §8 · **Size:** M · **Depends on:** VW-01
+**Roadmap:** §8 · **Size:** M · **Depends on:** VW-01 · **Status:** done on `vw-04-focus-destinations`.
 
 ### Goal
 
@@ -206,11 +281,53 @@ Define and implement the destination chain, in order:
 
 Focus trapping (non-goal), `Alt+Tab`-style switching (that is §6).
 
+### Notes
+
+- **One existing test changed, deliberately.** `host.spec.ts`'s "leaves focus alone when a window
+  is only minimized" asserted that minimizing the only window does *not* focus the opener — which
+  is step 3 of the chain this task defines. Global constraint 6 says a test needing to change is a
+  signal the task is out of its lane; here it is the signal that the task is exactly in it, since
+  "minimize does not move focus" is the sentence VW-04 exists to delete. It was rewritten to the
+  new contract, with the old title kept in a comment. Nothing else in the suite moved.
+- **The store holds DOM now, for one reason.** Step 1 asks "which window is on top", which is a
+  question about `z` and `minimized`; step 1 then has to focus that window's header, which is an
+  element some other component owns. The header registry lives in `state.ts` beside `docks` and
+  `closeGuards` — runtime-only, outside the watched `s`, and elements, so it can no more be
+  persisted than a guard function can. It reuses the existing `activeId` computed rather than
+  adding a second "which one is next", so the focus destination cannot drift from `data-vw-active`.
+- **`excluding the one leaving` needs no exclusion.** By the time the frame unmounts the store has
+  already stopped counting it: a closed window is out of the stack and a minimized one is skipped
+  by `activeId`. The leaving window can never be its own destination.
+- **Containment is measured in `onBeforeUnmount`, not `onUnmounted`.** By the latter the frame is
+  detached and `document.activeElement` has already fallen back to `<body>`, so "was focus inside
+  this window" can no longer be asked.
+- **No `nextTick` anywhere.** The next window's header is already mounted, and the taskbar target
+  is the consumer's own persistent element rather than a per-window button, so both destinations
+  exist at unmount time. A per-window button would have needed one, since the taskbar re-renders
+  after the host.
+- `registerFocusTarget` is a plain Vue ref callback: the element arrives on mount and `null` on
+  unmount, which is the whole registration. Nothing to clean up, and no library markup needed to
+  scope the lookup.
+- **Both projects, and the browser one earns its place.** The chain's logic is jsdom's to prove —
+  `focus.spec.ts`, next to the existing focus coverage in `host.spec.ts`. But jsdom fakes the two
+  things the chain runs against: `dialog.show()` there is a shim that sets an attribute, so the UA's
+  dialog focusing steps never run and never get the chance to compete with ours, and jsdom's
+  `focus()` is unconditional where a real browser refuses it on an element it does not consider
+  focusable. `focus.browser.spec.ts` measures the chain in Chromium, which is also what pins the
+  documented `tabindex="-1"` on the registered taskbar target as load-bearing rather than
+  decorative.
+
+### Verification
+
+`npx vitest run` — 126 tests, 112 jsdom (6 new) and 14 browser (4 new). `npm run type-check` and
+`npm run lint` clean. One existing assertion rewritten, as recorded above.
+
 ---
 
 ## VW-05 — Window transitions and the leaving lifecycle
 
-**Roadmap:** §1 · **Size:** L · **Depends on:** VW-01, VW-04 · **Blocks:** VW-06
+**Roadmap:** §1 · **Size:** L · **Depends on:** VW-01, VW-04 · **Blocks:** VW-06 · **Status:** done on
+`vw-05-transitions`.
 
 ### Goal
 
@@ -263,11 +380,66 @@ This is the riskiest task in the set. The failure mode is windows that never unm
 like a memory leak in production and passes a naive test suite. The 50-window loop assertion is not
 optional.
 
+### Notes
+
+- **One `v-for`, not two.** `WindowHost` renders a single insertion-ordered map of frames rather
+  than `visible` plus a leaving list. Two `v-for`s would put the same key in two fragments, so a
+  window crossing from one to the other would be unmounted and remounted — which kills the
+  transition and remounts the content at the exact moment both are supposed to be leaving. Keeping
+  the map's insertion order is the other half of that: a leaving frame must not move in the DOM.
+- **The host holds the frame elements, not the store.** The duration is read off the window
+  element, so something has to hold it. `state.ts` already holds header elements with a narrow
+  justification (only the store can answer "which window is next"), and this question is the host's
+  own, so it stays in the host — one stable ref callback per id, memoized because Vue re-runs a
+  ref whose identity changed and an inline arrow is a new function on every desktop render.
+- **A closing window keeps its content; a minimizing one does not.** Both are the same `leaving`
+  state, and the difference is read off the descriptor rather than passed as a second prop:
+  `minimized` is true for the one and false for the other. That is also what keeps existing test 8
+  honest — "the content is really gone while minimized" would quietly have become "gone,
+  eventually".
+- **`prefers-reduced-motion` needs no code.** The baseline sheet collapses
+  `--vtd-motion-duration` to `0ms`, the host reads `0`, and the frame retires in the same watcher
+  tick — the same path as no stylesheet at all. The one deviation from `style.css`'s "read, never
+  declare" rule is that the sheet must *declare* `--vtd-motion-duration`, since the host reads a
+  value back; `:where(:root)` keeps it at zero specificity so a consumer override still wins.
+- **The sheet animates `translate`/`scale`, never `transform`.** `transform` is where the window
+  *is*. The separate properties compose with it, so the fly-to-taskbar animation cannot fight the
+  drag position.
+- **A hidden tab delivers no animation frame.** Measured, not assumed: `requestAnimationFrame` in
+  a backgrounded Chrome tab did not fire within 800ms, so `entering` released on rAF alone left
+  the window parked at `opacity: 0` until the tab was looked at again. With nothing painting there
+  is nothing to animate, so `settle()` releases the frame immediately when `document.hidden`. This
+  cost a real bug and has its own test.
+- **The retention cap is not the same thing as the duration.** 1000ms is a ceiling on how long a
+  frame may be held, so a consumer who writes `--vtd-motion-duration: 30s` gets a clipped
+  animation rather than a desktop full of dead windows.
+
+### Verification
+
+`npx vitest run` — 143 tests, 126 jsdom (14 new) and 17 browser (3 new). `npm run lint` and
+`npm run type-check` clean. Existing specs untouched.
+
+Both projects again, for the usual reason: jsdom has no cascade, so `transitions.spec.ts` stubs the
+computed duration and pins the machine — retention, adoption on restore, the 50-window loop,
+`closeAll` mid-transition, host unmount — while `transitions.browser.spec.ts` imports `style.css`
+and lets Chromium resolve `--vtd-motion-duration` through inheritance, which is the one claim a
+stub cannot make. The browser spec is also what proves the frame is really animating (`opacity`
+below 1 mid-leave) and that the inline `transform` survives the fly.
+
+Exercised by hand in the playground under Chrome, where §17's slider writes the duration onto
+`<html>`: states through `entering` → `open` → `leaving`, a closing frame retained with its
+content and a minimizing one retained without it, the fly-to properties computed from the real
+taskbar button's rect (`--vtd-min-x: -21px`, `--vtd-min-y: 550px`, `--vtd-min-scale: 0.253`), a
+window restored mid-leave adopting its own frame back, `closeAll()` mid-transition leaving zero
+`<dialog>` elements, and no console output. The automated Chrome tab is `hidden`, which is how the
+animation-frame bug above was found; the timing claims themselves are the browser spec's, since a
+hidden tab throttles the timers that would measure them.
+
 ---
 
 ## VW-06 — Async close guards
 
-**Roadmap:** §3 · **Size:** M · **Depends on:** VW-05
+**Roadmap:** §3 · **Size:** M · **Depends on:** VW-05 · **Status:** done on `vw-06-async-close-guards`.
 
 ### Goal
 
@@ -308,11 +480,65 @@ which is the only reason a close guard exists.
 Rendering the confirm dialog itself — that is §4, and it is blocked. Until then the playground
 uses `window.confirm` to exercise the async path.
 
+### Notes
+
+- **The guards were already awaited.** `requestClose` was `async` and `await`ed both guards before
+  this task, so nothing about "a guard may return a promise" needed writing. What was missing is
+  everything that makes an *awaited* guard usable: a pending state to render, one guard run per
+  question, and a defined answer when the guard throws.
+- **Two structures, not one.** `closing` is a reactive `Set` beside `docks` — what the view reads —
+  and `pending` is a plain `Map` of the in-flight promise, which is what re-entrancy joins. A single
+  reactive map keyed by id would have had to hold promises inside a `reactive()` proxy, and awaiting
+  a proxied thenable is a subtlety with nothing to gain.
+- **The flag is what says whether there is anything to join.** A window with no guards at all never
+  suspends: `runGuards` runs to its `finally` synchronously, so by the time `requestClose` could
+  record the promise the request is already over. Recording it then would leave a `pending` entry
+  nothing ever removes. `if (closing.has(id))` is that check, and it is why every existing
+  synchronous caller still settles in the same microtask it always did.
+- **A throw is a veto, not a close.** The alternative — let the error propagate out of
+  `requestClose` — leaves the caller with a rejected promise and the window in an undefined state.
+  Treating an unanswered question as permission is the destructive reading, so a throwing guard
+  keeps the window and warns. That warning is the library's first `console.warn`; it is dev-only
+  (`import.meta.env.DEV`) and addressed at the developer, so constraint 4 is intact.
+- **`close()` mid-pending is not a special case.** It clears both structures, and the guard that is
+  still out answers into a window that no longer exists — `close(id)` inside `runGuards` finds
+  nothing and returns. The promise settles with whatever the guard said, which is honest: it is the
+  answer to a question that stopped mattering.
+- **Minimize is disabled too, not only close.** Minimizing unmounts the content, and the content is
+  where the pending guard lives — the frame would drop the very function that is being awaited.
+- **The taskbar exposes `closing(id)`, a function rather than a ref**, matching `setTaskbarRect`
+  and `registerFocusTarget`: the slot is per-window and a function reading the reactive set tracks
+  correctly in the consumer's own `v-for`.
+
+### Verification
+
+`npx vitest run` — 154 tests, 137 jsdom (11 new in `close-guards.spec.ts`) and 17 browser.
+`npm run lint` and `npm run type-check` clean. Existing specs untouched.
+
+jsdom only, and deliberately: everything here is store logic and one `:disabled` binding, and the
+one thing a real UA could add — that a disabled button really refuses the click — is the UA's own
+contract, not the library's.
+
+Exercised by hand in the running playground under Chrome. `window.confirm` was replaced in the
+page with a recording stub for the session: a native dialog blocks the automation channel, and the
+question being asked is the playground's stand-in for VW-07's owned window anyway — what is being
+measured is the state around it. Measured there: the ✕ and – disabled while the guard is out, the
+footer button reading `Closing…`, the taskbar button dimmed with `…` in place of its ✕, and the
+content's own hint switching to "Guard is deciding"; one `confirm` for three clicks on ✕ during the
+same request; refuse keeps the window and re-enables every control; accept closes it and the frame
+retires; `closeAll()` while a guard is pending leaves zero `<dialog>` elements and the guard's late
+answer lands harmlessly. No console output but Vite's own.
+
+The tab throttles timers — the same `document.hidden` condition VW-05 ran into — so a 600ms guard
+and a 180ms leave both take about five times as long there. It changes nothing about the order of
+events, which is what this task is about; the timing claims are the specs'.
+
 ---
 
 ## VW-07 — Owned child windows
 
-**Roadmap:** §4 (decided: option **a**) · **Size:** L · **Depends on:** VW-06
+**Roadmap:** §4 (decided: option **a**) · **Size:** L · **Depends on:** VW-06 · **Status:** done on
+`vw-07-owned-child-windows`.
 
 ### Goal
 
@@ -367,11 +593,87 @@ This is the macOS document-modal sheet, not a page modal.
 
 `alertdialog` semantics, a bundled confirm component, page-wide backdrop, focus trap.
 
+### Notes
+
+- **The cycle the task asks for cannot be built.** `open()` is the only thing that adds an owner
+  link, and the window it links is brand new, so the new window can never already be an ancestor of
+  its own owner. The walk up the chain still carries a `seen` set and throws on a repeat — a loop
+  that can hang is not a thing to leave in a library — but what the tests can reach are the two
+  real failures: an unknown owner id, and a chain past the cap. Both throw at call time, as an
+  unknown window name does.
+- **The pending join outranks the owner refusal, deliberately.** "`requestClose(ownerId)` is
+  refused outright" is the rule for a request that arrives while a child is open. But in the shape
+  this whole feature exists for, the child *is* that request's own guard asking its question — so
+  by the time the child exists, `requestClose` is already pending, and VW-06's re-entrancy hands
+  the second caller the same promise. Refusing there would answer "the window stayed open" while
+  the real answer is still out. The refusal therefore sits after the `pending` join and covers the
+  other case: a child opened by something other than a guard. Both are tested.
+- **Ownership is a group, not a parent pointer, for stacking.** "Focusing either raises both" is
+  not `owner.z + 1` computed at render time; it is one re-stack of the whole chain, owners before
+  children, on every focus. That is also how the child gets its `owner.z + 1` at open, which is why
+  `open()` calls the re-stack directly rather than `focus()`: the fresh window is already at
+  `topZ`, so `focus()`'s early return would have left the owner wherever it was.
+- **`inert` is written by hand, not bound.** A binding would clear the attribute on false, taking a
+  consumer's own `inert` with it, and there is no way to record what was there before. The watcher
+  records it once and hands it back — which is also what makes an owner that is itself somebody's
+  child survive its own child going away.
+- **That watcher is `flush: 'sync'`.** Closing a child hands focus back to the owner's header
+  through VW-04's chain, and a real UA refuses to focus anything inside an inert subtree. On the
+  default `pre` flush the host retires the child's frame in the same tick that clears `inert`, and
+  which of the two runs first is a matter of watcher creation order — the focus landed on nothing.
+  Sync makes the attribute go the instant the store forgets the link.
+- **Eviction counts roots, not windows.** `maxWindows` compares against the unowned windows only,
+  and evicts one of those; a child leaves with its owner rather than being picked. Anything else
+  would let a confirm close a real window to make room for itself.
+- **Persistence is filtered on the way out *and* on the way in.** Out, because the link lives in a
+  runtime map and a persisted child would come back as an ordinary window with no owner and no way
+  to be answered. In, because a hand-crafted blob can carry an `owner` key that no version of this
+  code writes, and dropping it is cheaper than reasoning about what it would mean.
+- **A function in `props` is legal for an owned window, and only for one.** The playground's sheet
+  takes its `answer` callback as a prop — normally the thing a descriptor may not carry. It is safe
+  for exactly the reason the window is: it is never written to storage, so the callback can never
+  come back dead. The playground says so where it does it.
+- **An unanswered question must not hang the guard.** A sheet can go away without answering — ESC
+  dismisses it, closing the owner takes it down — so the playground settles its promise from
+  `on('close')` as well as from the buttons. That is the consumer's half of the contract and it is
+  written into recipe 20, because getting it wrong leaves a window `closing` forever.
+
+### Verification
+
+`npx vitest run` — 174 tests, 154 jsdom (17 new in `owned.spec.ts`) and 20 browser (3 new in
+`owned.browser.spec.ts`). `npm run lint` and `npm run type-check` clean. Existing specs untouched.
+
+Both projects, and the browser one carries the half jsdom cannot: jsdom implements nothing of
+`inert`, so the jsdom spec can only prove the library sets the attribute — ownership bookkeeping,
+the close cascade, the refusals, the stacking group, the eviction rule and the two persistence
+directions are all store logic and belong there. What the UA owes is measured in Chromium: an
+`elementFromPoint` at the owner's own button comes back as `<body>` while the sibling's comes back
+as itself, `focus()` on anything inside the inert owner is refused, a sibling still drags, and a
+keydown on an inert owner is never delivered at all.
+
+Exercised by hand in the running playground under Chrome. The `window.confirm` VW-06 stood in with
+is gone: the editor's guard now opens a real owned window. Measured there — the sheet at
+`z-index: 1015` over its owner at `1014` with the untouched sibling at `1011`; the owner carrying
+`inert` and nothing else on the desktop doing so; the owner's input neither hittable nor focusable
+while a sibling window still drags by its header; `minimize(owner)` refused with the dev warning
+and no other console output; ESC on the sheet dismissing it, focus landing back inside the editor
+and every control re-enabled; "Keep editing" keeping the window and "Discard" closing it; a chain
+four windows deep with each owner inert and only the deepest interactive, a fifth throwing
+`owner chain deeper than 3 windows` and an unknown owner id throwing at the call; the persisted
+blob holding only the two real windows with no `owner` key anywhere in it, and a reload bringing
+back exactly those two, neither inert; `closeAll()` with a question out leaving zero `<dialog>`
+elements.
+
+One thing worth writing down about driving it: `await`ing `requestClose(owner)` from the console
+while the sheet is open hangs, because that promise is the question and the question is on screen.
+That is the feature working, and it froze the automation channel once before it was understood.
+
 ---
 
 ## VW-08 — Window results (breaking `open()`)
 
-**Roadmap:** §2 (decided: break the signature) · **Size:** M · **Depends on:** VW-07
+**Roadmap:** §2 (decided: break the signature) · **Size:** M · **Depends on:** VW-07 · **Status:**
+done on `vw-08-window-results`.
 
 ### Goal
 
@@ -415,11 +717,80 @@ of `on('close')` plus a side channel. Make the result a first-class part of the 
 
 Passing a result *into* a window, cancellation tokens, multiple results from one window.
 
+### Notes
+
+- **The suite moved, and this is the one task where that is the deliverable.** Global constraint 6
+  says an existing test needing to change is a signal the task is out of its lane; here the change
+  *is* the lane. 179 call sites across the specs, the benches and the playground gained `.id` — a
+  mechanical rewrite of the return value, not one rewritten assertion. Nothing about what any test
+  asserts moved, which is what makes 154 jsdom tests still passing meaningful rather than
+  coincidental.
+- **The handle warns rather than works.** The roadmap ruled out a handle that stringifies to an id,
+  and the task asks for a dev warning when one is used as a string; those are the same decision
+  seen from two sides. `Symbol.toPrimitive` is defined only under `import.meta.env.DEV`, warns once
+  per module and returns the id, so a 0.1 call site is loud in development and `[object Object]` in
+  production. A handle that quietly coerced everywhere would move the failure from the call site
+  that is wrong to somewhere else entirely.
+- **`resolve()` is unconditional, like `close()`.** The alternative — route it through
+  `requestClose` — means the editor's own "you have an unsaved draft" guard interrogates the save
+  that just happened. `requestClose` stays what the *user* asking to close calls.
+- **Settling once falls out of promises, not out of a flag.** `resolve(id, data)` settles and then
+  calls `close(id)`, which settles again; the second answer is dropped because a settled promise
+  drops it. That is also why `close()` can settle unconditionally without knowing whether anything
+  answered first.
+- **The restored case is settled at hydration, not on first access.** The task says "settles
+  `restored` synchronously on first access", and a lazily-created promise would satisfy that
+  wording — but `hydrate()` already walks every restored descriptor, so registering an
+  already-settled entry there makes `resultOf()` a plain map read with no branch that could rot.
+- **A deduped `open()` joins the answer as well as the window.** It could have handed the second
+  caller a fresh promise that never settles, which is the bug this rule exists to prevent; one
+  window per entity means one answer, and both callers hear it.
+- **`resultOf(id)` is the whole API for a window you did not open.** It is what makes the restored
+  case reachable at all — there is no handle for a hydrated window — and it answers `closed` for an
+  unknown id, since asking after the fact is not a reason to hang.
+- **The `result` marker is a `WindowSpec` field that no runtime reads.** `resolveOptions()` deletes
+  it next to the async keys, so it reaches neither `defaultsFor()` nor the descriptor, and
+  `WindowResultOf<E>` infers `unknown` from an entry that never declared one — the same
+  graceful-degradation rule the prop inference already follows.
+- **The playground's confirm sheet lost its callback prop.** VW-07 had to pass `answer` as a
+  function in `props` — legal only because an owned window is never persisted — and had to settle
+  it from `on('close')` as well, or an ESC-dismissed sheet hung the guard forever. Both are gone:
+  the sheet calls `resolve(ok)`, the editor awaits `.result`, and dismissal settles `{ ok: false }`
+  by itself. Recipe 20 is rewritten around that, and the playground's components map moved into
+  `playground/components.ts` so the type test checks the real map rather than a copy of it.
+
+### Verification
+
+`npx vitest run` — 188 tests, 168 jsdom (14 new in `results.spec.ts`) and 20 browser.
+`npm run lint` and `npm run type-check` clean. No assertion rewritten; 179 call sites took `.id`.
+
+jsdom only for the new spec, and deliberately: every claim here is store bookkeeping plus one
+binding in `useWindowContext`, and none of it is measured against the UA. The compile-time half is
+`playground/typed-open.type-test.ts`, which `npm run type-check` runs — inferred (`itemEditor`
+declares `result: SavedItem`), un-inferable (a bare loader), a spec with defaults but no marker, and
+the untyped store, plus `@ts-expect-error` on passing the handle where an id belongs.
+
+Exercised by hand in the running playground under Chrome. Measured there: *Save and close* settling
+`{ ok: true, data }` with the typed `SavedItem` and the awaiting `openItem()` logging its `name` and
+note length; the close guard opening the real sheet with the editor `inert` at `z-index: 1044` under
+it at `1045`; ESC on the sheet settling `{ ok: false }`, which the guard read as "keep editing" —
+the editor kept, `inert` cleared, every control re-enabled; *Discard* closing it and the opener
+logging `closed`; two `open('itemEditor', { id: 1 })` calls deduping to one window and both hearing
+`saved Shared`; `Flood` past `maxWindows: 8` settling all three evicted editors `closed`;
+`closeAll()` settling the last one; the persisted blob carrying no `result` key and `schema: 2`; and
+after a reload, `resultOf()` on both restored windows answering `restored`. No console output but
+Vite's own.
+
+The automation tab is `hidden`, as it was for VW-05 through VW-07, so screenshots come back stale
+and the session was driven through the page's own DOM — clicks on the real buttons, `input` events
+on the real fields, a real `keydown` for ESC — with the store's answers read back out of the event
+log the playground already renders.
+
 ---
 
 ## VW-09 — Keyboard snapping and window switching
 
-**Roadmap:** §6 · **Size:** M · **Depends on:** VW-04
+**Roadmap:** §6 · **Size:** M · **Depends on:** VW-04 · **Status:** done on `vw-09-keyboard-snapping`.
 
 ### Goal
 
@@ -467,11 +838,133 @@ put it on the left half. And there is no way to move focus between windows witho
 
 Chord sequences, per-window keymaps, a shortcuts cheatsheet UI.
 
+### Notes
+
+- **The listener started on the window element and had to move to the document.** The first version
+  bound `keydown` to each `<dialog>`, reasoning that the event's own window is the one that snaps,
+  so the handler needs no notion of "which window did the user mean". That holds for exactly one
+  window. With two it fails twice over, and both were reproduced in the playground before the fix:
+  a `<dialog>` is not focusable and neither is most window content, so clicking a window's body
+  text or the page background puts focus on `<body>` and **no chord fires at all**; and the drag
+  handle's `preventDefault()` on pointerdown suppresses the focus change, so clicking a background
+  window's header raised it while focus stayed behind — and the chord snapped the window the user
+  had just clicked *away* from. The keymap is now one document listener in the plugin's effect
+  scope, beside the viewport tracker and SSR-guarded the same way, and **every chord acts on the
+  active window** — the same `activeId` behind `data-vw-active` and the focus chain. One rule where
+  there were two, and the one a window manager follows. Bubble phase, never capture, so recipe 10's
+  `preventDefault()` escape hatch and a consumer's own handlers both still come first.
+- **Clicking a window now focuses it, which is the same bug seen from the other side.** *Raised*
+  and *focused* were allowed to disagree, and the keymap was only the loudest symptom: ESC and
+  ordinary typing went to the window the user had clicked away from too. `onPointerdown` focuses
+  the header when focus is not already inside that window — not unconditionally, or a click on a
+  field in the focused window would bounce focus up to the header. The UA's own focus-on-mousedown
+  still runs afterwards, so clicking a field still focuses the field.
+- **The plain arrow nudge had to learn about modifiers.** `onWindowKeydown` read `e.key` alone, so
+  `Meta+ArrowLeft` on a focused header moved the window 10px *and* snapped it — and the 10px landed
+  first, which meant the dock recorded the nudged rect as the geometry to give back. It now ignores
+  any arrow carrying `Meta`, `Ctrl` or `Alt`; `Shift` stays its own, since that is the resize
+  modifier.
+- **The quarters are a ring, because four arrows onto four corners has no natural mapping.**
+  The arrow names the edge you travel along to reach the next corner clockwise from the top-left:
+  up to the top-left, right to the top-right, down to the bottom-right, left to the bottom-left.
+  Any assignment here is a convention rather than a deduction, which is the sharpest argument for
+  the per-action overrides the task asks for.
+- **Snap keystrokes need `draggable` *and* `resizable`.** The pointer path reaches a snap through a
+  drag, so it only ever checks `draggable`; the done-when list asks for a non-resizable window to
+  ignore the keystrokes, and a snap does resize the window. The keyboard is therefore the stricter
+  of the two by exactly one flag, deliberately.
+- **Modifiers are compared exactly, not as a subset.** `Meta+ArrowUp` and `Meta+Shift+ArrowUp` are
+  different actions on adjacent keys; a subset match would have made the quarter fall through to
+  maximize the moment a consumer unbound it.
+- **Every action ships two chords, because one of them is usually dead.** The task's defaults are
+  the familiar ones, and on the three big desktops the familiar one never reaches the page at all:
+  Windows takes `Win`+arrow for Snap Assist, GNOME and KDE take `Super`+arrow for tiling, GNOME
+  takes `` Alt+` `` for switch-group, and macOS Chrome reads `Cmd`+`←` as Back. A window-manager
+  grab happens above the browser — no event, no signal, nothing to detect or override — so the only
+  available answer is a second chord one modifier away from everything a desktop reserves.
+  `Ctrl`+`Shift` is that gap (GNOME's workspaces are `Ctrl`+`Alt`+arrow, KDE's move-to-desktop
+  `Ctrl`+`Alt`+`Shift`+arrow, macOS' Mission Control `Ctrl`+arrow), and it is already covered by the
+  editable guard, since inside a text field it is word-select. The quarters cannot reuse the arrows
+  there — `Ctrl`+`Shift`+arrow is a half — so they are `Digit1`…`Digit4` in reading order, which
+  needs no convention at all, bound by `code` because `Shift`+`1` is `!` on one layout and something
+  else on the next. Switching keeps `Shift` as its reverse in both families rather than staying
+  inside the `Ctrl`+`Shift` gap. **An override replaces both chords for its action**: a consumer who
+  names a binding must not inherit the collision they did not ask for. Platform sniffing was
+  rejected — `userAgentData.platform` names the OS, and the grab is the window manager's.
+- **A chord matches `event.key` or `event.code`.** `Alt` turns `` ` `` into a dead key on several
+  layouts, so `Alt+Backquote` written against `key` alone would be unreachable exactly where the
+  binding matters. `Backquote` is the default for that reason, and either spelling works.
+- **Editable targets are found with `closest`, not `isContentEditable`.** A keystroke in rich text
+  is delivered to whatever inline element the caret sits in rather than to the editable root, and
+  the property is one of the things jsdom does not implement — so the spec could never have seen
+  the guard work.
+- **`focusNext` skips a window that owns a child.** An owner is `inert` while its question is on
+  screen, and a real UA refuses to focus anything inside an inert subtree, so cycling onto one
+  would leave focus on nothing. The child directly above it is the reachable half of that pair.
+  Minimized windows are skipped for the older reason: they have no frame to focus.
+
+### Verification
+
+`npx vitest run` — 218 tests, 197 jsdom (27 in `keymap.spec.ts`, 2 new in `host.spec.ts`) and 21
+browser (1 new in `focus.browser.spec.ts`). `npm run lint` and `npm run type-check` clean. Existing
+specs untouched.
+
+`keymap.spec.ts` unmounts its app in an `afterEach`, which matters here in a way it did not before:
+the keymap is a document listener living in the plugin's effect scope, so an app left mounted would
+answer the next test's keystrokes. That teardown is also what the "takes its listener with it when
+the app unmounts" assertion measures.
+
+jsdom only for the new spec, following VW-06 and VW-08: the keymap is option resolution, one
+comparison per keystroke and a `snap()` call the pointer path already makes. The one claim worth
+sharing with the UA — that a header really takes focus — is already pinned in
+`focus.browser.spec.ts` by VW-04. `Meta+ArrowLeft` is asserted against `snapRect('left', …)` from
+`geometry.ts`, which is verification 11's own function, so the keyboard and pointer paths cannot
+drift apart without one of the two specs failing.
+
+Exercised by hand in the running playground under Chrome. Measured there, in a 2048×792 viewport
+with `snap.insets.bottom: 36`: `Meta+←` giving 1024×756 at 0,0, `Meta+Shift+↑` the 1024×378
+top-left quarter, `Meta+Shift+↓` the bottom-right at 1024,378, `Meta+↑` maximizing to 2048×756 and
+`Meta+↓` returning the window to its pre-snap 420×360 at 68,68; the same chord in the editor's own
+`<input>` changing nothing; `Alt+`` ` `` walking all four windows by `z` and wrapping, with
+`document.activeElement` landing on each header in turn and `Alt+Shift+`` ` `` reversing; a
+minimized window dropping out of the ring; the fixed panel — neither draggable nor resizable —
+ignoring the chords entirely; an editor with an open confirm sheet skipped while `inert`, the sheet
+itself in the ring, and the sheet still dismissible with the owner un-inerted afterwards; the plain
+arrow still nudging 10px and `Shift`+arrow still resizing, with `Meta`+arrow doing neither; and
+after a reload the persisted blob still at `schema: 2` with the same twenty descriptor keys and no
+trace of a keymap. No console output but Vite's own.
+
+The multi-window fix was measured in a third session, with three windows open at 2560×990: a
+`pointerdown` on the background window's header making it both `data-vw-active` and the holder of
+`document.activeElement`, and `Ctrl+Shift+←` then snapping *that* window rather than the one that
+had held focus; the same chord fired with focus blurred to `<body>` — the case that previously did
+nothing at all — snapping the active window right; `Ctrl+Shift+←` inside the editor's own field
+still leaving every window alone; `` Ctrl+` `` cycling all three from `<body>`; and ESC, unchanged
+in code, now minimizing the window just clicked, since it is the focused one at last. No console
+output but Vite's own.
+
+The fallback chords were measured the same way, in a second session at 2560×990: `Ctrl+Shift+←/→`
+giving the 1280-wide halves, `Ctrl+Shift+↑` the full 2560 width, `Ctrl+Shift+1…4` the four 1280×477
+quarters in reading order, `Ctrl+Shift+↓` returning the window to its pre-snap 380×300 at 96,96,
+`` Ctrl+` `` walking all three windows and `` Ctrl+Shift+` `` reversing — and `Ctrl+Shift+←` inside
+the editor's `<input>`, where it is word-select, changing nothing about the window. The 520px
+heights on the halves are the log viewer's own `maxH`, the same clamp the pointer path applies.
+
+The automation tab is `hidden`, as it has been since VW-05, and this time that cost more than stale
+screenshots: the extension's key channel delivered nothing at all to the page — a plain `ArrowLeft`
+never arrived, and neither did `Ctrl+Shift+←` when the fallbacks were added — so both sessions were
+driven with `KeyboardEvent`s dispatched onto the real elements. **The one claim no test and no
+automation here can make is whether a given host OS lets a chord through at all**; a grabbed key
+produces no event to observe. That is the whole reason for the second chord, and for keeping every
+binding overridable. Confirming `Ctrl`+`Shift`+arrow against a real Windows, GNOME and macOS
+desktop is a human's job, and is still open.
+
 ---
 
 ## VW-10 — Cross-tab persistence safety
 
-**Roadmap:** §9 · **Size:** M · **Depends on:** nothing (land last; touches `persist.ts` only)
+**Roadmap:** §9 · **Size:** M · **Depends on:** nothing (land last; touches `persist.ts` only) ·
+**Status:** done on `vw-10-cross-tab-persistence`.
 
 ### Goal
 
@@ -513,11 +1006,62 @@ is not**.
 
 Merging, CRDTs, `BroadcastChannel` live sync, server-backed sessions, leader election.
 
+### Notes
+
+- **The token is in the envelope, and `SCHEMA` stays at 2.** `writer` sits beside `schema`, `topZ`
+  and `stack`, never on a descriptor. `read()` ignores keys it does not know, so a blob written by
+  the previous version reads fine here and a blob written here reads fine there — which is the whole
+  reason constraint 1 survives a task that changes what is written.
+- **Unreadable is foreign.** A cleared key (`e.key === null`), unparseable text and a blob from a
+  version that wrote no token are all treated as a foreign write. None of them came from this tab's
+  last write, and that is the only question being asked; guessing charitably here is how a session
+  gets eaten.
+- **Stopping clears the pending debounce.** Without that, a write scheduled *before* the foreign
+  event lands ~300ms *after* it and overwrites exactly the data the stop exists to protect. The flag
+  alone is not enough.
+- **Nothing resumes on its own — not on focus, not on the next mutation.** `info.resume()` is the
+  only path back, and it re-reads and hydrates before it clears the flag, so a resumed tab is
+  showing the snapshot it is about to start writing over. That is also why the README says plainly
+  that `resume()` replaces this tab's windows and drafts: adopting is a choice, not a repair.
+- **A throwing consumer is caught.** `onExternalChange` runs in a `storage` listener; letting it
+  throw would leave the listener's own bookkeeping half-done and is a failure mode the consumer
+  cannot see. The tab is stopped before the callback runs, so the protection holds either way.
+- **`onScopeDispose` is guarded by `getCurrentScope()`.** The plugin installs inside its own scope,
+  but `persist.spec.ts` calls `setupPersist()` bare — asking for teardown there would only warn, and
+  a library that warns in its own test suite has taught its users to ignore warnings.
+- **No adapter detection.** Only `localStorage` emits `storage` events; every other adapter simply
+  never reaches this path. Sniffing for one to warn about the difference would be a user-facing
+  string about a situation the consumer chose deliberately (constraint 4).
+
+### Verification
+
+`npx vitest run` — 241 tests, 220 jsdom (9 new in `persist-crosstab.spec.ts`) and 21 browser.
+`npm run lint` and `npm run type-check` clean. Existing specs untouched, `persist.spec.ts` and
+`ssr.spec.ts` included.
+
+jsdom only, following VW-06, VW-08 and VW-09: a `StorageEvent` is dispatched the same way in either
+project, and nothing here is measured against the UA. The spec runs `setupPersist` inside an
+explicit `effectScope` because the plugin does, and the unmount assertion goes through the real
+plugin and `app.unmount()`.
+
+Exercised by hand with two playground tabs on `playground:windows` under Chrome. Measured there:
+tab A opening a window and tab B logging one stop line per foreign write, including one for a
+`removeItem` in A; B then opening a window of its own and writing nothing at all, with the blob
+still carrying A's token and A's two ids; `__vwResume()` in B hydrating it to A's two windows and
+its next change writing under B's own token; A, symmetric, stopping and going quiet the moment B
+wrote; and a reload of A coming back live — no stop line, and its next change written under a fresh
+token. No console output but Vite's own.
+
+The playground reports through the event log and exposes `__vwResume()` on `window` rather than
+calling `confirm()`: a native dialog blocks the automation channel, and the default this task exists
+to defend is that nothing happens until the consumer asks for it.
+
 ---
 
 ## VW-11 — Fixed (always-on-top) windows
 
-**Roadmap:** Tier 2 "`alwaysOnTop`", promoted · **Size:** M · **Depends on:** VW-12 (see sequencing)
+**Roadmap:** Tier 2 "`alwaysOnTop`", promoted · **Size:** M · **Depends on:** VW-12 (see sequencing) ·
+**Status:** done on `vw-11-fixed-windows`.
 
 ### Goal
 
@@ -594,11 +1138,67 @@ A fixed window stays **closable and minimizable**. Only drag, resize and snap ar
 Per-window `zIndexBase`, pinning from the taskbar, a reserved screen region for pinned windows,
 "always on top of *these* windows" partial ordering.
 
+### Notes
+
+- **An entry in `pins` means pin-capable; its value means currently pinned.** A window opened
+  without `fixed` gets no entry at all, so `isPinnable(id)` is false, the header renders the same
+  two controls it always did, and the existing "hides the controls a window does not have"
+  assertion never sees a third button. `setPinned()` on an ordinary window creates the entry rather
+  than refusing — a consumer that pins from its own UI should not have to have said `fixed` at
+  `open()` time.
+- **Runtime-only, and the cost is paid knowingly.** Pinning is toggled by the user at runtime, so
+  the descriptor could only carry it by moving `SCHEMA`. A pinned window therefore comes back
+  unpinned after a reload, exactly as a snapped one comes back undocked — the same trade snap state
+  already makes, in the same place beside `docks`.
+- **One predicate, not two.** `interactive()` in `BaseWindow.vue` already meant "not mobile, not
+  leaving"; pinning is the third clause on that same function, so drag, resize, the double-click
+  toggle and the arrow-key nudge all go inert together. Introducing a second notion of
+  "interactive" is how one of the four ends up disagreeing with the rest. `snap()` refuses on its
+  own as well, which is what covers the document-level keymap chords VW-09 added — those never
+  reach `BaseWindow`'s handlers.
+- **The pin attribute is present only while pinned** (`:data-vw-pinned="pinned || undefined"`), so
+  the styling hook is an attribute selector rather than a value comparison. The button itself stays
+  rendered in both states — it is what gets the window back.
+- **The pin button is appended after close, deliberately.** The existing tests index `.vw__btn`
+  positionally, so a control inserted anywhere else would have rewritten assertions this task has
+  no business rewriting.
+- **Pinning drops the dock, unpinning does not restore it.** `setPinned(id, true)` calls
+  `undock(id)`, which keeps the geometry where it is and forgets the zone: an explicit pin outranks
+  a snap, the same reasoning the resize grip already uses. A window that is unpinned afterwards is
+  a plain floating window at the size the snap gave it.
+
+### Verification
+
+`npx vitest run` — 241 tests, 220 jsdom (13 in `pinned.spec.ts`) and 21 browser. `npm run lint` and
+`npm run type-check` clean. Existing specs untouched.
+
+jsdom only for the new spec, following VW-06 and VW-09: the band is one `zIndex` string, the
+inertness is one predicate, and neither is measured against the UA. The one thing that is — that a
+window really renders above another — is a computed `z-index` comparison, which jsdom answers from
+the same inline style the browser would.
+
+Exercised by hand in the running playground under Chrome, in a 2048-wide viewport. Measured there:
+a `fixed` window at `z-index: 1031` (`zIndexBase` 1000 + `topZ` 16 + its own `z` 15) staying above a
+plain window opened *and focused after it* at 1016; the pinned frame rendering three controls
+(`–`, `✕`, `▲`, the pin appended last and carrying `data-vw-pinned`) and zero resize grips against
+the plain window's two controls and eight grips; a header drag, a double-click and an arrow key
+each leaving it at exactly `260,60 380×240` with `dockZone` null; the pin button unpinning it back
+to `z-index: 1017` with its eight grips returned, a drag then moving it to `380,180` and
+`snap(id, 'left')` giving `0,0 1280×520` with `dockZone` `left`; `setPinned(id, true)` re-pinning to
+`z-index: 1034`, dropping the dock to null without moving the window, and taking the grips away
+again; minimize and close still working while pinned, with the window reaching the taskbar as
+`Log: pinned ✕` and coming back still pinned; and the persisted envelope holding only
+`schema`, `topZ`, `stack` and `writer`, with the descriptor keys unchanged and no `fixed` anywhere
+in the blob. After a reload the window came back **unpinned and not pin-capable** — no pin button,
+eight grips, `draggable: true` — which is the accepted cost recorded in the decision above, not a
+defect. No console output but Vite's own.
+
 ---
 
 ## VW-12 — Undock on drag, not on click
 
-**Roadmap:** none — reported bug · **Size:** S · **Depends on:** nothing
+**Roadmap:** none — reported bug · **Size:** S · **Depends on:** nothing · **Status:** done on
+`vw-12-undock-on-drag`.
 
 ### Goal
 
@@ -652,6 +1252,21 @@ lifecycle list)
 ### Out of scope
 
 Changing what double-click does, persisting snap zones, drag inertia.
+
+### Verification
+
+`npx vitest run` — 241 tests, 220 jsdom and 21 browser. `npm run lint` and `npm run type-check`
+clean. The two new assertions live in `host.spec.ts` next to the existing drag coverage and use the
+`pointer()` helper already there; the `undockForDrag` unit tests in `state.spec.ts` are untouched.
+
+Exercised by hand in the running playground under Chrome. Measured there, on a window maximized by
+double-clicking its header (`dockZone` `max`, `0,0 2560×520`): a `pointerdown` + `pointerup` on the
+header with no movement leaving both the zone and the geometry exactly as they were; the same with
+2px of jitter between them, which is under the 4px threshold, also leaving them alone; a real
+double-click then restoring the pre-snap `700,300 380×240` and clearing the zone — the reported bug,
+which could previously maximize but never restore; and a drag that crosses the threshold still
+undocking, with the window at `562,60 380×240` under a pointer at `680,68`, so the header offset the
+undock establishes survives the `onMove` that performs it. No console output but Vite's own.
 
 ---
 

@@ -2,6 +2,7 @@ import { effectScope, getCurrentInstance, inject, type App, type Plugin } from '
 import { OPTIONS_KEY, VIEWPORT_KEY, WINDOWS_KEY } from './injection'
 import { resolveOptions } from './options'
 import { setupPersist } from './persist'
+import { setupKeymap } from './useKeymap'
 import { createStore, type TypedWindowsApi, type WindowsApi } from './state'
 import { createViewport } from './useViewport'
 import type { ComponentsMap, ResolvedOptions, WindowsOptions } from './types'
@@ -17,12 +18,13 @@ export function createWindows(userOptions: WindowsOptions): Plugin {
 
   return {
     install(app: App) {
-      // Detached: the viewport listener and the persistence watcher belong to the app, not to
-      // whichever component happened to be rendering when install() ran.
+      // Detached: the viewport listener, the keymap listener and the persistence watcher belong to
+      // the app, not to whichever component happened to be rendering when install() ran.
       const scope = effectScope(true)
       const view = scope.run(() => {
         const v = createViewport()
         setupPersist(store, options)
+        setupKeymap(store, options, v)
         return v
       })!
 

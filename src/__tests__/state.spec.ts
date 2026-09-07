@@ -14,8 +14,8 @@ function store(maxWindows = 8) {
 describe('store', () => {
   it('opens a window with cascading geometry and rising z', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 })
-    const b = win.open('editor', { id: 2 })
+    const a = win.open('editor', { id: 1 }).id
+    const b = win.open('editor', { id: 2 }).id
     const wa = win.byId(a)!
     const wb = win.byId(b)!
 
@@ -31,9 +31,9 @@ describe('store', () => {
 
   it('dedupes on identical name + props and raises the existing window', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 })
+    const a = win.open('editor', { id: 1 }).id
     win.open('viewer', {})
-    const again = win.open('editor', { id: 1 })
+    const again = win.open('editor', { id: 1 }).id
 
     expect(again).toBe(a)
     expect(win.s.stack).toHaveLength(2)
@@ -49,18 +49,18 @@ describe('store', () => {
 
   it('restores a minimized duplicate instead of opening a second one', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 })
+    const a = win.open('editor', { id: 1 }).id
     win.minimize(a)
     expect(win.minimized.value).toHaveLength(1)
 
-    expect(win.open('editor', { id: 1 })).toBe(a)
+    expect(win.open('editor', { id: 1 }).id).toBe(a)
     expect(win.byId(a)!.minimized).toBe(false)
     expect(win.visible.value).toHaveLength(1)
   })
 
   it('evicts the oldest window past maxWindows', () => {
     const win = store(2)
-    const a = win.open('editor', { id: 1 })
+    const a = win.open('editor', { id: 1 }).id
     win.open('editor', { id: 2 })
     win.open('editor', { id: 3 })
 
@@ -70,15 +70,15 @@ describe('store', () => {
 
   it('focus bumps z monotonically', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 })
-    const b = win.open('editor', { id: 2 })
+    const a = win.open('editor', { id: 1 }).id
+    const b = win.open('editor', { id: 2 }).id
     win.focus(a)
     expect(win.byId(a)!.z).toBeGreaterThan(win.byId(b)!.z)
   })
 
   it('minimize keeps the descriptor but drops it from the rendered set', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 })
+    const a = win.open('editor', { id: 1 }).id
     win.minimize(a)
     expect(win.visible.value).toHaveLength(0)
     expect(win.s.stack).toHaveLength(1)
@@ -86,7 +86,7 @@ describe('store', () => {
 
   it('close removes, closeAll empties', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 })
+    const a = win.open('editor', { id: 1 }).id
     win.open('editor', { id: 2 })
     win.close(a)
     expect(win.s.stack).toHaveLength(1)
@@ -96,7 +96,7 @@ describe('store', () => {
 
   it('clampAll pulls windows back into a shrunken viewport', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 }, { x: 5000, y: 5000 })
+    const a = win.open('editor', { id: 1 }, { x: 5000, y: 5000 }).id
     win.clampAll({ w: 1000, h: 800 })
     const w = win.byId(a)!
     expect(w.x).toBe(1000 - 80)
@@ -105,7 +105,7 @@ describe('store', () => {
 
   it('snap assigns the zone geometry and gives it back on undock', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 })
+    const a = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 }).id
 
     win.snap(a, 'left', view)
     expect(win.byId(a)).toMatchObject({ x: 0, y: 0, w: 500, h: 800 })
@@ -119,7 +119,7 @@ describe('store', () => {
 
   it('re-snapping keeps the original pre-snap geometry', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 })
+    const a = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 }).id
 
     win.snap(a, 'left', view)
     win.snap(a, 'max', view)
@@ -131,7 +131,7 @@ describe('store', () => {
 
   it('undock keeps the snapped geometry — a manual resize outranks the zone', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 })
+    const a = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 }).id
 
     win.snap(a, 'left', view)
     win.undock(a)
@@ -141,7 +141,7 @@ describe('store', () => {
 
   it('undockForDrag restores the floating size under the pointer', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 })
+    const a = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 }).id
 
     win.snap(a, 'left', view)
     win.undockForDrag(a, 250) // pointer half way along the snapped width
@@ -151,15 +151,15 @@ describe('store', () => {
 
   it('undockForDrag does nothing to a floating window', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 })
+    const a = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300 }).id
     win.undockForDrag(a, 250)
     expect(win.byId(a)).toMatchObject({ x: 120, y: 90, w: 400, h: 300 })
   })
 
   it('clampAll re-snaps docked windows and only clamps floating ones', () => {
     const win = store()
-    const docked = win.open('editor', { id: 1 })
-    const floating = win.open('editor', { id: 2 }, { x: 900, y: 700 })
+    const docked = win.open('editor', { id: 1 }).id
+    const floating = win.open('editor', { id: 2 }, { x: 900, y: 700 }).id
     win.snap(docked, 'right', view)
 
     win.clampAll({ w: 600, h: 400 })
@@ -169,11 +169,11 @@ describe('store', () => {
 
   it('drops dock state with the window', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 })
+    const a = win.open('editor', { id: 1 }).id
     win.snap(a, 'left', view)
     win.close(a)
 
-    const b = win.open('editor', { id: 1 })
+    const b = win.open('editor', { id: 1 }).id
     expect(win.dockZone(b)).toBeNull()
   })
 
@@ -197,12 +197,12 @@ describe('store', () => {
 
     expect(win.isRestored('x')).toBe(true)
     expect(win.s.topZ).toBe(12)
-    expect(win.isRestored(win.open('editor', { id: 9 }))).toBe(false)
+    expect(win.isRestored(win.open('editor', { id: 9 }).id)).toBe(false)
   })
 
   it('focus does not write when the window is already on top', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 })
+    const a = win.open('editor', { id: 1 }).id
     win.open('editor', { id: 2 })
     const seen: string[] = []
     win.on('focus', (e) => seen.push(e.id))
@@ -215,9 +215,9 @@ describe('store', () => {
 
   it('restore still raises a window whose z already equalled topZ', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 })
+    const a = win.open('editor', { id: 1 }).id
     win.minimize(a)
-    const b = win.open('editor', { id: 2 })
+    const b = win.open('editor', { id: 2 }).id
 
     win.restore(a)
     expect(win.byId(a)!.z).toBeGreaterThan(win.byId(b)!.z)
@@ -226,8 +226,8 @@ describe('store', () => {
 
   it('activeId follows the top non-minimized window', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 })
-    const b = win.open('editor', { id: 2 })
+    const a = win.open('editor', { id: 1 }).id
+    const b = win.open('editor', { id: 2 }).id
     expect(win.activeId.value).toBe(b)
 
     win.minimize(b)
@@ -240,7 +240,7 @@ describe('store', () => {
     const win = store()
     const seen: { type: string; id: string }[] = []
     win.on('*', (e) => seen.push({ type: e.type, id: e.id }))
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
 
     win.minimize(id)
     win.minimize(id) // already minimized
@@ -256,7 +256,7 @@ describe('store', () => {
 
   it('does not emit for a draft mutation — persistence cannot ride on events', () => {
     const win = store()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     const seen: string[] = []
     win.on('*', (e) => seen.push(e.type))
 
@@ -268,20 +268,20 @@ describe('store', () => {
 
   it('honours the capability flags', () => {
     const win = store()
-    const id = win.open('editor', { id: 1 }, { minimizable: false })
+    const id = win.open('editor', { id: 1 }, { minimizable: false }).id
 
     win.minimize(id)
     expect(win.byId(id)!.minimized).toBe(false)
 
     // `closable: false` is a UI affordance; the programmatic escape hatch still works.
-    const other = win.open('editor', { id: 2 }, { closable: false })
+    const other = win.open('editor', { id: 2 }, { closable: false }).id
     win.close(other)
     expect(win.byId(other)).toBeUndefined()
   })
 
   it('clamps geometry to the window size limits', () => {
     const win = store()
-    const id = win.open('editor', { id: 1 }, { w: 100, h: 50, minW: 300, minH: 200, maxW: 900, maxH: 700 })
+    const id = win.open('editor', { id: 1 }, { w: 100, h: 50, minW: 300, minH: 200, maxW: 900, maxH: 700 }).id
     expect(win.byId(id)).toMatchObject({ w: 300, h: 200 })
 
     win.setGeometry(id, { w: 9999, h: 9999 })
@@ -294,17 +294,17 @@ describe('store', () => {
         components: { editor: { component: Stub, w: 300, h: 200, closable: false, minW: 250 } },
       }),
     )
-    const a = win.open('editor', { id: 1 })
+    const a = win.open('editor', { id: 1 }).id
     expect(win.byId(a)).toMatchObject({ w: 300, h: 200, closable: false, minW: 250 })
 
-    const b = win.open('editor', { id: 2 }, { w: 800, closable: true })
+    const b = win.open('editor', { id: 2 }, { w: 800, closable: true }).id
     expect(win.byId(b)).toMatchObject({ w: 800, h: 200, closable: true })
   })
 
   it('dedupe: false opens a second window with identical props', () => {
     const win = store()
-    const a = win.open('editor', { id: 1 })
-    const b = win.open('editor', { id: 1 }, { dedupe: false })
+    const a = win.open('editor', { id: 1 }).id
+    const b = win.open('editor', { id: 1 }, { dedupe: false }).id
 
     expect(b).not.toBe(a)
     expect(win.s.stack).toHaveLength(2)
@@ -312,7 +312,7 @@ describe('store', () => {
 
   it('updateProps and setMeta replace their field in place', () => {
     const win = store()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
 
     win.updateProps(id, { id: 2 })
     win.setMeta(id, { version: 7 })
@@ -324,14 +324,14 @@ describe('store', () => {
 describe('requestClose', () => {
   it('closes when nothing objects', async () => {
     const win = store()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     await expect(win.requestClose(id)).resolves.toBe(true)
     expect(win.byId(id)).toBeUndefined()
   })
 
   it("is vetoed by the window's own guard", async () => {
     const win = store()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     win.onBeforeClose(id, () => false)
 
     await expect(win.requestClose(id)).resolves.toBe(false)
@@ -342,7 +342,7 @@ describe('requestClose', () => {
     const win = createStore(
       resolveOptions({ components: { editor: Stub }, beforeClose: async (d) => d.minimized === false }),
     )
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     win.minimize(id)
 
     await expect(win.requestClose(id)).resolves.toBe(false)
@@ -351,7 +351,7 @@ describe('requestClose', () => {
 
   it('stops consulting guards once one has released them', async () => {
     const win = store()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     const off = win.onBeforeClose(id, () => false)
     off()
 
@@ -360,19 +360,19 @@ describe('requestClose', () => {
 
   it('close, closeAll and maxWindows eviction all ignore guards', async () => {
     const win = store(2)
-    const a = win.open('editor', { id: 1 })
+    const a = win.open('editor', { id: 1 }).id
     win.onBeforeClose(a, () => false)
 
     win.open('editor', { id: 2 })
     win.open('editor', { id: 3 }) // evicts `a` past maxWindows, guard or no guard
     expect(win.byId(a)).toBeUndefined()
 
-    const b = win.open('editor', { id: 4 })
+    const b = win.open('editor', { id: 4 }).id
     win.onBeforeClose(b, () => false)
     win.close(b)
     expect(win.byId(b)).toBeUndefined()
 
-    const c = win.open('editor', { id: 5 })
+    const c = win.open('editor', { id: 5 }).id
     win.onBeforeClose(c, () => false)
     win.closeAll()
     expect(win.s.stack).toHaveLength(0)

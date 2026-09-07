@@ -78,7 +78,7 @@ describe('write (one debounced flush)', () => {
     const store = createStore(resolveOptions({ components: { editor: Stub }, maxWindows: 100000 }))
     const note = 'x'.repeat(draftBytes)
     for (let i = 0; i < count; i++) {
-      const id = store.open('editor', { id: i })
+      const id = store.open('editor', { id: i }).id
       store.byId(id)!.state = { name: `draft ${i}`, note }
     }
     return store

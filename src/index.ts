@@ -10,12 +10,18 @@ export type { WindowsApi, TypedWindowsApi, CloseGuard } from './state'
 export type { WindowContext } from './injection'
 export type { ResizeDir } from './useWindowResize'
 export type {
+  AsyncWindowOptions,
   BeforeCloseGuard,
   Bounds,
   ComponentsMap,
+  ExternalChangeInfo,
+  KeyChord,
+  KeymapAction,
+  KeymapOptions,
   OpenOptions,
   PersistOptions,
   Rect,
+  ResolvedKeymap,
   ResolvedOptions,
   ResolvedSnap,
   SizeLimits,
@@ -30,7 +36,11 @@ export type {
   WindowEntry,
   WindowEvent,
   WindowEventType,
+  WindowHandle,
   WindowProps,
+  WindowResult,
+  WindowResultOf,
   WindowSpec,
   WindowsOptions,
+  WindowVisualState,
 } from './types'

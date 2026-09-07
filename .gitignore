@@ -34,6 +34,10 @@ coverage
 
 # Vitest
 __screenshots__/
+.vitest-attachments/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# Claude Code worktrees and local agent state
+.claude/

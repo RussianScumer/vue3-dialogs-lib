@@ -24,7 +24,7 @@ function app(windows: number, minimized: boolean) {
   const wrapper = mount(Root, { global: { plugins: [plugin] }, attachTo: document.body })
   const win = useWindows()
   for (let i = 0; i < windows; i++) {
-    const id = win.open('editor', { id: i })
+    const id = win.open('editor', { id: i }).id
     if (minimized) win.minimize(id)
   }
   return { wrapper, win }

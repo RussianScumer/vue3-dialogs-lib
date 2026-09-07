@@ -35,7 +35,7 @@ describe('SSR', () => {
     app.use(lib.createWindows({ components: { editor: Stub } }))
 
     const win = lib.useWindows()
-    const id = win.open('editor', { id: 1 })
+    const id = win.open('editor', { id: 1 }).id
     expect(win.byId(id)).toMatchObject({ name: 'editor', w: 640, h: 480 })
   })
 })
