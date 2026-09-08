@@ -113,4 +113,23 @@ describe('persist', () => {
     expect(written.stack[0].state).toEqual({ name: 'draft' })
     vi.useRealTimers()
   })
+
+  it('flushes the pending write when the page goes away', async () => {
+    vi.useFakeTimers()
+    const { store, storage } = setup()
+    const id = store.open('editor', { id: 7 }).id
+    store.byId(id)!.state = { name: 'unsaved' }
+    await nextTick()
+    expect(storage.data.get('k')).toBeUndefined()
+
+    // A reload a keystroke after the last edit: the debounce never gets to fire.
+    window.dispatchEvent(new Event('pagehide'))
+    expect(JSON.parse(storage.data.get('k')!).stack[0].state).toEqual({ name: 'unsaved' })
+
+    // And the flushed timer does not fire a second time afterwards.
+    storage.data.delete('k')
+    vi.advanceTimersByTime(300)
+    expect(storage.data.get('k')).toBeUndefined()
+    vi.useRealTimers()
+  })
 })

@@ -110,6 +110,18 @@ describe('cross-tab persistence', () => {
     expect(storage.data.get('k')).toBe(before)
   })
 
+  it('flushes nothing on pagehide once another tab has taken over', async () => {
+    vi.useFakeTimers()
+    const { store, storage } = setup()
+    store.open('editor')
+    await nextTick()
+
+    fire('k', foreignBlob())
+    window.dispatchEvent(new Event('pagehide'))
+
+    expect(storage.data.get('k')).toBeUndefined()
+  })
+
   it('treats a cleared storage and an unreadable value as foreign', () => {
     const cleared = vi.fn()
     setup(cleared)
