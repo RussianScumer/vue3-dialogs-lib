@@ -164,7 +164,9 @@ const ghostStyle = computed(() => {
     width: `${p.w}px`,
     height: `${p.h}px`,
     transform: `translate(${p.x}px, ${p.y}px)`,
-    zIndex: String(win.s.topZ + 1),
+    // The pinned band tops out at `zIndexBase + topZ + d.z` and `d.z` never exceeds `topZ`, so
+    // doubling the counter clears every window, pinned or not, whatever the base is.
+    zIndex: String(options.zIndexBase + 2 * win.s.topZ + 1),
     pointerEvents: 'none' as const,
     boxSizing: 'border-box' as const,
   }
