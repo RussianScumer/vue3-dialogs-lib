@@ -37,7 +37,15 @@ interface Frame {
   /** The descriptor object, still referenced here after the store has dropped it. */
   d: WindowDescriptor
   state: WindowVisualState
+  /** Part of the render key, so a frame that adopts a new descriptor object remounts. */
+  gen: number
 }
+
+/**
+ * Bumped for every frame ever created by this host. Only its inequality matters: it makes the key
+ * of an adopted frame differ from the key it had a tick ago.
+ */
+let generation = 0
 
 /** Insertion-ordered on purpose: a window that starts leaving must not move in the DOM. */
 const frames = reactive(new Map<string, Frame>())
@@ -126,7 +134,19 @@ watch(
     for (const [id, d] of now) {
       const f = frames.get(id)
       if (!f) {
-        frames.set(id, { d, state: 'entering' })
+        frames.set(id, { d, state: 'entering', gen: ++generation })
+        settle(id)
+      } else if (f.d !== d) {
+        // Same id, different object: `hydrate()` — in practice `resume()` on a foreign write —
+        // replaced the stack. The old object is detached, so a frame that keeps it renders stale
+        // geometry and writes drags nowhere. `BaseWindow` reads `props.descriptor` once and hands
+        // it to the drag, resize, focus and context composables, so it cannot be updated in place;
+        // the frame is thrown away and rebuilt around the descriptor that is now the truth. The
+        // content remounts and re-reads `state` from it, which is the point of `resume()`.
+        // Focus is not stolen: `hydrate()` marks every id restored, and `useWindowFocus` skips
+        // a restored window.
+        retire(id)
+        frames.set(id, { d, state: 'entering', gen: ++generation })
         settle(id)
       } else if (f.state === 'leaving') {
         // Restored mid-flight: the same frame is adopted back rather than duplicated.
@@ -176,7 +196,7 @@ const ghostStyle = computed(() => {
 <template>
   <BaseWindow
     v-for="f in rendered"
-    :key="f.d.id"
+    :key="`${f.d.id}:${f.gen}`"
     :ref="frameRef(f.d.id)"
     :descriptor="f.d"
     :state="f.state"
