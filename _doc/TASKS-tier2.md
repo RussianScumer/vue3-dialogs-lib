@@ -15,7 +15,7 @@ Same as [TASKS-tier1.md](./TASKS-tier1.md) §Global constraints; they apply unch
 ## VW-13 — A frame adopts a re-hydrated descriptor
 
 **Roadmap:** [§9 Cross-tab persistence](./ROADMAP-gaps.md) · **Size:** S · **Blocks:** VW-16 ·
-**Status:** done on `vw-13-hydrate-frames`.
+**Status:** done, merged into `master` for 0.2.1.
 
 ### Goal
 

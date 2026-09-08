@@ -2,6 +2,31 @@
 
 Notable changes to `@korneevec/vue3-dialogs-lib`. Dates are release dates; unreleased work sits at the top.
 
+## 0.2.1 — 2026-09-08
+
+### Fixed
+
+- **A frame keeps rendering a descriptor that `hydrate()` has already replaced.** `hydrate()` —
+  in practice `resume()` after a foreign cross-tab write — swaps `s.stack` for fresh objects, but
+  the host only replaced a frame's descriptor when the frame was leaving, and `BaseWindow` reads
+  `props.descriptor` once at setup. A surviving id went on rendering the old, detached object: the
+  store said `x: 300` while the DOM stayed where it was, and a drag afterwards mutated an object
+  the persistence watcher no longer saw. A frame whose descriptor object changed is now retired and
+  rebuilt around the new one, remounting its content so it re-reads `state` from the adopted
+  descriptor. Focus is not stolen — `hydrate()` marks every id restored and `useWindowFocus`
+  skips a restored window.
+
+- **The snap ghost drew below the windows whenever `zIndexBase` was non-zero.** It used
+  `topZ + 1` while windows use `zIndexBase + (pinned ? topZ : 0) + z`, so with a base of 1000 the
+  drop preview vanished under every window, and even at base 0 it sat under the pinned band. It now
+  clears the pinned band at any base.
+
+- **The debounced persistence write is flushed on `pagehide`.** Writes are debounced by 300 ms and
+  nothing flushed them on the way out, so a reload within 300 ms of the last keystroke in a
+  `useWindowState` draft dropped it. `pagehide` rather than `beforeunload`: it also fires for a
+  bfcache freeze and a mobile tab discard, and it does not block unload. A tab that has stopped
+  after a foreign write still writes nothing.
+
 ## 0.2.0 — 2026-09-07
 
 ### Breaking

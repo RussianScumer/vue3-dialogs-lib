@@ -113,7 +113,7 @@ then the playground in a real browser via `/verify-task`).
 
 ### VW-14 — Snap ghost above every band
 
-**Roadmap:** none, reported bug · **Size:** XS · **Depends on:** nothing · **Status:** open.
+**Roadmap:** none, reported bug · **Size:** XS · **Depends on:** nothing · **Status:** done, merged into `master` for 0.2.1.
 
 #### Goal
 
@@ -141,7 +141,7 @@ The drop-preview ghost renders above every window, pinned or not, whatever `zInd
 
 ### VW-13 — A frame adopts a re-hydrated descriptor
 
-**Roadmap:** §9 · **Size:** S · **Depends on:** nothing · **Status:** open.
+**Roadmap:** §9 · **Size:** S · **Depends on:** nothing · **Status:** done, merged into `master` for 0.2.1.
 
 #### Goal
 
@@ -189,7 +189,7 @@ Merging the two tabs' stacks. VW-10's "second writer stops" rule stands.
 
 ### VW-15 — Flush the persistence debounce on `pagehide`
 
-**Roadmap:** §9 · **Size:** S · **Depends on:** nothing · **Status:** open.
+**Roadmap:** §9 · **Size:** S · **Depends on:** nothing · **Status:** done, merged into `master` for 0.2.1.
 
 #### Goal
 
