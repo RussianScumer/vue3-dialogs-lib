@@ -517,6 +517,25 @@ describe('capabilities', () => {
     wrapper.unmount()
   })
 
+  it('draws the snap ghost above the windows, base and all', async () => {
+    const plugin = createWindows({ components: { editor: Content }, zIndexBase: 1000 })
+    const wrapper = mount(defineComponent({ components: { WindowHost }, template: '<WindowHost />' }), {
+      global: { plugins: [plugin] },
+      attachTo: document.body,
+    })
+    const win = useWindows()
+    win.open('editor', { id: 1 })
+    await nextTick()
+
+    win.setPreview('left', { w: window.innerWidth, h: window.innerHeight })
+    await nextTick()
+
+    const dialog = wrapper.find('dialog.vw').element as HTMLElement
+    const ghost = wrapper.find('.vw-ghost').element as HTMLElement
+    expect(Number(ghost.style.zIndex)).toBeGreaterThan(Number(dialog.style.zIndex))
+    wrapper.unmount()
+  })
+
   it("drops a content-registered guard when the content unmounts — a minimized window has none", async () => {
     const Guarded = defineComponent({
       props: { windowId: { type: String, default: '' } },

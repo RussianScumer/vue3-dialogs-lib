@@ -171,6 +171,19 @@ describe('pinned windows — frame', () => {
     expect(zOf(dialogs()[0]!.element)).toBeLessThan(zOf(dialogs()[1]!.element))
   })
 
+  it('keeps the snap ghost above a pinned window', async () => {
+    const { wrapper, win } = app()
+    win.open('editor', { id: 1 }, { fixed: true })
+    await nextTick()
+
+    win.setPreview('left', view)
+    await nextTick()
+
+    const dialog = wrapper.find('dialog.vw').element
+    const ghost = wrapper.find('.vw-ghost').element
+    expect(zOf(ghost)).toBeGreaterThan(zOf(dialog))
+  })
+
   it('does not drag, resize, snap or nudge while pinned', async () => {
     const { wrapper, win } = app()
     const id = win.open('editor', { id: 1 }, { x: 100, y: 100, w: 400, h: 300, fixed: true }).id
