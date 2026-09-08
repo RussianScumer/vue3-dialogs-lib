@@ -99,10 +99,12 @@ VW-17 hydrate hardening   (S)   — after VW-15 (both in persist.ts)
 VW-18 packaging + CI      (S)   — independent, any time
 VW-20 minor batch         (S)   — last, sweeps leftovers
 VW-19 control labels      (M)   — separate release, needs an option-shape decision first
+VW-21 modal windows       (L)   — independent of the above; reopens a documented non-goal, so it
+                                  needs the decision in its own section before any code
 ```
 
-VW-13 to VW-15 are bug fixes and ship as `0.2.1`. VW-16 and VW-19 add public surface and belong
-in `0.3.0`. Versions are not bumped as part of any task; releases stay manual.
+VW-13 to VW-15 are bug fixes and ship as `0.2.1`. VW-16, VW-19 and VW-21 add public surface and
+belong in `0.3.0`. Versions are not bumped as part of any task; releases stay manual.
 
 Every task obeys the global constraints in `_doc/TASKS-tier1.md`: `SCHEMA` untouched, no new
 descriptor fields, no dependencies, no user-facing strings, SSR guards on every DOM access, the
@@ -343,3 +345,221 @@ the strings come from the consumer, the library only places them.
 #### Do
 
 Written as its own contract once the shape is agreed. Not started before the tasks above land.
+
+---
+
+### VW-21 — Modal windows, scrim and open presets
+
+**Roadmap:** none — reopens a rejected non-goal, see the decision below · **Size:** L ·
+**Depends on:** nothing · **Status:** needs the decision recorded below to be confirmed, then open.
+
+#### What exists today, and what does not
+
+The question that started this task was whether pinned windows already carry presets — a size, a
+position, a tinted background. They do not. `fixed` (VW-11) is exactly two things: a second render
+band, `zIndexBase + topZ + d.z` in `src/BaseWindow.vue:152`, and one `interactive()` predicate
+(`src/BaseWindow.vue:33`) that turns drag, resize, the arrow keys and the maximize double-click off.
+A pinned window is visually identical to every other one — `src/style.css` has no `[data-vw-pinned]`
+rule and no tint token, and `data-vw-pinned` sits on the pin button rather than on the `<dialog>`.
+
+Nothing else of the classical-dialog shape is present either:
+
+- No presets, and no centring code path. Every window opens through `cascade()`
+  (`src/geometry.ts:21-28`) at `40 + (index % 8) * 28`, sized `640×480`.
+- No scrim, overlay or backdrop anywhere. `BaseWindow.vue:69` calls `el.show()`, never
+  `showModal()`; `aria-modal` and `::backdrop` do not occur in `src/`.
+- The only click blocking in the library is `inert` on a single element: an owner's own `<dialog>`
+  while it has a child sheet (`src/BaseWindow.vue:84-100`). `owned.browser.spec.ts:80` asserts that
+  a sibling window stays draggable, precisely because there is no page-wide overlay.
+
+#### The decision, and the non-goal it reopens
+
+`_doc/ROADMAP-gaps.md:209-217` lists "Modal mode / `showModal()` / page-wide backdrop / focus trap"
+under *Considered and rejected — the founding non-goal*, and `README.md:335` and
+`docs/how-it-works.md:215` sell non-modality as a design position. This task reopens part of that
+decision deliberately, in a narrow reading that the docs must be rewritten to state:
+
+- still `show()`, never `showModal()` — no top layer, so the taskbar, `zIndexBase`, the two existing
+  bands and the leaving/transition lifecycle all keep working;
+- the scrim and the `inert` sweep are opt-in per window, so a desktop with no modal open behaves
+  exactly as it does today;
+- no focus-trap loop. Containment comes from `inert`, the same mechanism owner-sheets already use.
+  The one hole this leaves is named and covered by an option below rather than papered over.
+
+The rejection bullet in `_doc/ROADMAP-gaps.md` is edited as part of this task; leaving it standing
+would put the docs in contradiction with the library.
+
+Four shape decisions were taken up front:
+
+| Question | Decision |
+| --- | --- |
+| Flag shape | A new `modal` capability, separate from `fixed`. Decided at `open()` time and not toggleable from the header. Pinning keeps its non-blocking always-on-top meaning and its runtime toggle. |
+| Mechanism | A synthetic scrim element plus `inert` on every other window. `show()` is kept. |
+| Presets | `placement: 'center'` **and** a named `presets` map in `createWindows` options. |
+| Persistence | A modal window is filtered out of the persisted blob entirely, exactly as an owned window is. |
+
+#### Goal
+
+`open(name, props, { modal: true })` opens a window that draws above everything, dims the page behind
+it, and is the only thing on screen that answers a click — the `el-dialog` shape — while a desktop
+with no modal open is byte-for-byte the desktop that exists today. Alongside it, a named preset map
+and a `center` placement make that shape a one-liner without the library shipping opinions about
+size, position or chrome.
+
+#### Do
+
+**Runtime state.** `const modals = reactive(new Set<string>())` in `src/state.ts`, next to `pins`
+(`:114`) and carrying the same rationale comment. Populated in `openWindow` where `pins` is
+(`:571-573`), from `opts.modal ?? defs.modal`; `modal` goes on `WindowDefaults` in `src/types.ts:44-57`
+beside `fixed`, so it works as a spec default, a preset field and an `open()` option. It never reaches
+the descriptor: `SCHEMA` does not move (constraint 1) and `WindowDescriptor` gains no field
+(constraint 2). Cleared where `pins` is cleared — `close()` (`:315-316`), `closeAll()` (`:332-333`),
+`hydrate()` (`:721-722`).
+
+Store API, mirroring `isPinned`:
+
+```ts
+isModal(id): boolean          // this window is a modal
+topModalId(): string | null   // highest-z non-minimized modal, or null — what the scrim sits under
+isBlockedByModal(id): boolean // a modal is open and this window is neither it nor a child of it
+```
+
+`isBlockedByModal` returns false for every id when no modal is open. That is the guard which keeps
+`owned.spec.ts` passing untouched (constraint 6). A modal is forced `minimizable: false` at
+`openWindow`, the same forcing owned windows already get (`state.ts:562-564`), so a minimized modal
+freezing the desktop stays theoretical.
+
+**Bands and the scrim.** The bands today are unpinned `base + d.z`, pinned `base + topZ + d.z`, and
+the snap ghost `base + 2*topZ + 1` (`WindowHost.vue:189`); `d.z <= topZ` always, so each is clear of
+the next. Add a third above the ghost, in `BaseWindow.vue`'s `style` computed (`:149-152`):
+
+```ts
+zIndex: String(options.zIndexBase + band * win.s.topZ + d.z)   // band: modal ? 3 : pinned ? 1 : 0
+```
+
+The ghost keeps `2*topZ + 1` untouched — `pinned.spec.ts:174-185` asserts ghost above pinned dialog,
+and a ghost cannot coexist with a modal anyway, since every other window is inert and no drag can
+start.
+
+The scrim is one element in `WindowHost.vue`, a sibling of the ghost, rendered only when
+`topModalId()` is non-null and positioned one below that modal's own rendered z. One scrim, under the
+topmost modal: stacked modals then dim each other, which is what `el-dialog` does, and the lower one
+is inert regardless. Its `position`, `inset` and `z-index` are inline so that clicks are blocked with
+no stylesheet imported (constraint 7); the tint is a new `.vw-scrim` rule in `src/style.css` reading a
+new `--vtd-scrim-bg` token (default `rgba(0, 0, 0, 0.4)`), beside the existing `.vw-ghost` block
+(`:72-79`), with a dark-scheme override and a fade on `--vtd-motion-duration` so a modal does not
+leave a hard rectangle behind mid-transition. It is `aria-hidden="true"` and carries no click
+handler — click-outside-to-dismiss stays the consumer's business.
+
+**Blocking.** `BaseWindow.vue:86-100` already owns an `inert` watcher that records and restores
+`priorInert` and flushes `sync`. Widen only its condition:
+
+```ts
+const blocked = computed(() => win.hasChild(d.id) || win.isBlockedByModal(d.id))
+```
+
+Nothing else in that watcher changes — the recording that makes a nested owner safe is exactly what
+makes a modal over an owner safe.
+
+**Focus.** `inert` covers the other windows. It does not cover the consumer's own page behind the
+scrim: the scrim blocks the pointer, but Tab can still walk into the app. Closing that with a trap
+loop is the founding non-goal, so instead an opt-in option, no default:
+
+```ts
+createWindows({ modal: { inertRoot: '#app' } })   // selector or HTMLElement
+```
+
+While a modal is open, `WindowHost` sets `inert` on that element and takes it off after, with the same
+record-and-restore discipline, resolved in `onMounted` and guarded for SSR. Documented plainly:
+without it, a modal blocks clicks but not Tab.
+
+**ESC.** `onEscape` (`BaseWindow.vue:202-215`) dismisses for `owned` and minimizes otherwise. A modal
+takes the sheet's branch — `e.preventDefault()` then `requestClose(d.id)` — so close guards still run.
+
+**Presets and centring.** `placement: 'cascade' | 'center'` on `WindowDefaults`, default `'cascade'`.
+`src/geometry.ts` gains `centerRect(w, h, view)` beside `cascade()`, and `openWindow` picks between
+them at `state.ts:556`; an explicit `opts.x`/`opts.y` beats `placement` either way. Centring needs the
+viewport, which `createStore(options)` (`state.ts:77`) does not have, since the store is built before
+`createViewport()` in `createWindows.ts:17,25` — add `store.attachViewport(view)`, called inside the
+existing effect scope right after `createViewport()`, with the store holding a `{ w: 1024, h: 768 }`
+default until then so SSR and a store used without the plugin still work.
+
+`presets: Record<string, WindowDefaults>` on `WindowsOptions`, resolved in `src/options.ts` beside
+`defaultsFor(name)` (`:232-234`) as `presetFor(name)`. Precedence at `openWindow` becomes one step
+wider than today's comment at `state.ts:547`: the `open()` call, then the named preset, then the
+component's spec, then the library default. A preset is named at the call site, so it outranks the
+component's own spec but loses to the explicit options of that call. An unknown preset name throws at
+`open()`, exactly as an unknown owner id does.
+
+Together that is the whole `el-dialog` shape without the library holding an opinion:
+
+```js
+createWindows({
+  presets: {
+    dialog: { modal: true, placement: 'center', w: 420, h: 200,
+              draggable: false, resizable: false, minimizable: false },
+  },
+})
+
+const ok = await win.open('confirm', { message }, { preset: 'dialog' }).result
+```
+
+**Persistence.** `persist.ts:135` already writes `store.s.stack.filter((w) => !store.ownerOf(w.id))`.
+Extend that one predicate to drop modals, and extend the comment at `:129-131` with the same
+reasoning: a modal that came back after a reload would be a question with nobody asking it. `SCHEMA`,
+`normalize()` and `isDescriptor` are untouched.
+
+#### Files
+
+`src/types.ts` (`modal`, `placement` on `WindowDefaults`; `preset` on `OpenOptions`; `presets` and
+`modal.inertRoot` on `WindowsOptions`/`ResolvedOptions`), `src/state.ts`, `src/geometry.ts`,
+`src/options.ts`, `src/createWindows.ts`, `src/WindowHost.vue`, `src/BaseWindow.vue`, `src/persist.ts`,
+`src/style.css`, new `src/__tests__/modal.spec.ts` and `src/__tests__/modal.browser.spec.ts`,
+`playground/`, `README.md`, `FEATURES.md`, `docs/how-it-works.md`, `docs/recipes.md`,
+`_doc/ROADMAP-gaps.md`.
+
+Docs to write: a "Modal windows" section in `README.md` after "Pinned windows" (`:422-452`) saying
+plainly what modal does and does not do; a `docs/how-it-works.md` section after "Pinned windows"
+(`:280-311`) in the same transition-table style, covering the third band, the single scrim, the
+`inert` sweep and the persistence exclusion; a `docs/recipes.md` entry beside the owner-sheet one
+(`:592-641`) contrasting a sheet (owner-scoped) with a modal (desktop-scoped); and the rewrite of the
+`_doc/ROADMAP-gaps.md:209-217` rejection bullet.
+
+The browser spec is not optional: `inert` and hit-testing are UA behaviour and jsdom implements
+neither, which is exactly the split constraint 8 draws.
+
+#### Done when
+
+- `modal: true` never reaches the descriptor. `isModal` is true and `isPinned` false — the two are
+  independent, and `{ modal: true, fixed: true }` renders in the modal band.
+- A modal's rendered `z-index` is above a pinned window's and above a window focused after it.
+- The scrim renders once for two stacked modals, at the top modal's z minus one, and not at all when
+  no modal is open.
+- `isBlockedByModal` is false for every id when no modal is open, and false for a sheet owned by the
+  modal. `owned.spec.ts` and `pinned.spec.ts` pass untouched.
+- The state is cleared on `close`, `closeAll` and `hydrate`; the persisted blob matches neither
+  `/modal|scrim/` nor contains the modal's id, and a reload returns the desktop without it.
+- `placement: 'center'` puts a 400×300 window at `(view.w - 400) / 2, (view.h - 300) / 2`; explicit
+  `x`/`y` still win; the default stays `cascade`, asserted against an existing cascade position.
+- Preset precedence holds in both directions — `open()` options beat the preset, the preset beats the
+  component spec — and an unknown preset name throws `/preset/`.
+- ESC on a modal calls `requestClose`, not `minimize`, and a close guard still runs.
+- In Chromium: a pointerdown on a background window's header while a modal is open moves nothing, and
+  the same drag works once the modal closes; every other `<dialog>` carries `inert` while the modal is
+  open and none does after; a window that was already `inert` for its own reason is still `inert`
+  afterwards; Tab from inside the modal never reaches a background window's control; with
+  `modal.inertRoot` set a button in the page behind is unreachable by Tab and without it is reachable
+  (the documented hole, pinned by a test so it cannot regress silently); and with no stylesheet
+  imported a click at the viewport centre outside the modal still does not reach a page-behind button.
+- Playground: `open('confirm', { message }, { preset: 'dialog' })` opens centred at 420×200 over a
+  dimmed page with no grips and no drag; clicking a background window and the taskbar does nothing;
+  ESC closes it through its guard and the desktop is fully interactive again afterwards; a pinned
+  window sits below the modal and is dimmed by the scrim; `--vtd-scrim-bg` overridden on `:root`
+  changes the tint and the dark scheme picks up its own default; the persisted blob contains no modal.
+
+#### Out of scope
+
+Click-on-scrim to dismiss, scroll lock on the page behind, `showModal()` and the top layer, a
+focus-trap loop, persisting modality, a modal toggle in the header, and one scrim per stacked modal.
+Each is a decision of its own; they are listed here so a later reader knows they were considered
+rather than missed.
