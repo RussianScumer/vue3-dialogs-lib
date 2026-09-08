@@ -354,6 +354,7 @@ install → read(storage[key])
             ├─ descriptor whose `name` is not registered  → dropped
             └─ survivors: clamp to the current viewport, hydrate, mark as restored
 watch(stack, deep) → debounce 300ms → storage[key] = { schema, topZ, stack, writer }
+pagehide → a pending debounced write is flushed synchronously (nothing once stopped)
 storage event on key → writer !== ours → stop writing, onExternalChange(info)
                                           └─ info.resume() → re-read, hydrate, write again
 ```
@@ -363,6 +364,11 @@ descriptor is missing is filled from that component's defaults — and dropped o
 is too old to read. Dropping a readable blob would throw away every open window and every draft on
 upgrade, which the reload-survival promise cannot afford. The same repair path fixes a hand-edited
 descriptor, so there is one code path to extend when a field is added.
+
+A page can go away inside the debounce window, which would drop a draft typed a keystroke before a
+reload. A `pagehide` listener flushes the pending write synchronously, so the last edit survives a
+reload, a tab close, a bfcache freeze and a mobile tab discard alike; a tab that already stopped
+writing after a foreign change stays silent through the flush too.
 
 Everything DOM-touching is guarded by `typeof window === 'undefined'`, so importing the entry in
 Node or during SSR does nothing. `storage` is any `{ getItem, setItem, removeItem }`, so

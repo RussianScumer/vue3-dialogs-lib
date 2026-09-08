@@ -124,6 +124,24 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
   // regained focus is exactly how one session eats another. Only `resume()` clears it.
   let stopped = false
 
+  const write = (): void => {
+    if (stopped) return
+    // Owned windows are dropped on the way out, not filtered on the way in: the link lives in
+    // a runtime map, so a persisted child would come back as an ordinary window with no owner
+    // and no way to be answered.
+    const data: Snapshot = {
+      schema: SCHEMA,
+      topZ: store.s.topZ,
+      stack: store.s.stack.filter((w) => !store.ownerOf(w.id)),
+      writer: token,
+    }
+    try {
+      p.storage.setItem(p.key, JSON.stringify(data))
+    } catch {
+      /* storage full or unavailable — drop the write, keep the app alive */
+    }
+  }
+
   // Deep, and it has to stay deep: `useWindowState` hands the content its draft object to mutate
   // directly, and the drag writes x/y straight onto the descriptor. Neither goes through a store
   // method, so no event-based scheme could see them.
@@ -132,25 +150,24 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
     () => {
       clearTimeout(timer)
       timer = setTimeout(() => {
-        if (stopped) return
-        // Owned windows are dropped on the way out, not filtered on the way in: the link lives in
-        // a runtime map, so a persisted child would come back as an ordinary window with no owner
-        // and no way to be answered.
-        const data: Snapshot = {
-          schema: SCHEMA,
-          topZ: store.s.topZ,
-          stack: store.s.stack.filter((w) => !store.ownerOf(w.id)),
-          writer: token,
-        }
-        try {
-          p.storage.setItem(p.key, JSON.stringify(data))
-        } catch {
-          /* storage full or unavailable — drop the write, keep the app alive */
-        }
+        timer = undefined
+        write()
       }, DEBOUNCE_MS)
     },
     { deep: true },
   )
+
+  /**
+   * The debounce is the whole reason a draft can be lost: a reload a keystroke after the last edit
+   * would otherwise take the pending write with it. `pagehide` rather than `beforeunload` — it also
+   * fires for a bfcache freeze and for a mobile tab discard, and it does not block unload.
+   */
+  const onPageHide = (): void => {
+    if (timer === undefined) return
+    clearTimeout(timer)
+    timer = undefined
+    write() // a stopped tab writes nothing; `write()` asks that question itself
+  }
 
   /**
    * A blob is this tab's only if it says so. A removed key, unparseable text and a blob from a
@@ -177,6 +194,7 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
     // before the foreign one must not land after it.
     stopped = true
     clearTimeout(timer)
+    timer = undefined
 
     try {
       p.onExternalChange?.({
@@ -193,7 +211,13 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
   }
 
   window.addEventListener('storage', onStorage)
+  window.addEventListener('pagehide', onPageHide)
   // The plugin installs inside its own scope; a bare `setupPersist()` call (the specs do this) has
   // none, and asking for teardown there would only warn.
-  if (getCurrentScope()) onScopeDispose(() => window.removeEventListener('storage', onStorage))
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('pagehide', onPageHide)
+    })
+  }
 }
