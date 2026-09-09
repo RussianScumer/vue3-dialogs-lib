@@ -1,5 +1,5 @@
-import { clampSize } from './geometry'
-import type { WindowDescriptor } from './types'
+import { clampSize, clampX, clampY } from './geometry'
+import type { Bounds, Viewport, WindowDescriptor } from './types'
 
 /** The eight grips, edges first so the corners paint over them. */
 export const RESIZE_DIRS = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'] as const
@@ -21,6 +21,9 @@ export const RESIZE_STYLES: Record<ResizeDir, Record<string, string>> = {
 }
 
 interface ResizeOptions {
+  /** A west or north grip moves the window, so this path answers to `bounds` exactly as drag does. */
+  view: Viewport
+  bounds: Bounds
   enabled: () => boolean
   /** Raise the window, as a drag does. */
   onStart?: () => void
@@ -69,14 +72,21 @@ export function useWindowResize(d: WindowDescriptor, options: ResizeOptions) {
       w: east ? start.w + dx : west ? start.w - dx : start.w,
       h: south ? start.h + dy : north ? start.h - dy : start.h,
     }
+    // A west or north grip drags the leading edge, and that edge has to stay in reach: cap the
+    // size at whatever keeps it inside `bounds` before the limits are applied, so the window stops
+    // growing at the top of the screen rather than pushing its own bottom edge down.
+    if (west) wanted.w = start.x + start.w - clampX(start.x + start.w - wanted.w, wanted.w, options.view, options.bounds)
+    if (north) wanted.h = start.y + start.h - clampY(start.y + start.h - wanted.h, wanted.h, options.view, options.bounds)
     const size = clampSize(wanted.w, wanted.h, d)
 
     // The anchored edge is the one without a grip: growing west moves x by whatever width was
     // actually granted, so the east edge stays exactly where it was even at the min-width stop.
+    // Clamped once more because `clampSize` has the last word on the size: a window that cannot
+    // shrink any further would otherwise walk its leading edge off the screen.
     d.w = size.w
     d.h = size.h
-    if (west) d.x = start.x + (start.w - size.w)
-    if (north) d.y = start.y + (start.h - size.h)
+    if (west) d.x = clampX(start.x + (start.w - size.w), size.w, options.view, options.bounds)
+    if (north) d.y = clampY(start.y + (start.h - size.h), size.h, options.view, options.bounds)
   }
 
   function onUp(e: PointerEvent) {

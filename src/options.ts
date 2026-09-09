@@ -174,8 +174,9 @@ export function resolveOptions(options: WindowsOptions): ResolvedOptions {
   const asyncOptions: Record<string, AsyncWindowOptions> = {}
   for (const [name, entry] of Object.entries(components)) {
     if (!isSpec(entry)) continue
-    const { component, ...rest } = entry
-    void component
+    // `component` is dropped by the rest-destructure itself; the underscore is what marks it
+    // deliberately unread rather than forgotten.
+    const { component: _component, ...rest } = entry
     const async: AsyncWindowOptions = {}
     for (const key of ASYNC_KEYS) {
       if (rest[key] === undefined) continue

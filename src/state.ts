@@ -546,8 +546,15 @@ export function createStore(options: ResolvedOptions) {
     // Owned windows are not the user's windows: they neither count towards the limit nor are ever
     // the thing evicted to make room for it. A confirm must not close a real window to appear.
     if (owner === null) {
+      // A limit below one would evict every window and then open one anyway, leaving a desktop the
+      // option said could not exist. One is the smallest limit that means anything.
+      let limit = options.maxWindows
+      if (limit < 1) {
+        warn(`maxWindows is ${limit}; treating it as 1`)
+        limit = 1
+      }
       let roots = s.stack.filter((w) => !owners.has(w.id))
-      while (roots.length >= options.maxWindows && roots[0]) {
+      while (roots.length >= limit && roots[0]) {
         close(roots[0].id)
         roots = s.stack.filter((w) => !owners.has(w.id))
       }

@@ -16,6 +16,15 @@ export default defineConfigWithVueTs(
   vueTsConfigs.recommended,
 
   {
+    name: 'app/rules',
+    rules: {
+      // Omitting a key by naming it beside a rest property is the idiom for stripping it; the
+      // binding exists to be discarded, and an underscore says so.
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true, varsIgnorePattern: '^_' }],
+    },
+  },
+
+  {
     name: 'app/test-fixtures',
     files: ['src/__tests__/**', 'src/__bench__/**'],
     rules: {

@@ -309,8 +309,16 @@ close / closeAll /
 `z` is always positive, so `topZ + z` puts every pinned window above every unpinned one while
 pinned windows keep their relative order. `focus()`, `activeId` and everything persisted are
 untouched: there is still one stack, and the second band exists only at render time. The snap ghost
-keeps `topZ + 1` and therefore sits under a pinned window, which is correct — nothing can be
-snapped onto one anyway.
+sits at `zIndexBase + 2 * topZ + 1`, above both bands, so a drop preview is visible whatever is
+pinned.
+
+That the bands are render-only has one consequence worth stating: **the top window is not
+necessarily the active one.** `activeId` is the highest `z` among non-minimized windows, and
+pinning does not touch `z`, so a pinned window drawn over the desktop is not what ESC, the keymap
+or `data-vw-active` address unless it was also the last one focused. Deriving `activeId` from the
+render band instead would mean a pinned window could never be left in the background, which is the
+opposite of what pinning is for — a mini-player stays visible precisely while you work in something
+else.
 
 The cost is explicit and accepted: a reload brings a pinned window back unpinned and draggable, in
 exactly the way it brings a snapped one back undocked.
@@ -444,6 +452,12 @@ outlives the app that owns it.
 `inject` with a fallback to the most recently installed app so it also works outside `setup()`
 (route guards, services, event handlers in plain modules). Inside components the injected store
 always wins, so multiple app instances stay correct.
+
+That fallback is a module-level binding, which is exactly as far as an injection-free API can go —
+and on a server it is shared by every request being rendered. `useWindows()` called outside
+`setup()` there answers with whichever app installed last, which is not necessarily the one being
+rendered. It is safe in the browser, where there is one app per document; in SSR code, `inject` the
+store inside a component or pass it down explicitly instead.
 
 ## Focus
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, type ComponentPublicInstance } from 'vue'
 import { useWindows } from './createWindows'
-import type { Rect } from './types'
+import type { Rect, WindowDescriptor } from './types'
 
 // Renderless: the consumer owns the visual completely.
 const win = useWindows()
@@ -16,7 +16,7 @@ defineSlots<{
     /** The minimized set — unchanged, so existing taskbars keep working. */
     windows: ReturnType<typeof useWindows>['minimized']['value']
     /** Every window, minimized or not: what an actual taskbar needs. */
-    all: ReturnType<typeof useWindows>['minimized']['value']
+    all: WindowDescriptor[]
     /** Id of the top non-minimized window, or null. */
     active: string | null
     restore: (id: string) => string
