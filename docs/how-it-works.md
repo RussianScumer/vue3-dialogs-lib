@@ -142,9 +142,14 @@ window. The store owns the header registry because the first step is a question 
 window.
 
 Each transition emits an event (`open`, `close`, `focus`, `minimize`, `restore`, `geometry`,
-`title`), subscribable with `win.on(type, cb)`. Note what this deliberately cannot see: a draft
-mutation, or a drag frame. Both write straight onto the descriptor without passing through a store
-method, which is exactly why persistence watches the stack deeply instead of listening to events.
+`title`), subscribable with `win.on(type, cb)`. A gesture reports through the store once it is
+over: drag, resize and the arrow keys write x/y/w/h straight onto the descriptor frame by frame,
+then hand the result to `setGeometry`, so `geometry` fires once per gesture rather than per frame,
+and a drop into a snap zone fires it once, from `snap()`. Note what this deliberately cannot see:
+a draft mutation, or a mid-gesture frame. Both write straight onto the descriptor without passing
+through a store method, which is exactly why persistence watches the stack deeply instead of
+listening to events. `clampAll` on a viewport resize is silent by the same reasoning — nobody
+asked for that move.
 
 ## Why the content is really gone while minimized
 

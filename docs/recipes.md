@@ -529,9 +529,11 @@ const off = win.on('*', (e) => analytics.track(`window:${e.type}`, { id: e.id })
 // 'open' | 'close' | 'focus' | 'minimize' | 'restore' | 'geometry' | 'title' | '*'
 ```
 
-Events cover store transitions only. A draft mutation and a drag frame write straight onto the
-descriptor without passing through a store method, so neither emits — if you need those, watch the
-descriptor yourself.
+Events cover store transitions only. `geometry` reports one event per gesture — a drag, a resize or
+an arrow-key nudge, at the end of it — plus `snap()` and `setGeometry()`; the frames in between and
+a draft mutation write straight onto the descriptor without passing through a store method, so
+neither emits. If you need those, watch the descriptor yourself. Clamping the stack back into a
+shrunken viewport is silent too: it is the browser moving the windows, not the user.
 
 ## 19 · Say something while a window loads, and when it fails
 

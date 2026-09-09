@@ -118,6 +118,10 @@ const off = win.on('close', (e) => console.log(e.id)) // 'open' | 'close' | 'foc
                                                      // 'restore' | 'geometry' | 'title' | '*'
 ```
 
+`geometry` fires once per drag, resize or arrow-key nudge — at the end of the gesture, not per
+frame — and on `snap()` and `setGeometry()`. A drop into a snap zone reports once, from the snap.
+Re-clamping the whole stack after a viewport resize is silent.
+
 `open()` deduplicates: the same `name` plus shallow-equal `props` restores and raises the existing
 window instead of opening a second one. Pass `{ dedupe: false }` when you really want two. Past
 `maxWindows`, the oldest window is closed — silently, and without consulting any guard.
