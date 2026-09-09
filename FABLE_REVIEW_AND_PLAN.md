@@ -286,7 +286,7 @@ re-hydration drops.
 
 ### VW-20 — Minor batch
 
-**Roadmap:** none · **Size:** S · **Depends on:** VW-16 · **Status:** open.
+**Roadmap:** none · **Size:** S · **Depends on:** VW-16 · **Status:** done, merged into `master` for 0.3.0.
 
 #### Do
 
@@ -398,7 +398,7 @@ accessible name.
 ### VW-21 — Modal windows, scrim and open presets
 
 **Roadmap:** none — reopens a rejected non-goal, see the decision below · **Size:** L ·
-**Depends on:** nothing · **Status:** needs the decision recorded below to be confirmed, then open.
+**Depends on:** nothing · **Status:** done, merged into `master` for 0.3.0.
 
 #### What exists today, and what does not
 
