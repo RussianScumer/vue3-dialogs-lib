@@ -99,6 +99,13 @@ describe('persist', () => {
     expect(store.byId('a')!.x).toBe(window.innerWidth - 80)
   })
 
+  it('clamps a hydrated size up to the minimum it declares', () => {
+    // A blob written before the component raised its floor, or edited by hand: without the clamp
+    // it renders under the minimum until the first resize.
+    const { store } = setup({ schema: SCHEMA, topZ: 11, stack: [descriptor({ w: 10, h: 5 })] })
+    expect(store.byId('a')).toMatchObject({ w: 160, h: 80 })
+  })
+
   it('writes a debounced snapshot including draft state', async () => {
     vi.useFakeTimers()
     const { store, storage } = setup()

@@ -1,5 +1,5 @@
 import { getCurrentScope, onScopeDispose, watch } from 'vue'
-import { DEFAULT_MIN_H, DEFAULT_MIN_W, clampDescriptor } from './geometry'
+import { DEFAULT_MIN_H, DEFAULT_MIN_W, clampDescriptor, clampSize } from './geometry'
 import type { WindowsApi } from './state'
 import type { ResolvedOptions, WindowDescriptor } from './types'
 
@@ -76,6 +76,9 @@ function normalize(v: WindowDescriptor, options: ResolvedOptions): WindowDescrip
   d.minH = size(d.minH, defs.minH ?? DEFAULT_MIN_H)
   d.maxW = limit(d.maxW, defs.maxW ?? null)
   d.maxH = limit(d.maxH, defs.maxH ?? null)
+  // Once the limits are known, the size has to obey them: a blob written before a component raised
+  // its `minW`, or edited by hand, would otherwise render under the minimum until the first resize.
+  Object.assign(d, clampSize(d.w, d.h, d))
   return d
 }
 

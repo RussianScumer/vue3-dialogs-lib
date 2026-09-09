@@ -714,6 +714,11 @@ export function createStore(options: ResolvedOptions) {
 
   /** Replaces the stack with a hydrated one; every id counts as restored. */
   function hydrate(stack: WindowDescriptor[], topZ: number): void {
+    // A window the incoming stack does not carry is gone for a listener in every way that matters,
+    // so it leaves through the same event a `close()` would have fired. Arrivals stay silent:
+    // `open` means a call asked for a window, and a hydration is nobody asking.
+    const arrived = new Set(stack.map((w) => w.id))
+    const departed = s.stack.filter((w) => !arrived.has(w.id)).map((w) => w.id)
     s.stack = stack
     s.topZ = Math.max(topZ, ...stack.map((w) => w.z), 10)
     restoredIds.clear()
@@ -732,6 +737,7 @@ export function createStore(options: ResolvedOptions) {
       // `resultOf()` is synchronous truth rather than a promise nobody will ever settle.
       results.set(w.id, { promise: Promise.resolve(RESTORED), settle: () => {} })
     }
+    for (const id of departed) emit('close', id)
   }
 
   return {
