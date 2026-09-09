@@ -11,6 +11,8 @@ hidden), and with persistence on it survives a page reload.
 
 ## Documentation
 
+- [Window modes](./docs/window-modes.md) — every kind of window the library opens (plain,
+  restricted, pinned, owned sheet, modal), with a small example of each and what survives a reload.
 - [How it works](./docs/how-it-works.md) — the descriptor model, the render path, geometry,
   persistence, and why the windows are non-modal.
 - [Recipes](./docs/recipes.md) — complete use cases with code.
