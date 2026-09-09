@@ -51,6 +51,9 @@ app.use(createWindows({
     enabled: true,                       // false removes every binding, store API unaffected
     bindings: { snapLeft: 'Ctrl+Alt+ArrowLeft' }, // per action: a chord, several, or null
   },
+  labels: {                              // accessible names for the default –, ✕ and ▲ controls
+    minimize: 'Minimize', close: 'Close', pin: 'Keep on top', // no defaults; see Control labels
+  },
   async: {                               // fallback loading/error states for every window type
     loadingComponent: WindowLoading,     // per-type overrides live on the component's spec
     errorComponent: WindowError,         // also used when a window's content throws
@@ -138,9 +141,10 @@ win.open('itemEditor', { id: 42 }, {
 })
 ```
 
-One option in that shape is **not** on the descriptor and does not persist — `fixed`, which pins
-the window above every other one. It is toggled from the header at runtime, so it lives in a
-runtime map instead; see [Pinned windows](#pinned-windows).
+Two options in that shape are **not** on the descriptor and do not persist — `fixed`, which pins
+the window above every other one, and `labels`, the accessible names for its default controls. Both
+live in runtime maps instead; see [Pinned windows](#pinned-windows) and
+[Control labels](#control-labels).
 
 Repeating those at every call site is the failure mode, so a component can carry its own defaults.
 Give the components map a `{ component, ... }` object instead of a bare component:
@@ -448,6 +452,37 @@ no second band.
 Pin state is **runtime-only**, like snap state: it is not on the descriptor and is not persisted, so
 after a reload a pinned window comes back unpinned and draggable. That is deliberate — pinning is
 toggled by the user at runtime, and persisting it would mean moving the storage schema.
+
+## Control labels
+
+The default header controls are glyphs — `–`, `✕` and the pin's `▲` — and the library ships no
+strings, so they have no accessible name until you give them one:
+
+```js
+app.use(createWindows({
+  components,
+  labels: { minimize: 'Minimize', close: 'Close', pin: 'Keep on top' },
+}))
+```
+
+Those become `aria-label` on the buttons and nothing else. There are no defaults on purpose: an
+English default would be wrong in every app that is not English. In development a desktop that
+renders a default control with no name warns once in the console; production says nothing.
+
+A window can name its own controls, merged key by key over the app-wide option — `open()` over the
+component's spec over the app-wide names:
+
+```js
+win.open('settings', {}, { labels: { close: 'Close settings' } }) // keeps the app-wide 'Minimize'
+win.labelsFor(id)                                                 // the effective names
+```
+
+The pin button is a toggle: it carries `aria-pressed` with the pin state, so one `pin` name covers
+both directions. Like `fixed`, labels are **runtime-only** — they belong to the locale of the app
+that is running rather than to the window, so they never reach the descriptor or storage, and the
+app-wide option is simply read again on the next load.
+
+Replacing the `controls` slot takes over completely: your buttons, your names, and no warning.
 
 ## Keyboard
 

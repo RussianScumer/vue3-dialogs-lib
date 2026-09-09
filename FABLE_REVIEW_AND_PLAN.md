@@ -333,18 +333,90 @@ re-hydration drops.
 
 ### VW-19 — Accessible names for the default controls
 
-**Roadmap:** tier 2 "Default control labels" · **Size:** M · **Depends on:** VW-20 · **Status:**
-needs a decision.
+**Roadmap:** tier 2 "Default control labels" · **Size:** M · **Depends on:** VW-20 (independent
+lines, so it can land first) · **Status:** in progress on `vw-19-control-labels`.
 
-#### Decision needed
+#### Decision taken
 
-Option shape `labels: { minimize?, close?, pin? }`, `aria-label` only, no defaults, and a dev
-warning when neither `labels` nor a `controls` slot is present. This keeps constraint 4 intact:
-the strings come from the consumer, the library only places them.
+`labels: { minimize?, close?, pin? }`, `aria-label` only, no default strings, and a dev-mode
+`console.warn` when a frame renders a default control with no name and no `controls` slot. The
+strings stay the consumer's, so constraint 4 holds: the library only places them.
+
+Three details were decided on top of that shape:
+
+- **Both levels.** `labels` is an app-wide option *and* a `WindowDefaults` key, so it works as a
+  component spec default and as an `open()` option: `open('settings', {}, { labels: { close:
+  'Close settings' } })`. Merged key by key, `open()` over the spec over the app-wide option, so a
+  window that names only `close` keeps the app-wide `minimize`.
+- **The pin toggle takes one name.** The button is a toggle, so it carries `aria-pressed` with the
+  pin state and a single `labels.pin` covers both directions — the standard toggle-button pattern,
+  and one string instead of two. `aria-pressed` is rendered whether or not a label was given.
+- **`restore` is not part of this.** The roadmap row named it, but the taskbar is renderless: its
+  button is the consumer's own markup and already carries whatever name they gave it.
+
+Per-window labels are **runtime-only**, in a reactive map beside `pins`, for the reason that
+decided every other map there: `WindowDescriptor` gains no field (constraint 2) and `SCHEMA` does
+not move (constraint 1). A label is a property of the running app's locale, not of the window, so
+losing it across a reload is correct — the app-wide option is re-read on the next install.
+
+#### Goal
+
+The default ✕, – and ▲ buttons have an accessible name whenever the consumer supplies one, from
+one place for the whole app or per window, and a consumer who supplies none is told about it in
+dev instead of shipping three unnamed buttons.
 
 #### Do
 
-Written as its own contract once the shape is agreed. Not started before the tasks above land.
+- `src/types.ts`: `ControlLabels { minimize?, close?, pin? }`; `labels?: ControlLabels` on
+  `WindowDefaults` (which is what puts it on `WindowSpec` and `OpenOptions`) and on
+  `WindowsOptions`; `labels: ControlLabels` on `ResolvedOptions`.
+- `src/options.ts`: `labels: options.labels ?? NO_LABELS`, a frozen empty object like
+  `NO_DEFAULTS`.
+- `src/state.ts`: `controlLabels = reactive(new Map<string, ControlLabels>())` beside `pins`, with
+  the same runtime-only rationale comment. Filled in `openWindow` from `{ ...defs.labels,
+  ...opts.labels }` when either side has a key, cleared in `close()`, `closeAll()` and
+  `hydrate()` where `pins` is. One store method, `labelsFor(id)`, returning the effective merge
+  `{ ...options.labels, ...controlLabels.get(id) }` — the store already holds the options, so the
+  precedence lives in one place rather than in the template.
+- `src/BaseWindow.vue`: `:aria-label` on the three default buttons from a `labels` computed over
+  `win.labelsFor(d.id)`; `:aria-pressed="pinned"` on the pin button. An undefined label renders no
+  attribute, which is what keeps the DOM identical for a consumer who sets none.
+- `src/BaseWindow.vue`, dev warning: on mount, in `DEV` only, when no `controls` slot was passed
+  and a rendered control has no name, warn once per app. The flag is a module-level `WeakSet` keyed
+  on the resolved options object, so one desktop warns once however many windows it opens, and two
+  independent `createWindows()` calls each warn.
+- `playground/`: labels on the app-wide options, and one window with a per-window `close` label.
+- Docs: the options block and a short "Control labels" section in `README.md`, the `FEATURES.md`
+  row, and the runtime-state list in `docs/how-it-works.md` that already names `docks` and `pins`.
+  The tier-2 row in `_doc/ROADMAP-gaps.md` moves to the shipped list rather than staying open.
+
+#### Files
+
+`src/types.ts`, `src/options.ts`, `src/state.ts`, `src/BaseWindow.vue`, new
+`src/__tests__/labels.spec.ts`, `playground/`, `README.md`, `FEATURES.md`, `docs/how-it-works.md`,
+`_doc/ROADMAP-gaps.md`.
+
+#### Done when
+
+- `labels.spec.ts`: with app-wide labels, the minimize and close buttons carry them; a window
+  opened with `{ labels: { close: 'Close settings' } }` overrides only `close` and keeps the
+  app-wide `minimize`; a component spec's labels sit between the two.
+- The pin button carries `aria-pressed="false"`, then `"true"` after a click, with and without a
+  `labels.pin`.
+- With no labels anywhere, no `aria-label` attribute is rendered at all and `console.warn` fires
+  exactly once for two open windows; with a `controls` slot it never fires; in neither case does it
+  fire outside `DEV`.
+- No label reaches the descriptor or the persisted blob, and `hydrate()` drops the per-window
+  entries. `persist.spec.ts`, `pinned.spec.ts` and `host.spec.ts` pass untouched — the `.vw__btn`
+  count and order do not move.
+- Playground: a screen reader reads "Close" and "Minimize" on the default controls, the pinned
+  window's pin button reads as a pressed toggle, and the console carries no label warning.
+
+#### Out of scope
+
+Default English strings, a `restore` label for the taskbar, labelling the resize grips (they are
+`aria-hidden` and pointer-only), and translating the title — the title is already the dialog's
+accessible name.
 
 ---
 

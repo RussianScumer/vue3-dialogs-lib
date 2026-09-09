@@ -4,6 +4,7 @@ import type {
   Bounds,
   CloseGuard,
   ComponentsMap,
+  ControlLabels,
   OpenOptions,
   Rect,
   ResolvedOptions,
@@ -112,6 +113,14 @@ export function createStore(options: ResolvedOptions) {
    * exactly as it did before this existed — no extra control, no second z band.
    */
   const pins = reactive(new Map<string, boolean>())
+  /**
+   * Per-window accessible names for the default controls, merged over the app-wide `labels` option
+   * by `labelsFor`. Runtime-only beside `pins`, and for a reason of its own: a label belongs to the
+   * locale of the app that is running, not to the window — persisting one would restore last
+   * month's translation into a page that has since been re-installed with a new one. Reactive
+   * because a window opened with labels renders its header in the same tick.
+   */
+  const controlLabels = reactive(new Map<string, ControlLabels>())
   /**
    * Functions, so they can never be persisted — same placement rationale as `docks`. Guards come
    * from mounted content and die with it.
@@ -314,6 +323,7 @@ export function createStore(options: ResolvedOptions) {
     restoredIds.delete(id)
     docks.delete(id)
     pins.delete(id)
+    controlLabels.delete(id)
     taskbarRects.delete(id)
     closeGuards.delete(id)
     closing.delete(id)
@@ -331,6 +341,7 @@ export function createStore(options: ResolvedOptions) {
     owners.clear()
     docks.clear()
     pins.clear()
+    controlLabels.clear()
     taskbarRects.clear()
     closeGuards.clear()
     closing.clear()
@@ -571,6 +582,10 @@ export function createStore(options: ResolvedOptions) {
     // window pin-capable, and the resolved value is whether it starts pinned.
     const fixed = opts.fixed ?? defs.fixed
     if (fixed !== undefined) pins.set(d.id, fixed)
+    // Merged rather than replaced, and only stored when there is something to store: a window that
+    // names one control keeps the app-wide names for the rest.
+    const labels = { ...defs.labels, ...opts.labels }
+    if (Object.keys(labels).length > 0) controlLabels.set(d.id, labels)
     if (owner !== null) {
       owners.set(d.id, owner)
       // Not `focus()`: the fresh window is already at topZ, so the early return would leave its
@@ -634,6 +649,17 @@ export function createStore(options: ResolvedOptions) {
     require(id)
     pins.set(id, pinned)
     if (pinned) undock(id)
+  }
+
+  /**
+   * The effective names for a window's default controls: the app-wide option, with whatever the
+   * window itself named laid over it key by key. The precedence lives here rather than in the
+   * template so every consumer of it — the frame, and anyone rendering their own `controls` slot —
+   * reads the same answer.
+   */
+  function labelsFor(id: string): ControlLabels {
+    const own = controlLabels.get(id)
+    return own ? { ...options.labels, ...own } : options.labels
   }
 
   /**
@@ -720,6 +746,7 @@ export function createStore(options: ResolvedOptions) {
     owners.clear()
     docks.clear()
     pins.clear()
+    controlLabels.clear()
     taskbarRects.clear()
     closeGuards.clear()
     closing.clear()
@@ -776,6 +803,7 @@ export function createStore(options: ResolvedOptions) {
     isPinned,
     isPinnable,
     setPinned,
+    labelsFor,
     setPreview,
     clampAll,
     isRestored,

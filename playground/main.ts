@@ -36,6 +36,9 @@ createApp(App)
       snap: { insets: { bottom: 36 } },
       // The page header is at z-index 100; windows have to clear it.
       zIndexBase: 1000,
+      // The library ships no strings, so the glyph controls have no accessible name until an app
+      // gives them one. In dev an app that gives none is warned about, once.
+      labels: { minimize: 'Minimize window', close: 'Close window', pin: 'Keep window on top' },
       // The app-wide guard is the only one a minimized window has — its content, and therefore its
       // own onBeforeClose, is unmounted. Deliberately not confirm(): a modal would block the page.
       beforeClose: (d) => {

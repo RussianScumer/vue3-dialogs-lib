@@ -202,7 +202,7 @@ window and whose `defaultPrevented` is false.
 | **Programmatic slots** | `open(name, props, { slots })` accepting render functions | VFM's `useModalSlot()`. Lets one generic "shell" window type host arbitrary content without registering a component. **Breaks serializability** — must be explicitly marked non-persistable and dropped on hydrate |
 | **RTL** | `dir` detection: mirror grip order, swap `left`/`right` snap zones and header layout | Currently unaddressed anywhere in the docs. Snapping is where it actually bites |
 | **Touch-sized resize grips** | Widen the invisible hit area to 20px on `(pointer: coarse)`, keep the visual at 8px | The 768–1024px tablet band is not fullscreen and not mouse-driven. Eight 8px grips are unhittable with a finger |
-| **Default control labels** | `labels: { minimize, close, restore }` in options, `aria-label` only | "No strings in the library" is right for visible text; it currently means the default controls ship with *no* accessible name unless the consumer replaces the `controls` slot. An option with no default value, warned about in dev, keeps the principle and closes the hole |
+| ~~**Default control labels**~~ | *Shipped as VW-19:* `labels: { minimize, close, pin }` app-wide and per window, `aria-label` only, no defaults, dev warning when a control renders unnamed | "No strings in the library" is right for visible text; it used to mean the default controls shipped with *no* accessible name unless the consumer replaced the `controls` slot. `restore` was dropped from the shape: the taskbar is renderless, so its button is the consumer's own markup |
 
 ---
 

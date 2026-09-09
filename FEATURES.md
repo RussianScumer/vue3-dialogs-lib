@@ -267,6 +267,25 @@ one, and gives it a pin button in its own header to let go again.
 
 ---
 
+## Control labels
+
+The default `–`, `✕` and pin controls are glyphs, and the library ships no strings — `labels` is
+where their accessible names come from.
+
+- **`aria-label` only, no defaults.** `labels: { minimize, close, pin }` on the options, and the
+  same key on a `WindowSpec` or an `open()` call. An English default would be wrong in every app
+  that is not English, so an unnamed control renders no attribute at all.
+- **Merged key by key** — `open()` over the component's spec over the app-wide option, so a window
+  that renames only its ✕ keeps the app-wide `Minimize`. `labelsFor(id)` is the effective answer.
+- **The pin is a toggle.** It carries `aria-pressed` with its state, so one name covers both
+  directions.
+- **Runtime-only.** Labels belong to the locale of the running app, not to the window: they never
+  reach the descriptor or storage, and the app-wide option is read again on the next load.
+- **A dev warning, once per app**, when a frame renders a default control with no name and no
+  `controls` slot. Production is silent, and a replaced `controls` slot is never warned about.
+
+---
+
 ## Persistence
 
 Optional, via `persist: { key, storage }`. Any object with `getItem`/`setItem`/`removeItem`
@@ -369,7 +388,8 @@ Every window's content receives a `windowId` prop, supplied by `WindowHost`.
 - **Restored windows do not steal focus** on page load, and only the top window takes it.
 - The header is `tabindex="0"` and is the keyboard drag/resize surface, with a `:focus-visible`
   outline.
-- `aria-label` on the dialog from the window title; the snap ghost is `aria-hidden`.
+- `aria-label` on the dialog from the window title; the snap ghost is `aria-hidden`; the default
+  header controls take their names from `labels`, and the pin button carries `aria-pressed`.
 
 ---
 
