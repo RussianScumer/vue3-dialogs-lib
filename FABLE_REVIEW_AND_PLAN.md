@@ -225,7 +225,7 @@ A change made in the last 300 ms before the page goes away still reaches storage
 
 ### VW-16 — `geometry` fires for every user gesture
 
-**Roadmap:** none, API consistency · **Size:** M · **Depends on:** VW-13 · **Status:** open.
+**Roadmap:** none, API consistency · **Size:** M · **Depends on:** VW-13 · **Status:** done, merged into `master` for 0.3.0.
 
 #### Goal
 
@@ -259,7 +259,7 @@ the window moving without polling the descriptor.
 
 ### VW-17 — Hydration hardening
 
-**Roadmap:** §9 · **Size:** S · **Depends on:** VW-15 · **Status:** open.
+**Roadmap:** §9 · **Size:** S · **Depends on:** VW-15 · **Status:** done, merged into `master`.
 
 #### Goal
 
@@ -334,7 +334,7 @@ re-hydration drops.
 ### VW-19 — Accessible names for the default controls
 
 **Roadmap:** tier 2 "Default control labels" · **Size:** M · **Depends on:** VW-20 (independent
-lines, so it can land first) · **Status:** in progress on `vw-19-control-labels`.
+lines, so it can land first) · **Status:** done, merged into `master` for 0.3.0.
 
 #### Decision taken
 
