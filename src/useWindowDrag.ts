@@ -14,6 +14,13 @@ interface DragOptions {
   onArm?: (zone: SnapZone | null) => void
   /** A drag released over an armed zone. */
   onDrop?: (zone: SnapZone) => void
+  /**
+   * A gesture that actually moved the window has ended — released, or cancelled where it stood.
+   * Not called when `onDrop` is: the snap reports that move itself.
+   */
+  onEnd?: () => void
+  /** `onWindowKeydown`'s equivalent: one nudge or one keyboard resize step has been applied. */
+  onChange?: () => void
 }
 
 /**
@@ -71,10 +78,14 @@ export function useWindowDrag(handleRef: Ref<HTMLElement | null>, d: WindowDescr
     const el = e.currentTarget as HTMLElement
     if (el.hasPointerCapture(start.pointerId)) el.releasePointerCapture(start.pointerId)
     start = null
+    const moved = dragging
     dragging = false
     const zone = armed
     arm(null) // a ghost left behind by a cancelled drag would never go away
     if (zone && e.type !== 'pointercancel') options.onDrop?.(zone)
+    // One report per gesture, and none for a press that never passed SLOP: that is a click, and it
+    // moved nothing. A cancelled drag still reports — the window stayed where the pointer left it.
+    else if (moved) options.onEnd?.()
   }
 
   function bind(el: HTMLElement) {
@@ -130,10 +141,12 @@ export function onWindowKeydown(e: KeyboardEvent, d: WindowDescriptor, options: 
     if (!d.resizable) return
     e.preventDefault()
     Object.assign(d, clampSize(d.w + dx, d.h + dy, d))
+    options.onChange?.()
     return
   }
   if (!d.draggable) return
   e.preventDefault()
   d.x = clampX(d.x + dx, d.w, options.view, options.bounds)
   d.y = clampY(d.y + dy, d.h, options.view, options.bounds)
+  options.onChange?.()
 }

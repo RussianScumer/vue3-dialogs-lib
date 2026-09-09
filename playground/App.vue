@@ -425,9 +425,11 @@ function clearStorage() {
         <section>
           <h2>14 · Lifecycle events</h2>
           <p>
-            The log on the right is fed entirely by <code>win.on('*')</code>. Note what never appears there: typing in
-            a draft, and dragging a window. Both write straight onto the descriptor without passing through a store
-            method, which is exactly why persistence watches the stack deeply instead of listening to events.
+            The log on the right is fed entirely by <code>win.on('*')</code>. A drag, a resize or an arrow-key nudge
+            logs one <code>geometry</code> line when the gesture ends, never one per frame. Note what never appears
+            there: typing in a draft, and the frames within a gesture. Both write straight onto the descriptor without
+            passing through a store method, which is exactly why persistence watches the stack deeply instead of
+            listening to events.
           </p>
         </section>
 

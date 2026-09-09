@@ -48,6 +48,16 @@ const visual = computed<WindowVisualState>(() => props.state ?? 'open')
 /** Retained for the animation only: the store has already let go, so nothing here may be clicked. */
 const leaving = computed(() => visual.value === 'leaving')
 
+/**
+ * Hands a gesture's result back to the store so `on('geometry')` fires for it. The descriptor is
+ * already where the gesture left it — this is the report, not the move. Guarded because a window
+ * can be closed mid-gesture: the pointerup still arrives, and `setGeometry` would throw on an id
+ * the store has forgotten.
+ */
+function report(geom: Partial<Pick<WindowDescriptor, 'x' | 'y' | 'w' | 'h'>>) {
+  if (win.byId(d.id)) win.setGeometry(d.id, geom)
+}
+
 provideWindowContext(d)
 useWindowDrag(handle, d, {
   view,
@@ -58,13 +68,20 @@ useWindowDrag(handle, d, {
   onUndock: (pointerX) => win.undockForDrag(d.id, pointerX),
   onArm: (zone) => win.setPreview(zone, view),
   onDrop: (zone) => win.snap(d.id, zone, view),
+  // The pointer writes x/y straight onto the descriptor, frame by frame; the store hears about it
+  // once, when the gesture ends. `setGeometry` re-clamps and emits `geometry`, so a listener sees
+  // one event per move whichever path moved the window.
+  onEnd: () => report({ x: d.x, y: d.y }),
 })
 // Resizing by a grip is an explicit choice of size — it outranks the snap, which is dropped
 // without moving the window back.
 const resize = useWindowResize(d, {
   enabled: () => canResize.value,
   onStart: () => win.focus(d.id),
-  onEnd: () => win.undock(d.id),
+  onEnd: () => {
+    win.undock(d.id)
+    report({ w: d.w, h: d.h })
+  },
 })
 onMounted(() => el.value?.show()) // non-modal: background stays usable, taskbar clickable
 
@@ -234,7 +251,12 @@ onErrorCaptured((err) => {
 })
 
 function onKeydown(e: KeyboardEvent) {
-  onWindowKeydown(e, d, { view, bounds: options.bounds, enabled: interactive })
+  onWindowKeydown(e, d, {
+    view,
+    bounds: options.bounds,
+    enabled: interactive,
+    onChange: () => report({ x: d.x, y: d.y, w: d.w, h: d.h }),
+  })
 }
 
 /**

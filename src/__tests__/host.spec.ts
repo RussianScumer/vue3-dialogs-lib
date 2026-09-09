@@ -325,6 +325,58 @@ describe('WindowHost', () => {
     expect(win.dockZone(id)).toBeNull()
   })
 
+  it('emits geometry once per drag, once per resize and once per nudge', async () => {
+    const { wrapper, win } = app()
+    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 }).id
+    await nextTick()
+    const seen = vi.fn()
+    win.on('geometry', seen)
+
+    // A drag: nothing while the pointer moves, one event on release.
+    const head = wrapper.find('.vw__head').element
+    pointer(head, 'pointerdown', 1, 400, 320)
+    pointer(head, 'pointermove', 1, 500, 360)
+    pointer(head, 'pointermove', 1, 560, 380)
+    expect(seen).not.toHaveBeenCalled()
+    pointer(head, 'pointerup', 1, 560, 380)
+    expect(seen).toHaveBeenCalledTimes(1)
+    expect(seen.mock.calls[0]![0]).toMatchObject({ type: 'geometry', id })
+
+    // A press that never passed the slop is a click, and moved nothing.
+    pointer(head, 'pointerdown', 2, 560, 380)
+    pointer(head, 'pointerup', 2, 562, 381)
+    expect(seen).toHaveBeenCalledTimes(1)
+
+    const grip = wrapper.find('[data-vw-grip="se"]').element
+    pointer(grip, 'pointerdown', 3, 700, 600)
+    pointer(grip, 'pointermove', 3, 750, 630)
+    expect(seen).toHaveBeenCalledTimes(1)
+    pointer(grip, 'pointerup', 3, 750, 630)
+    expect(seen).toHaveBeenCalledTimes(2)
+
+    await wrapper.find('.vw__head').trigger('keydown', { key: 'ArrowRight' })
+    expect(seen).toHaveBeenCalledTimes(3)
+    await wrapper.find('.vw__head').trigger('keydown', { key: 'ArrowRight', shiftKey: true })
+    expect(seen).toHaveBeenCalledTimes(4)
+    // A key the window path ignores reports nothing.
+    await wrapper.find('.vw__head').trigger('keydown', { key: 'Enter' })
+    expect(seen).toHaveBeenCalledTimes(4)
+  })
+
+  it('a drag dropped into a zone emits geometry once, from the snap', async () => {
+    const { wrapper, win } = app()
+    win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 })
+    await nextTick()
+    const seen = vi.fn()
+    win.on('geometry', seen)
+
+    const head = wrapper.find('.vw__head').element
+    pointer(head, 'pointerdown', 1, 400, 320)
+    pointer(head, 'pointermove', 1, 3, 320)
+    pointer(head, 'pointerup', 1, 3, 320)
+    expect(seen).toHaveBeenCalledTimes(1)
+  })
+
   it('goes fullscreen and inert below the mobile breakpoint', async () => {
     const { wrapper, win } = app()
     const id = win.open('editor', { id: 1 }, { x: 100, y: 100 }).id
