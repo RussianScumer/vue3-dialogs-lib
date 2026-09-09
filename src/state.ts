@@ -1,5 +1,13 @@
 import { computed, reactive, shallowRef } from 'vue'
-import { DEFAULT_MIN_H, DEFAULT_MIN_W, cascade, clampDescriptor, clampSize, snapRect } from './geometry'
+import {
+  DEFAULT_MIN_H,
+  DEFAULT_MIN_W,
+  cascade,
+  centerRect,
+  clampDescriptor,
+  clampSize,
+  snapRect,
+} from './geometry'
 import type {
   Bounds,
   CloseGuard,
@@ -10,6 +18,7 @@ import type {
   ResolvedOptions,
   SnapZone,
   Viewport,
+  WindowDefaults,
   WindowDescriptor,
   WindowEvent,
   WindowEventType,
@@ -77,6 +86,13 @@ function makeHandle<T>(id: string, result: Promise<WindowResult<T>>): WindowHand
 
 export function createStore(options: ResolvedOptions) {
   const s = reactive({ stack: [] as WindowDescriptor[], topZ: 10 })
+  /**
+   * The viewport, once the plugin has one to give — `createViewport()` runs after the store is
+   * built, so `attachViewport` hands it over rather than the constructor taking it. Until then, and
+   * on a server, this is the same default `createViewport()` itself starts from: a store used
+   * without the plugin still centres a window somewhere sensible rather than at NaN.
+   */
+  let viewport: Viewport = { w: 1024, h: 768 }
   /** Ids that arrived from storage rather than from a fresh open(). */
   const restoredIds = new Set<string>()
   /**
@@ -121,6 +137,16 @@ export function createStore(options: ResolvedOptions) {
    * because a window opened with labels renders its header in the same tick.
    */
   const controlLabels = reactive(new Map<string, ControlLabels>())
+  /**
+   * The windows opened with `modal: true`. Runtime-only beside `pins`, and for a reason closer to
+   * `owners`: a modal is a question, and a question must not survive a reload — so it is filtered
+   * out of the persisted blob entirely rather than merely losing a flag. Reactive, because the
+   * scrim, the render band and every other window's `inert` all follow it.
+   *
+   * A Set rather than a Map: modality is decided at `open()` and never toggled, so there is no
+   * "capable but off" state for a value to carry.
+   */
+  const modals = reactive(new Set<string>())
   /**
    * Functions, so they can never be persisted — same placement rationale as `docks`. Guards come
    * from mounted content and die with it.
@@ -323,6 +349,7 @@ export function createStore(options: ResolvedOptions) {
     restoredIds.delete(id)
     docks.delete(id)
     pins.delete(id)
+    modals.delete(id)
     controlLabels.delete(id)
     taskbarRects.delete(id)
     closeGuards.delete(id)
@@ -341,6 +368,7 @@ export function createStore(options: ResolvedOptions) {
     owners.clear()
     docks.clear()
     pins.clear()
+    modals.clear()
     controlLabels.clear()
     taskbarRects.clear()
     closeGuards.clear()
@@ -521,6 +549,13 @@ export function createStore(options: ResolvedOptions) {
   ): WindowHandle {
     if (!options.components[name]) throw new Error(`[vue3-dialogs-lib] unknown window "${name}"`)
 
+    // Before anything is evicted or opened: a call naming a preset that does not exist is the
+    // caller asking for something that is not there, exactly as an unknown name or owner id is.
+    const preset = opts.preset === undefined ? null : options.presetFor(opts.preset)
+    if (opts.preset !== undefined && !preset) {
+      throw new Error(`[vue3-dialogs-lib] unknown preset "${opts.preset}"`)
+    }
+
     const owner = opts.owner ?? null
     if (owner !== null) {
       // Unknown owner throws at call time, exactly as an unknown name does: both are the caller
@@ -560,8 +595,23 @@ export function createStore(options: ResolvedOptions) {
       }
     }
 
-    // Precedence: the open() call, then the component's spec, then the library default.
-    const defs = options.defaultsFor(name)
+    // Precedence: the open() call, then the named preset, then the component's spec, then the
+    // library default. A preset is named at the call site, so it outranks the component's own spec
+    // and loses to the explicit options of that call.
+    const spec = options.defaultsFor(name)
+    const defs: WindowDefaults = preset ? { ...spec, ...preset } : spec
+    // Resolved before the descriptor because it decides `minimizable` as well: a minimized modal
+    // would freeze the desktop behind a scrim with nothing left to dismiss it, so modality forces
+    // the flag off exactly as an owner does.
+    const modal = (opts.modal ?? defs.modal) === true
+    const place = cascade(s.stack.length, { x: opts.x, y: opts.y, w: opts.w ?? defs.w, h: opts.h ?? defs.h })
+    // `center` needs the size, which `cascade` has just resolved. An explicit x or y still wins,
+    // one axis at a time — a call that pins only `y` keeps the centred `x`.
+    if ((opts.placement ?? defs.placement ?? 'cascade') === 'center') {
+      const centred = centerRect(place.w, place.h, viewport)
+      if (opts.x === undefined) place.x = centred.x
+      if (opts.y === undefined) place.y = centred.y
+    }
     const d: WindowDescriptor = {
       id: newId(),
       name,
@@ -569,13 +619,13 @@ export function createStore(options: ResolvedOptions) {
       state: null,
       title: opts.title ?? defs.title ?? '',
       minimized: false,
-      ...cascade(s.stack.length, { x: opts.x, y: opts.y, w: opts.w ?? defs.w, h: opts.h ?? defs.h }),
+      ...place,
       z: ++s.topZ,
       meta: opts.meta ?? {},
       // Forced for an owned window, not defaulted: a sheet the user cannot dismiss is a trap, and a
       // minimized sheet is a question with nothing left to answer it about.
       closable: owner !== null ? true : (opts.closable ?? defs.closable ?? true),
-      minimizable: owner !== null ? false : (opts.minimizable ?? defs.minimizable ?? true),
+      minimizable: owner !== null || modal ? false : (opts.minimizable ?? defs.minimizable ?? true),
       draggable: opts.draggable ?? defs.draggable ?? true,
       resizable: opts.resizable ?? defs.resizable ?? true,
       minW: opts.minW ?? defs.minW ?? DEFAULT_MIN_W,
@@ -589,6 +639,9 @@ export function createStore(options: ResolvedOptions) {
     // window pin-capable, and the resolved value is whether it starts pinned.
     const fixed = opts.fixed ?? defs.fixed
     if (fixed !== undefined) pins.set(d.id, fixed)
+    // Not on the descriptor either, and for a stronger reason than the pin: `persist.ts` drops a
+    // modal from the blob on the way out, so this map is the only record that it is one.
+    if (modal) modals.add(d.id)
     // Merged rather than replaced, and only stored when there is something to store: a window that
     // names one control keeps the app-wide names for the rest.
     const labels = { ...defs.labels, ...opts.labels }
@@ -656,6 +709,38 @@ export function createStore(options: ResolvedOptions) {
     require(id)
     pins.set(id, pinned)
     if (pinned) undock(id)
+  }
+
+  /** True when this window was opened as a modal — decided at `open()` and never toggled. */
+  function isModal(id: string): boolean {
+    return modals.has(id)
+  }
+
+  /**
+   * The modal the scrim sits under: the highest-`z` one that is on screen, or null when no modal is
+   * open. Minimized is asked about for completeness only — a modal is forced non-minimizable — and
+   * costs nothing next to the `z` comparison the answer needs anyway.
+   */
+  function topModalId(): string | null {
+    let top: WindowDescriptor | null = null
+    for (const w of s.stack) {
+      if (modals.has(w.id) && !w.minimized && (!top || w.z > top.z)) top = w
+    }
+    return top?.id ?? null
+  }
+
+  /**
+   * True when a modal is open and this window is neither it nor one of its own children — the one
+   * condition that makes a frame `inert` for a reason outside itself.
+   *
+   * False for every id when no modal is open, which is what keeps a desktop without one exactly the
+   * desktop it was. A second modal below the top one is blocked like anything else: stacked modals
+   * dim each other, and the lower one is not the question being asked.
+   */
+  function isBlockedByModal(id: string): boolean {
+    const top = topModalId()
+    if (top === null || top === id) return false
+    return !ancestorsOf(id).includes(top)
   }
 
   /**
@@ -741,6 +826,16 @@ export function createStore(options: ResolvedOptions) {
     }
   }
 
+  /**
+   * Hands the store the app's viewport tracker. Called once by the plugin, inside its effect scope,
+   * right after `createViewport()` — the store is built first, so this is the seam rather than a
+   * constructor argument. Only `placement: 'center'` reads it; everything else already receives a
+   * viewport from its caller.
+   */
+  function attachViewport(view: Viewport): void {
+    viewport = view
+  }
+
   function isRestored(id: string): boolean {
     return restoredIds.has(id)
   }
@@ -758,6 +853,7 @@ export function createStore(options: ResolvedOptions) {
     owners.clear()
     docks.clear()
     pins.clear()
+    modals.clear()
     controlLabels.clear()
     taskbarRects.clear()
     closeGuards.clear()
@@ -816,9 +912,13 @@ export function createStore(options: ResolvedOptions) {
     isPinned,
     isPinnable,
     setPinned,
+    isModal,
+    topModalId,
+    isBlockedByModal,
     labelsFor,
     setPreview,
     clampAll,
+    attachViewport,
     isRestored,
     hydrate,
   }

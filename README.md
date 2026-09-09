@@ -11,6 +11,8 @@ hidden), and with persistence on it survives a page reload.
 
 ## Documentation
 
+- [Window modes](./docs/window-modes.md) — every kind of window the library opens (plain,
+  restricted, pinned, owned sheet, modal), with a small example of each and what survives a reload.
 - [How it works](./docs/how-it-works.md) — the descriptor model, the render path, geometry,
   persistence, and why the windows are non-modal.
 - [Recipes](./docs/recipes.md) — complete use cases with code.
@@ -54,6 +56,11 @@ app.use(createWindows({
   labels: {                              // accessible names for the default –, ✕ and ▲ controls
     minimize: 'Minimize', close: 'Close', pin: 'Keep on top', // no defaults; see Control labels
   },
+  presets: {                             // named bundles of window defaults, picked per open() call
+    dialog: { modal: true, placement: 'center', w: 420, h: 200, draggable: false, resizable: false },
+  },
+  modal: { inertRoot: '#page' },         // optional: what goes inert while a modal is open
+
   async: {                               // fallback loading/error states for every window type
     loadingComponent: WindowLoading,     // per-type overrides live on the component's spec
     errorComponent: WindowError,         // also used when a window's content throws
@@ -468,6 +475,75 @@ and the keymap all still follow `z`, so a pinned window drawn over the desktop i
 the keyboard is talking to unless it was also the last one focused. Click it and it becomes active
 like any other window.
 
+## Modal windows
+
+`modal: true` opens a window above every other band, dims the page behind it, and makes every other
+window on the desktop `inert` until it closes:
+
+```js
+const answer = await win.open('confirm', { message }, { modal: true }).result
+```
+
+It is still `dialog.show()`, never `showModal()`. There is no browser top layer, so `zIndexBase`,
+the taskbar, the pinned band and the leaving animation all keep working, and a desktop with no
+modal open is byte-for-byte the desktop it was.
+
+- **A third render band**, above the pinned one and above the snap ghost. A sheet opened with
+  `{ owner: <the modal> }` rides up with it; a *second* modal opened over the first is dimmed by it
+  and inert, as a stacked dialog should be.
+- **One scrim**, under the topmost modal. Its position and stacking are inline, so it blocks the
+  pointer with no stylesheet imported; the tint is `--vtd-scrim-bg` in the optional sheet. It has no
+  click handler — click-outside-to-dismiss stays your decision.
+- **Never minimizable**, forced the way an owned window's flags are: a minimized modal would freeze
+  the desktop with nothing left to answer it.
+- **ESC dismisses it** through `requestClose(id)`, so a close guard still runs, rather than
+  minimizing it.
+- **Never persisted.** A modal is filtered out of the blob entirely, exactly as an owned window is:
+  a question must not come back after a reload. It is decided at `open()` and never toggled from the
+  header, unlike the pin.
+
+```js
+win.isModal(id)            // opened as a modal
+win.topModalId()           // the modal the scrim sits under, or null
+win.isBlockedByModal(id)   // a modal is open and this window is neither it nor its child
+```
+
+**Tab is not trapped.** The scrim stops the pointer and nothing stops the keyboard: without help,
+Tab from inside a modal walks into your own page. A focus-trap loop is a non-goal, so the answer is
+opt-in and uses the same mechanism as everything else here:
+
+```js
+app.use(createWindows({ components, modal: { inertRoot: '#page' } }))
+```
+
+That element goes `inert` for as long as a modal is open, and whatever `inert` it already had is
+handed back afterwards. It must **not** contain `WindowHost` — `inert` covers a subtree, so an
+ancestor of the windows would take the modal with it; in development such an element warns and is
+ignored.
+
+### Presets
+
+`presets` are named bundles of the same options a `WindowSpec` takes, chosen per call:
+
+```js
+app.use(createWindows({
+  components,
+  presets: {
+    dialog: { modal: true, placement: 'center', w: 420, h: 200,
+              draggable: false, resizable: false },
+  },
+}))
+
+const ok = await win.open('confirm', { message }, { preset: 'dialog' }).result
+```
+
+A preset is named at the call site, so it outranks the component's own spec and loses to the
+explicit options of that call: `open()` → preset → spec → library default. An unknown preset name
+throws at `open()`, as an unknown component name does.
+
+`placement: 'center'` puts a window in the middle of the viewport instead of the cascade; an
+explicit `x` or `y` still wins, one axis at a time. The default is `'cascade'`.
+
 ## Control labels
 
 The default header controls are glyphs — `–`, `✕` and the pin's `▲` — and the library ships no
@@ -599,13 +675,17 @@ reachable while the user resizes the window down.
 - **Two tabs on one persist key do not merge.** The second writer is detected and the receiving tab
   stops writing rather than losing a session — see [Persistence](#persistence) — but nothing is
   merged, and a tab that ignores `onExternalChange` is stale until it reloads.
+- **A modal does not trap Tab.** The scrim blocks the pointer; the keyboard still reaches your page
+  unless you point `modal: { inertRoot }` at it — see [Modal windows](#modal-windows).
 - Resize grips sit in the outermost 4px of the window, which is where a body scrollbar also lands.
 
 ## Non-goals
 
-Modal mode, confirm/alert helpers, data fetching or staleness resolution, cross-device layout sync,
-tiling window management (docked rails, tab stacks, splitters), and a bundled design system.
-Snapping is limited to the Windows edge gestures described above.
+`showModal()` and the browser top layer, a focus-trap loop, confirm/alert helpers, data fetching or
+staleness resolution, cross-device layout sync, tiling window management (docked rails, tab stacks,
+splitters), and a bundled design system. Snapping is limited to the Windows edge gestures described
+above. [Modal windows](#modal-windows) are the narrow reading of the first two: an opt-in scrim and
+an `inert` sweep, per window, with the top layer and the trap still out.
 
 ## Development
 

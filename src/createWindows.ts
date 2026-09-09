@@ -23,6 +23,9 @@ export function createWindows(userOptions: WindowsOptions): Plugin {
       const scope = effectScope(true)
       const view = scope.run(() => {
         const v = createViewport()
+        // Before persistence, so a hydration that lands here already has a real viewport to
+        // clamp against — and because `placement: 'center'` is unanswerable without one.
+        store.attachViewport(v)
         setupPersist(store, options)
         setupKeymap(store, options, v)
         return v

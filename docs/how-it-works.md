@@ -219,7 +219,8 @@ properties compose with it instead of overwriting it.
 
 ## Why non-modal
 
-Windows are opened with `dialog.show()`, not `showModal()`.
+Windows are opened with `dialog.show()`, not `showModal()` — modal windows included, see
+[Modal windows](#modal-windows).
 
 - Several windows can be open at once, the page behind stays usable, and the taskbar stays
   clickable — all impossible with a modal, which makes everything else inert.
@@ -322,6 +323,78 @@ else.
 
 The cost is explicit and accepted: a reload brings a pinned window back unpinned and draggable, in
 exactly the way it brings a snapped one back undocked.
+
+## Modal windows
+
+`modal` is the fourth piece of runtime-only per-window state, beside `docks`, `owners` and `pins`,
+and the one with the sharpest reason: a modal is a question, so it is not merely unpersisted like a
+pin — it is dropped from the blob entirely, exactly as an owned window is.
+
+```
+modals: Set<id>                    // runtime-only, beside `pins` — never persisted
+```
+
+A Set rather than a Map, unlike `pins`: modality is decided at `open()` and never toggled from the
+header, so there is no "capable but off" state for a value to carry.
+
+```
+open(..., { modal })   → modals.add(id); minimizable is forced false, as it is for an owner's child
+render band            → modal: zIndexBase + 3 * topZ + z    (pinned: 1 * topZ, plain: 0)
+scrim                  → one element, at the top modal's rendered z minus one
+every other window     → BaseWindow's `blocked` goes true; `inert` on its own <dialog>
+ESC on a modal         → requestClose(id) — dismiss through the guards, not minimize
+close / closeAll /
+  hydrate              → the entry is dropped where the `pins` entry is
+persistence            → filtered out of the blob, beside the owned windows
+```
+
+The band is asked for as *"not blocked while a modal is open"* rather than *"is a modal"*, which
+answers two questions with one predicate: a sheet owned by the modal rides up into the top band with
+it — a question drawn underneath the window asking it is not a question — and a *lower* modal, which
+is blocked like everything else, stays under the scrim where stacked dialogs belong.
+
+The `inert` sweep is not new machinery. `BaseWindow` has recorded and restored `inert` since owned
+windows shipped, so widening one condition covers a modal opened over a window that is already an
+inert owner: it is still inert when the modal goes away.
+
+| | Owner-scoped sheet (`owner`) | Desktop-scoped modal (`modal`) |
+| --- | --- | --- |
+| What goes inert | the owner's own `<dialog>` | every other window, plus `modal.inertRoot` if set |
+| Backdrop | none | one scrim, under the top modal |
+| Band | the owner's, at `owner.z + 1` | the third band, above pinned and above the ghost |
+| Other windows | fully interactive, drag included | inert |
+| Persistence | filtered out of the blob | filtered out of the blob |
+
+**The hole, named.** `inert` covers the windows; it does not cover the consumer's page, and the
+scrim only stops the pointer. Tab therefore walks out of a modal into the page behind unless
+`modal: { inertRoot }` names an element to inert alongside — opt-in, because a focus-trap loop is
+the founding non-goal. That element may not contain `WindowHost`: `inert` covers a subtree, so an
+ancestor of the windows would take the modal with it, which is measured against the rendered frames
+and refused with a dev warning rather than only documented.
+
+The scrim itself carries its position, size and stacking inline, for the reason the window geometry
+is inline: a modal has to block a click with no stylesheet imported. `style.css` adds the tint
+(`--vtd-scrim-bg`) and the fade, nothing else. `WindowHost` keeps the scrim while the modal's frame
+is still leaving, so the two fade out together instead of the page snapping back undimmed.
+
+## Presets and placement
+
+`presets` is a map of named `WindowDefaults` on the options, and `open(name, props, { preset })`
+picks one. It sits one step wider than the precedence that was already there:
+
+```
+the open() call  →  the named preset  →  the component's spec  →  the library default
+```
+
+A preset is named at the call site, which is why it outranks the component's own spec and loses to
+the explicit options of that call. An unknown name throws at `open()`, before anything is evicted or
+opened, exactly as an unknown owner id does.
+
+`placement: 'center'` centres a window instead of cascading it. Centring needs the viewport, which
+`createStore(options)` does not have — the store is built before `createViewport()` — so the plugin
+hands it over with `store.attachViewport(view)` inside its own effect scope, and the store holds the
+same `1024 × 768` default `createViewport()` starts from until then. An explicit `x` or `y` still
+wins, one axis at a time.
 
 ## Control labels
 
@@ -499,8 +572,10 @@ they can act on.
 
 ## What the library deliberately does not do
 
-No modal mode, no confirm/alert helpers, no data fetching, no staleness resolution, no cross-device
-sync, no tiling window management (docked rails, tab stacks, splitters), no design system. Edge
+No `showModal()` and no browser top layer, no focus-trap loop, no confirm/alert helpers, no data
+fetching, no staleness resolution, no cross-device sync, no tiling window management (docked rails,
+tab stacks, splitters), no design system. [Modal windows](#modal-windows) are the narrow reading of
+the first two — an opt-in scrim and an `inert` sweep, per window — and not the top layer. Edge
 snapping is the one exception, and it stays geometry-only. Minimize and restore are not announced
 to screen readers, because announcing them needs strings and the library ships none. See [recipes](./recipes.md) for the patterns that
 cover the gaps.

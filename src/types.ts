@@ -78,7 +78,28 @@ export interface WindowDefaults {
    * app-wide option is simply read again on the next install.
    */
   labels?: ControlLabels
+  /**
+   * Open this window as a modal: it renders above every other band, dims the page behind it with a
+   * scrim, and makes every other window `inert` until it closes. Still `show()`, never
+   * `showModal()` — there is no top layer, so the taskbar, `zIndexBase`, the pinned band and the
+   * leaving lifecycle all keep working, and a desktop with no modal open is exactly the desktop
+   * that existed before this option did.
+   *
+   * Decided at `open()` time and never toggled from the header, unlike `fixed`: a window that
+   * stopped being modal mid-question would be a question answered by accident. Runtime-only for
+   * the reason `fixed` is, plus a sharper one — a modal is **filtered out of the persisted blob**
+   * entirely, exactly as an owned window is, because a question must not come back after a reload.
+   */
+  modal?: boolean
+  /**
+   * Where a window with no explicit `x`/`y` opens: cascaded down the desktop like every window
+   * before it, or centred in the viewport. An explicit `x`/`y` outranks both.
+   */
+  placement?: WindowPlacement
 }
+
+/** Where a fresh window is placed when the call gave no `x`/`y`. */
+export type WindowPlacement = 'cascade' | 'center'
 
 export interface OpenOptions extends WindowDefaults {
   x?: number
@@ -96,6 +117,12 @@ export interface OpenOptions extends WindowDefaults {
    * is why the link lives in a runtime-only map and not on the descriptor.
    */
   owner?: string
+  /**
+   * A named bundle of `WindowDefaults` from the `presets` option. It is chosen at the call site, so
+   * it outranks the component's own spec and loses to the explicit options of that call. An unknown
+   * name throws at `open()`, exactly as an unknown component name does.
+   */
+  preset?: string
 }
 
 export interface Viewport {
@@ -364,6 +391,30 @@ export interface WindowsOptions {
   keymap?: KeymapOptions
   /** Accessible names for the default header controls. No defaults; per window under `labels` too. */
   labels?: ControlLabels
+  /**
+   * Named bundles of `WindowDefaults`, picked per call with `open(name, props, { preset })`. The
+   * whole `el-dialog` shape — modal, centred, fixed size, no chrome — is one entry here rather than
+   * an opinion the library ships.
+   */
+  presets?: Record<string, WindowDefaults>
+  /** Modal behaviour that belongs to the app rather than to one window. */
+  modal?: ModalOptions
+}
+
+export interface ModalOptions {
+  /**
+   * The element made `inert` while a modal is open: the consumer's own page, which the scrim covers
+   * against the pointer but which Tab can still walk into. Opt-in and unset by default, because a
+   * focus-trap loop is the founding non-goal — without this a modal blocks clicks but not Tab.
+   *
+   * It must not contain `WindowHost`: `inert` covers a subtree, so an ancestor of the windows would
+   * take the modal with it. In dev an element that does warns and is ignored.
+   */
+  inertRoot?: string | HTMLElement
+}
+
+export interface ResolvedModal {
+  inertRoot: string | HTMLElement | null
 }
 
 export interface ResolvedOptions {
@@ -378,10 +429,14 @@ export interface ResolvedOptions {
   keymap: ResolvedKeymap
   /** App-wide control names, empty when the consumer set none. */
   labels: ControlLabels
+  /** App-wide modal behaviour; `inertRoot` is null unless the consumer asked for it. */
+  modal: ResolvedModal
   /** Memoized component resolution; loader functions become async components. */
   resolve(name: string): Component
   /** The `WindowSpec` defaults for a name, or an empty object. */
   defaultsFor(name: string): WindowDefaults
+  /** The named preset's defaults, or null when no preset by that name was registered. */
+  presetFor(name: string): WindowDefaults | null
   /**
    * The error component for a name — per-type, else app-wide, else null. `BaseWindow` reads it for
    * a content component that threw; `resolve()` has already handed the same one to

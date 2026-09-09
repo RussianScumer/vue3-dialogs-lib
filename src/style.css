@@ -78,8 +78,27 @@
   border-radius: var(--vtd-ghost-radius, var(--vtd-radius, 8px));
 }
 
+/* Modal scrim: the page dimmed behind a modal window. Position, size and stacking are inline on
+   the element, so a modal still blocks clicks with no stylesheet imported — this is the tint and
+   the fade only. The fade-in shares --vtd-motion-duration with the window it belongs to; the scrim
+   is unmounted with that window's frame, so both leave together. */
+.vw-scrim {
+  background: var(--vtd-scrim-bg, rgba(0, 0, 0, 0.4));
+  animation: vw-scrim-in var(--vtd-motion-duration, 0ms) ease;
+}
+
+@keyframes vw-scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+
 /* Dark defaults only — still fallbacks, so a consumer value keeps winning. */
 @media (prefers-color-scheme: dark) {
+  .vw-scrim {
+    background: var(--vtd-scrim-bg, rgba(0, 0, 0, 0.6));
+  }
+
   .vw {
     --_vtd-bg: var(--vtd-bg, #1b1b1f);
     --_vtd-border: var(--vtd-border, 1px solid rgba(255, 255, 255, 0.15));

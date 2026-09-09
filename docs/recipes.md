@@ -761,3 +761,74 @@ Three things worth knowing about how the chords are delivered:
 - **It is scoped to the app, not to the page's lifetime.** The listener lives in the plugin's
   effect scope alongside the viewport tracker, so `app.unmount()` takes it with it, and nothing is
   bound at all when there is no DOM.
+
+## 23 · Ask a question the whole desktop has to answer
+
+Recipe 20's sheet blocks exactly one window — the one that asked. When the question is about the
+desktop rather than about a document, open it as a modal instead:
+
+```js
+const answer = await win.open('confirm', { message }, { modal: true }).result
+```
+
+The page behind is dimmed by a scrim, every other window's `<dialog>` goes `inert`, and the modal
+renders above both the pinned band and the snap ghost. It is still `show()`, never `showModal()`:
+there is no browser top layer, so your taskbar, `zIndexBase` and the leaving animation keep working,
+and a desktop with no modal open is exactly the desktop you had.
+
+|  | Sheet — `{ owner: id }` | Modal — `{ modal: true }` |
+| --- | --- | --- |
+| Scope | one window: its owner | the desktop |
+| What goes inert | the owner's own `<dialog>` | every other window |
+| Backdrop | none | one scrim, under the top modal |
+| Other windows | fully usable, drag included | inert |
+| Where it sits | one `z` above its owner | the top band, above pinned |
+| ESC | dismisses it | dismisses it |
+| Persisted | never | never |
+
+Both settle a result on every path that takes them away, so an unanswered question reads as "no"
+rather than hanging the caller — see recipe 21.
+
+Give the shape a name once instead of spelling it at every call site:
+
+```js
+app.use(createWindows({
+  components,
+  presets: {
+    dialog: { modal: true, placement: 'center', w: 420, h: 200,
+              draggable: false, resizable: false },
+  },
+}))
+
+const ok = await win.open('confirm', { message }, { preset: 'dialog' }).result
+```
+
+A preset is named at the call site, so it outranks the component's own spec and loses to the
+explicit options of that call — `open()` → preset → spec → default. An unknown name throws at
+`open()`.
+
+Two things to decide yourself, because the library takes no position on either:
+
+- **Tab.** The scrim stops the pointer and nothing stops the keyboard, so Tab walks out of a modal
+  into your page. Point `modal: { inertRoot }` at the element that holds your page content and it
+  goes `inert` while a modal is open:
+
+  ```js
+  createWindows({ components, modal: { inertRoot: '#page' } })
+  ```
+
+  It must not contain `WindowHost` — `inert` covers a subtree, so an ancestor of the windows would
+  make the modal itself unclickable. Mount the host beside your page content, not inside it.
+
+- **Clicking the scrim.** It has no click handler at all. If dismissing that way is right for your
+  app, it is two lines of your own:
+
+  ```js
+  document.addEventListener('pointerdown', (e) => {
+    if ((e.target as Element).classList.contains('vw-scrim')) void win.requestClose(win.topModalId())
+  })
+  ```
+
+The tint is `--vtd-scrim-bg` in the optional stylesheet (`rgba(0, 0, 0, 0.4)`, and a darker default
+under `prefers-color-scheme: dark`). Position and stacking are inline on the element, so a modal
+blocks clicks even with no stylesheet imported at all.
