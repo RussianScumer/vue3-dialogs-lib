@@ -2,6 +2,88 @@
 
 Notable changes to `@korneevec/vue3-dialogs-lib`. Dates are release dates; unreleased work sits at the top.
 
+## 0.3.0 — 2026-09-09
+
+### Added
+
+- **Modal windows.** `open(name, props, { modal: true })` opens a window that draws above every
+  other band, dims the page behind it with a single scrim, and makes every other window on the
+  desktop `inert` until it closes. It is still `dialog.show()`, never `showModal()`: there is no
+  browser top layer, so `zIndexBase`, the taskbar, the pinned band and the leaving animation all
+  keep working, and a desktop with no modal open is byte-for-byte the desktop 0.2.1 rendered —
+  `isBlockedByModal(id)` answers `false` for every id while no modal is open, which is what leaves
+  everything else untouched.
+
+  The scrim is one element under the topmost modal, positioned and stacked inline so it blocks the
+  pointer with no stylesheet imported; the tint is a new `--vtd-scrim-bg` token in the optional
+  sheet. Containment is `inert` — the same mechanism, and the same record-and-restore, an owner
+  already used for its own sheet — not a focus-trap loop, which stays a non-goal. A modal is forced
+  non-minimizable, and ESC dismisses it through `requestClose(id)` so a close guard still runs.
+
+  Modality is runtime-only, in a reactive `Set` beside `pins`: `WindowDescriptor` gains no field and
+  `SCHEMA` does not move. A modal is filtered out of the persisted blob entirely, exactly as an
+  owned window is — a question must not come back after a reload. New store methods `isModal(id)`,
+  `topModalId()` and `isBlockedByModal(id)`.
+
+  Tab is **not** trapped: the scrim stops the pointer and nothing stops the keyboard. The opt-in
+  answer is `modal: { inertRoot }`, an element that goes `inert` alongside — it must not contain
+  `WindowHost`, and in development one that does warns and is ignored. Said plainly rather than
+  papered over.
+
+  This narrows the founding non-goal rather than dropping it; the rejection bullet in
+  `_doc/ROADMAP-gaps.md` and the "non-modal by design" claims in the README and
+  `docs/how-it-works.md` were rewritten to match what the library now does.
+
+- **Presets and centring.** `presets: Record<string, WindowDefaults>` on the options are named
+  bundles of the same keys a `WindowSpec` takes, chosen per call with `{ preset: 'dialog' }`.
+  Precedence is `open()` → preset → the component's spec → the library default: a preset is named at
+  the call site, so it outranks the spec and loses to that call's explicit options. An unknown name
+  throws at `open()`, as an unknown component does. `placement: 'center'` puts a window in the
+  middle of the viewport instead of the cascade, one axis at a time, with an explicit `x` or `y`
+  still winning.
+
+- **Accessible names for the default controls.** `labels: { minimize, close, pin }`, app-wide on the
+  options and per window as a spec default or an `open()` option, merged key by key. `aria-label`
+  only — the library still ships no strings, it only places the consumer's. The pin renders
+  `aria-pressed` whether or not it was named, being a toggle. A window that renders a default
+  control with no name and no `controls` slot warns once per app in development instead of silently
+  shipping unnamed buttons. Labels are runtime-only and are dropped by `hydrate()`: a label belongs
+  to the running app's locale, not to the window.
+
+- **`geometry` fires for every user gesture.** Drag, resize and arrow-key nudges emit once at the
+  end of the gesture — not per frame — alongside the existing `snap()` and `setGeometry()`. A drop
+  into a snap zone still reports exactly once, from the snap. Re-clamping the whole stack after a
+  viewport resize stays silent, and that is now documented.
+
+- **[Window modes](./docs/window-modes.md)** — a guide to every kind of window the library opens:
+  plain, owned, pinned, modal, and what each one does to focus, ESC, persistence and the z bands.
+
+### Fixed
+
+- **Hydration respects a window's own size limits.** `normalize()` filled `minW`/`maxW` but never
+  ran `clampSize`, so a hand-edited or older blob with `w` below the minimum rendered under it until
+  the first resize.
+
+- **`hydrate()` tells listeners what it dropped.** It settled outstanding results as `closed` but
+  emitted no `close` event for a window that a `resume()` removed. Arrivals still emit no `open`:
+  that would change what `on('open')` means.
+
+- **A west or north resize grip clamps to `bounds` like a drag does.** Dragging the leading edge
+  could push the window's own top or left out of reach; the grip now stops where a drag would.
+
+- **`maxWindows` below one is treated as one, with a development warning.** It used to evict every
+  window and then open one anyway, leaving a desktop the option said could not exist.
+
+### Changed
+
+- `WindowDescriptor['state']` is typed `unknown` rather than `unknown | null`, which collapsed to
+  the same type and only read as if it did more.
+- `WindowTaskbar`'s `all` slot prop is typed `WindowDescriptor[]` instead of borrowing the
+  `minimized` computed's type.
+
+`SCHEMA` does not move in this release: nothing here is a persisted-shape change, and a reload
+restores exactly the windows 0.2.1 restored.
+
 ## 0.2.1 — 2026-09-08
 
 ### Fixed
