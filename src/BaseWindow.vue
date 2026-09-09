@@ -40,6 +40,8 @@ const d = props.descriptor
 const mobile = computed(() => view.w < options.mobileBreakpoint)
 /** Pinned above every other window, and inert to geometry for as long as it is. */
 const pinned = computed(() => win.isPinned(d.id))
+/** Opened as a modal: the top band, the scrim under it, and every other window inert. */
+const modal = computed(() => win.isModal(d.id))
 /**
  * The one notion of "this frame answers to input that moves it". Drag, resize, the header's arrow
  * keys and the maximize double-click all read it, so a window can never be half inert.
@@ -62,8 +64,13 @@ const closing = computed(() => win.isClosing(d.id))
 const labels = computed(() => win.labelsFor(d.id))
 /** True for a sheet: a window opened with `{ owner }`, which ESC dismisses instead of minimizing. */
 const owned = computed(() => win.ownerOf(d.id) !== null)
-/** True while this window owns a child. The child is the question; this frame stands down. */
-const blocked = computed(() => win.hasChild(d.id))
+/**
+ * True while this frame must not answer to input for a reason outside itself: it owns a child, or a
+ * modal somewhere else on the desktop is the only question being asked. One condition, so the
+ * `inert` watcher below — which records and restores whatever was already there — covers both, and
+ * a modal opened over a window that is already an inert owner leaves it inert afterwards.
+ */
+const blocked = computed(() => win.hasChild(d.id) || win.isBlockedByModal(d.id))
 const visual = computed<WindowVisualState>(() => props.state ?? 'open')
 /** Retained for the animation only: the store has already let go, so nothing here may be clicked. */
 const leaving = computed(() => visual.value === 'leaving')
@@ -195,6 +202,19 @@ const minTo = computed(() => {
   }
 })
 
+/**
+ * Which of the three render bands this frame sits in. The ghost occupies band 2 on its own.
+ *
+ * The modal band is asked for as "not blocked while a modal is open" rather than "is a modal",
+ * which answers two questions with one predicate: a sheet owned by the modal rides up with it —
+ * a question drawn underneath the window asking it is not a question — and a *lower* modal, which
+ * is blocked like everything else, stays under the scrim where stacked modals belong.
+ */
+const band = computed(() => {
+  if (win.topModalId() !== null && !win.isBlockedByModal(d.id)) return 3
+  return pinned.value ? 1 : 0
+})
+
 // The UA stylesheet gives <dialog> position:absolute; margin:auto; inset:0 —
 // all three must be cleared or centering fights the transform.
 const style = computed(() => ({
@@ -208,10 +228,11 @@ const style = computed(() => ({
   flexDirection: 'column' as const,
   overflow: 'hidden',
   boxSizing: 'border-box' as const,
-  // Two bands. `d.z` is always positive, so `topZ + d.z` puts every pinned window above every
-  // unpinned one while pinned windows keep their own relative order. Nothing persisted moves:
-  // `focus()` and `activeId` still see one stack.
-  zIndex: String(options.zIndexBase + (pinned.value ? win.s.topZ : 0) + d.z),
+  // Three bands, one counter apart. `d.z` is always positive and never exceeds `topZ`, so each
+  // band clears the one below it whatever the base is: unpinned, pinned, then — above the snap
+  // ghost at `2 * topZ + 1` — modal. Nothing persisted moves: `focus()` and `activeId` still see
+  // one stack.
+  zIndex: String(options.zIndexBase + band.value * win.s.topZ + d.z),
   width: mobile.value ? '100vw' : `${d.w}px`,
   height: mobile.value ? '100dvh' : `${d.h}px`,
   transform: mobile.value ? 'none' : `translate(${d.x}px, ${d.y}px)`,
@@ -263,10 +284,10 @@ function ownsEscape(target: EventTarget | null): boolean {
  */
 function onEscape(e: KeyboardEvent) {
   if (e.defaultPrevented || !active.value || ownsEscape(e.target)) return
-  // A sheet is dismissed by ESC rather than minimized — it is not minimizable, and dismissing is
-  // what the key means over a question. It goes through `requestClose`, so a child with a guard of
-  // its own is still asked. An inert owner never gets here: the UA does not deliver the event.
-  if (owned.value) {
+  // A sheet or a modal is dismissed by ESC rather than minimized — neither is minimizable, and
+  // dismissing is what the key means over a question. It goes through `requestClose`, so a guard of
+  // its own is still asked. An inert window never gets here: the UA does not deliver the event.
+  if (owned.value || modal.value) {
     e.preventDefault()
     void win.requestClose(d.id)
     return

@@ -129,13 +129,14 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
 
   const write = (): void => {
     if (stopped) return
-    // Owned windows are dropped on the way out, not filtered on the way in: the link lives in
-    // a runtime map, so a persisted child would come back as an ordinary window with no owner
-    // and no way to be answered.
+    // Owned and modal windows are dropped on the way out, not filtered on the way in: both links
+    // live in a runtime map, so a persisted child would come back as an ordinary window with no
+    // owner and no way to be answered, and a persisted modal as a question with nobody asking it —
+    // dimming the page on load over an answer that was given yesterday.
     const data: Snapshot = {
       schema: SCHEMA,
       topZ: store.s.topZ,
-      stack: store.s.stack.filter((w) => !store.ownerOf(w.id)),
+      stack: store.s.stack.filter((w) => !store.ownerOf(w.id) && !store.isModal(w.id)),
       writer: token,
     }
     try {

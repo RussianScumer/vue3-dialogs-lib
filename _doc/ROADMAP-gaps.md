@@ -208,13 +208,20 @@ window and whose `defaultPrevented` is false.
 
 ## Considered and rejected
 
-- **Modal mode / `showModal()` / page-wide backdrop / focus trap** — the founding non-goal; Tier 1
-  §4's owner-scoped modality is deliberately narrower and does not reopen it.
+- **`showModal()` / the browser top layer / a focus-trap loop** — still rejected, and for the
+  original reasons: the top layer would cost the taskbar, `zIndexBase`, the two existing bands and
+  the leaving lifecycle, and a trap loop is machinery this library does not want to own.
+  *Partly reopened as VW-21:* a page-wide backdrop and page-wide modality now exist as an **opt-in
+  per window** — `modal: true` draws a scrim and sweeps `inert` across every other window, while
+  still calling `show()`. A desktop with no modal open is unchanged. The one hole that leaves,
+  Tab walking out of the modal into the consumer's page, is named rather than papered over and
+  answered by the opt-in `modal: { inertRoot }` rather than by a trap.
 - **`confirm`/`alert`/`prompt` helpers** — still no. Tier 1 §4 gives the mechanism; the dialog is
   the consumer's component.
 - **Scroll lock, `reserveScrollBarGap`, `dismissableMask`, `persistent`, `modal-penetrable`,
-  swipe-to-close** — all consequences of an overlay this library does not have. Listing them here
-  so a future reader does not "discover" them as gaps.
+  swipe-to-close** — consequences of an overlay the library still does not want opinions about.
+  VW-21 added the scrim itself and nothing else: it carries no click handler, locks no scroll and
+  reserves no gutter. Listing them here so a future reader does not "discover" them as gaps.
 - **Tab stacks, docked rails, splitters** — the tiling non-goal stands. Tier 2's `tileAll()` is a
   one-shot geometry command, not a layout model.
 - **Persisting snap zones** — the runtime-only placement is a deliberate schema trade, documented

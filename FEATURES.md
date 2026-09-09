@@ -267,6 +267,46 @@ one, and gives it a pin button in its own header to let go again.
 
 ---
 
+## Modal windows
+
+`modal: true` — as an `open()` option, a `WindowSpec` default or a preset field — opens a window
+that dims the page behind it and is the only thing on the desktop that answers a click.
+
+- **Still `show()`, never `showModal()`.** No browser top layer, so `zIndexBase`, the taskbar, the
+  pinned band and the leaving lifecycle all keep working. A desktop with no modal open behaves
+  exactly as it did before the feature existed.
+- **A third z band.** A modal renders at `zIndexBase + 3 * topZ + z`, above the pinned band and
+  above the snap ghost. A sheet owned by the modal rides up with it; a second modal opened over the
+  first is dimmed by it and inert, as a stacked dialog should be.
+- **One scrim, under the topmost modal.** Position and stacking are inline, so it blocks the pointer
+  with no stylesheet imported; the tint is `--vtd-scrim-bg`. `aria-hidden`, and no click handler —
+  click-outside-to-dismiss is the consumer's decision.
+- **Containment is `inert`, not a trap.** Every other window's `<dialog>` goes inert — the same
+  mechanism, and the same record-and-restore, an owner already uses for its own sheet. Tab into the
+  consumer's page is *not* closed unless `modal: { inertRoot }` names an element to inert alongside;
+  that element may not contain `WindowHost`, and in dev one that does warns and is ignored.
+- **Never minimizable**, forced the way an owned window's flags are, and **ESC dismisses** it
+  through `requestClose` so a close guard still runs.
+- **Runtime-only, and unpersisted.** Modality lives in a reactive Set beside `pins`, never on the
+  descriptor — and a modal is filtered out of the blob entirely, exactly as an owned window is: a
+  question must not come back after a reload. Decided at `open()`, never toggled from the header.
+- **Store API** — `isModal(id)`, `topModalId()`, `isBlockedByModal(id)`. The last is false for every
+  id when no modal is open, which is what keeps everything else unchanged.
+
+---
+
+## Presets and placement
+
+- **`presets: Record<string, WindowDefaults>`** on the options, picked per call with
+  `open(name, props, { preset })`. Precedence is `open()` → preset → the component's spec → the
+  library default: a preset is named at the call site, so it outranks the spec and loses to the
+  explicit options of that call. An unknown name throws at `open()`.
+- **`placement: 'cascade' | 'center'`** on the same three levels. `center` puts the window in the
+  middle of the viewport; an explicit `x` or `y` still wins, one axis at a time. The default is
+  `cascade` — `40 + (index % 8) * 28` — unchanged.
+
+---
+
 ## Control labels
 
 The default `–`, `✕` and pin controls are glyphs, and the library ships no strings — `labels` is

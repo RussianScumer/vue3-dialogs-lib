@@ -16,6 +16,9 @@ import type {
 
 const NO_DEFAULTS: WindowDefaults = Object.freeze({})
 
+/** No presets registered: `presetFor` then answers null for every name, and `open()` throws. */
+const NO_PRESETS: Record<string, WindowDefaults> = Object.freeze({})
+
 /** No default names: every string in the library comes from the consumer. */
 const NO_LABELS: ControlLabels = Object.freeze({})
 
@@ -167,6 +170,7 @@ export function resolveOptions(options: WindowsOptions): ResolvedOptions {
   const cache = new Map<string, Component>()
   const insets = options.snap?.insets
   const globalAsync: AsyncWindowOptions = options.async ?? {}
+  const presets = options.presets ?? NO_PRESETS
 
   // Stripped once at install, so open() and hydration both read a plain defaults object, and the
   // async keys never travel towards the descriptor.
@@ -215,6 +219,7 @@ export function resolveOptions(options: WindowsOptions): ResolvedOptions {
     beforeClose: options.beforeClose ?? null,
     keymap: resolveKeymap(options.keymap),
     labels: options.labels ?? NO_LABELS,
+    modal: { inertRoot: options.modal?.inertRoot ?? null },
     resolve(name) {
       const cached = cache.get(name)
       if (cached) return cached
@@ -235,6 +240,9 @@ export function resolveOptions(options: WindowsOptions): ResolvedOptions {
     },
     defaultsFor(name) {
       return defaults[name] ?? NO_DEFAULTS
+    },
+    presetFor(name) {
+      return presets[name] ?? null
     },
     errorComponentFor(name) {
       return asyncFor(name).errorComponent ?? null

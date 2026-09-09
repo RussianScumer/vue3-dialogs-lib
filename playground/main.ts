@@ -39,6 +39,16 @@ createApp(App)
       // The library ships no strings, so the glyph controls have no accessible name until an app
       // gives them one. In dev an app that gives none is warned about, once.
       labels: { minimize: 'Minimize window', close: 'Close window', pin: 'Keep window on top' },
+      // The whole el-dialog shape as one named bundle: the call site says `{ preset: 'dialog' }`
+      // and nothing else. A preset outranks the component's own spec and loses to the options of
+      // the call that named it.
+      presets: {
+        dialog: { modal: true, placement: 'center', w: 420, h: 260, draggable: false, resizable: false },
+      },
+      // The scrim stops the pointer; nothing stops Tab. This is the opt-in that does. It names the
+      // wrapper around everything *except* WindowHost — an ancestor of the windows would make the
+      // modal itself inert, since `inert` covers a subtree, and the library warns and ignores one.
+      modal: { inertRoot: '.desktop' },
       // The app-wide guard is the only one a minimized window has — its content, and therefore its
       // own onBeforeClose, is unmounted. Deliberately not confirm(): a modal would block the page.
       beforeClose: (d) => {

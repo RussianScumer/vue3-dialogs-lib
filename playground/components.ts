@@ -55,6 +55,12 @@ export const components = {
     h: 190,
     result: null as unknown as boolean,
   },
+  // The desktop-scoped question, opened with `{ preset: 'dialog' }` — the preset in main.ts is what
+  // makes it modal, centred and chromeless, so nothing here says any of that.
+  modalDialog: {
+    component: () => import('./windows/ModalDialog.vue'),
+    result: null as unknown as boolean,
+  },
   // The chunk arrives; the component throws on mount.
   brokenPanel: { component: () => import('./windows/BrokenPanel.vue'), w: 380, h: 220 },
 }

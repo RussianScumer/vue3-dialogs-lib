@@ -28,6 +28,14 @@ export function cascade(index: number, opts: OpenOptions) {
   }
 }
 
+/**
+ * Where a `placement: 'center'` window opens. Only the position: the size is already resolved by
+ * the time this is asked, and centring must not change it.
+ */
+export function centerRect(w: number, h: number, view: Viewport): Rect {
+  return { x: Math.round((view.w - w) / 2), y: Math.round((view.h - h) / 2), w, h }
+}
+
 /** The one place size limits are applied, so pointer, keyboard and snap all agree. */
 export function clampSize(w: number, h: number, l: SizeLimits): { w: number; h: number } {
   return {

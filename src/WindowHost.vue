@@ -2,6 +2,7 @@
 import {
   computed,
   onBeforeUnmount,
+  onMounted,
   reactive,
   watch,
   type ComponentPublicInstance,
@@ -51,6 +52,14 @@ let generation = 0
 const frames = reactive(new Map<string, Frame>())
 const rendered = computed(() => [...frames.values()])
 
+/**
+ * Frames that were opened as modals. The store forgets a modal the instant it closes, but the frame
+ * lingers for its leave animation and the scrim has to linger with it — a modal fading out over a
+ * page that is already undimmed is the flicker this avoids. Plain rather than reactive: it is only
+ * ever read while the reactive `frames` map is being read, which is what drives the recompute.
+ */
+const modalFrames = new Set<string>()
+
 const els = new Map<string, HTMLElement>()
 const binders = new Map<string, (c: Element | ComponentPublicInstance | null) => void>()
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -94,6 +103,7 @@ function retire(id: string): void {
   if (timer !== undefined) clearTimeout(timer)
   timers.delete(id)
   frames.delete(id)
+  modalFrames.delete(id)
   els.delete(id)
   binders.delete(id)
 }
@@ -135,6 +145,7 @@ watch(
       const f = frames.get(id)
       if (!f) {
         frames.set(id, { d, state: 'entering', gen: ++generation })
+        if (win.isModal(id)) modalFrames.add(id)
         settle(id)
       } else if (f.d !== d) {
         // Same id, different object: `hydrate()` — in practice `resume()` on a foreign write —
@@ -147,6 +158,7 @@ watch(
         // a restored window.
         retire(id)
         frames.set(id, { d, state: 'entering', gen: ++generation })
+        if (win.isModal(id)) modalFrames.add(id)
         settle(id)
       } else if (f.state === 'leaving') {
         // Restored mid-flight: the same frame is adopted back rather than duplicated.
@@ -171,8 +183,91 @@ const offClose = win.on('close', (e) => {
 
 onBeforeUnmount(() => {
   offClose()
+  applyRootInert(false)
   for (const id of [...frames.keys()]) retire(id)
 })
+
+/**
+ * The window the scrim sits under: the store's topmost modal, or — while one is on its way out —
+ * the modal frame that is still on screen. One scrim, under the top modal only: stacked modals then
+ * dim each other, which is what a classical dialog stack does, and the lower one is inert anyway.
+ */
+const scrimUnder = computed<WindowDescriptor | null>(() => {
+  const id = win.topModalId()
+  if (id !== null) return frames.get(id)?.d ?? win.byId(id) ?? null
+  for (const f of frames.values()) if (modalFrames.has(f.d.id)) return f.d
+  return null
+})
+
+/**
+ * Position, size and stacking are inline, so a modal blocks clicks with no stylesheet imported —
+ * the tint is the stylesheet's business and nothing here depends on it.
+ */
+const scrimStyle = computed(() => {
+  const d = scrimUnder.value
+  if (!d) return undefined
+  return {
+    position: 'fixed' as const,
+    inset: '0',
+    // One below the modal's own rendered z, which is `zIndexBase + 3 * topZ + z`: everything under
+    // it — the snap ghost included — is covered, and the modal itself is not.
+    zIndex: String(options.zIndexBase + 3 * win.s.topZ + d.z - 1),
+  }
+})
+
+/**
+ * The consumer's own page, made `inert` while a modal is open. The scrim stops the pointer; it does
+ * nothing about Tab, which walks into the page behind regardless. Closing that with a trap loop is
+ * the founding non-goal, so this is opt-in via `modal: { inertRoot }` and unset by default: without
+ * it a modal blocks clicks but not Tab, which is documented rather than papered over.
+ *
+ * Whatever `inert` was already on the element is recorded and handed back, the same discipline
+ * `BaseWindow` uses for an owner's own dialog.
+ */
+let inertRoot: HTMLElement | null = null
+let rootPriorInert: boolean | null = null
+let rootWarned = false
+
+function applyRootInert(on: boolean): void {
+  const node = inertRoot
+  if (!node) return
+  if (on) {
+    // `inert` covers a whole subtree, so an element containing the desktop would make the modal
+    // itself unclickable — the failure reads as the library being broken rather than as a
+    // misconfigured selector, which is why it is measured against the rendered frames and refused.
+    if (containsDesktop(node)) {
+      if (import.meta.env.DEV && !rootWarned) {
+        rootWarned = true
+        console.warn(
+          '[vue3-dialogs-lib] modal.inertRoot contains WindowHost; it would make the modal inert ' +
+            'too, so it is ignored. Point it at the page content beside the host instead.',
+        )
+      }
+      return
+    }
+    rootPriorInert ??= node.hasAttribute('inert')
+    node.setAttribute('inert', '')
+  } else if (rootPriorInert !== null) {
+    if (!rootPriorInert) node.removeAttribute('inert')
+    rootPriorInert = null
+  }
+}
+
+function containsDesktop(node: HTMLElement): boolean {
+  for (const el of els.values()) if (node.contains(el)) return true
+  return false
+}
+
+onMounted(() => {
+  const target = options.modal.inertRoot
+  if (!target) return
+  inertRoot = typeof target === 'string' ? document.querySelector<HTMLElement>(target) : target
+  applyRootInert(win.topModalId() !== null)
+})
+
+// `post` rather than the `sync` the per-window `inert` needs: the containment check above reads the
+// frames this host has rendered, and the modal's own frame is only in the DOM after the patch.
+watch(() => win.topModalId() !== null, applyRootInert, { flush: 'post' })
 
 const ghostStyle = computed(() => {
   const p = preview.value
@@ -245,5 +340,14 @@ const ghostStyle = computed(() => {
     :style="ghostStyle"
     aria-hidden="true"
     :data-vw-zone="preview.zone"
+  />
+
+  <!-- Decorative and never a dismiss affordance: click-outside-to-close is the consumer's own
+       decision, and a scrim that swallowed the click would take that decision away. -->
+  <div
+    v-if="scrimStyle"
+    class="vw-scrim"
+    :style="scrimStyle"
+    aria-hidden="true"
   />
 </template>
