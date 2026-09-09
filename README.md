@@ -123,7 +123,13 @@ const off = win.on('close', (e) => console.log(e.id)) // 'open' | 'close' | 'foc
 
 `geometry` fires once per drag, resize or arrow-key nudge — at the end of the gesture, not per
 frame — and on `snap()` and `setGeometry()`. A drop into a snap zone reports once, from the snap.
+
 Re-clamping the whole stack after a viewport resize is silent.
+
+Outside `setup()` there is nothing to inject from, so `useWindows()` falls back to the most
+recently installed app's store. On a server that fallback is shared across requests: in SSR code,
+take the store from `inject` inside a component, or hand it down explicitly, rather than reaching
+for it.
 
 `open()` deduplicates: the same `name` plus shallow-equal `props` restores and raises the existing
 window instead of opening a second one. Pass `{ dedupe: false }` when you really want two. Past
@@ -456,6 +462,11 @@ no second band.
 Pin state is **runtime-only**, like snap state: it is not on the descriptor and is not persisted, so
 after a reload a pinned window comes back unpinned and draggable. That is deliberate — pinning is
 toggled by the user at runtime, and persisting it would mean moving the storage schema.
+
+**Pinned is not active.** The second band is a render-time thing: `activeId`, `data-vw-active`, ESC
+and the keymap all still follow `z`, so a pinned window drawn over the desktop is not the window
+the keyboard is talking to unless it was also the last one focused. Click it and it becomes active
+like any other window.
 
 ## Control labels
 

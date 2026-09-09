@@ -519,6 +519,27 @@ describe('capabilities', () => {
     pointer(grip, 'pointerup', 1, 700, 450)
   })
 
+  it('a west or north grip keeps the leading edge inside bounds', async () => {
+    const { wrapper, win } = app()
+    // 1024x768 in jsdom, minVisible 80: the north edge stops at 0 and the west edge at 944.
+    const id = win.open('editor', { id: 1 }, { x: 940, y: 100, w: 400, h: 300 }).id
+    await nextTick()
+
+    const north = wrapper.find('[data-vw-grip="n"]').element
+    pointer(north, 'pointerdown', 1, 1000, 100)
+    pointer(north, 'pointermove', 1, 1000, -150)
+    pointer(north, 'pointerup', 1, 1000, -150)
+    // Grown up to the top edge and no further: the bottom edge has not moved to make room.
+    expect(win.byId(id)).toMatchObject({ y: 0, h: 400 })
+
+    const west = wrapper.find('[data-vw-grip="w"]').element
+    pointer(west, 'pointerdown', 1, 940, 200)
+    pointer(west, 'pointermove', 1, 1400, 200)
+    pointer(west, 'pointerup', 1, 1400, 200)
+    expect(win.byId(id)!.x).toBe(1024 - 80)
+    expect(win.byId(id)!.w).toBe(396)
+  })
+
   it('a grip resize drops the snap without moving the window back', async () => {
     const { wrapper, win } = app()
     const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 }).id

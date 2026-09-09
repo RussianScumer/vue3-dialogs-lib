@@ -8,7 +8,7 @@ export interface WindowDescriptor {
   /** Ids and primitives only — a window outlives the view that opened it. */
   props: Record<string, unknown>
   /** Draft state owned by the content component, see useWindowState. */
-  state: unknown | null
+  state: unknown
   title: string
   minimized: boolean
   x: number

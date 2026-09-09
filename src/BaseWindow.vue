@@ -96,6 +96,8 @@ useWindowDrag(handle, d, {
 // Resizing by a grip is an explicit choice of size — it outranks the snap, which is dropped
 // without moving the window back.
 const resize = useWindowResize(d, {
+  view,
+  bounds: options.bounds,
   enabled: () => canResize.value,
   onStart: () => win.focus(d.id),
   onEnd: () => {
