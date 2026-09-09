@@ -1,6 +1,7 @@
 import { defineAsyncComponent, type Component } from 'vue'
 import type {
   AsyncWindowOptions,
+  ControlLabels,
   KeyChord,
   KeymapAction,
   KeymapOptions,
@@ -14,6 +15,9 @@ import type {
 } from './types'
 
 const NO_DEFAULTS: WindowDefaults = Object.freeze({})
+
+/** No default names: every string in the library comes from the consumer. */
+const NO_LABELS: ControlLabels = Object.freeze({})
 
 /** Keys of `AsyncWindowOptions`: they configure loading, not the window, so they are split off. */
 const ASYNC_KEYS = ['loadingComponent', 'errorComponent', 'delay', 'timeout'] as const
@@ -210,6 +214,7 @@ export function resolveOptions(options: WindowsOptions): ResolvedOptions {
     zIndexBase: options.zIndexBase ?? 0,
     beforeClose: options.beforeClose ?? null,
     keymap: resolveKeymap(options.keymap),
+    labels: options.labels ?? NO_LABELS,
     resolve(name) {
       const cached = cache.get(name)
       if (cached) return cached

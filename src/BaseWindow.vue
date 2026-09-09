@@ -1,5 +1,19 @@
+<script lang="ts">
+import type { ResolvedOptions } from './types'
+
+/**
+ * The apps already warned about unnamed controls, keyed on the resolved options object so one
+ * desktop warns once however many windows it opens while two independent `createWindows()` calls
+ * each get their own warning. Weak, so a torn-down app is not kept alive by its own warning.
+ *
+ * In a plain `<script>` on purpose: everything in `<script setup>` runs per component instance, so
+ * a set declared there would be one set per frame and would never dedupe anything.
+ */
+const warnedApps = new WeakSet<ResolvedOptions>()
+</script>
+
 <script setup lang="ts">
-import { computed, onErrorCaptured, onMounted, ref, watch } from 'vue'
+import { computed, onErrorCaptured, onMounted, ref, useSlots, watch } from 'vue'
 import { useWindows, useWindowOptions } from './createWindows'
 import { onWindowKeydown, useWindowDrag } from './useWindowDrag'
 import { RESIZE_DIRS, RESIZE_STYLES, useWindowResize } from './useWindowResize'
@@ -40,6 +54,12 @@ const active = computed(() => win.activeId.value === d.id)
  * very guard that is still being awaited.
  */
 const closing = computed(() => win.isClosing(d.id))
+/**
+ * Accessible names for the default controls: the app-wide option with this window's own laid over
+ * it. Nothing has a default, so an unnamed control renders no `aria-label` attribute at all rather
+ * than an empty one — the DOM of a consumer who names none is exactly what it was.
+ */
+const labels = computed(() => win.labelsFor(d.id))
 /** True for a sheet: a window opened with `{ owner }`, which ESC dismisses instead of minimizing. */
 const owned = computed(() => win.ownerOf(d.id) !== null)
 /** True while this window owns a child. The child is the question; this frame stands down. */
@@ -83,7 +103,32 @@ const resize = useWindowResize(d, {
     report({ w: d.w, h: d.h })
   },
 })
-onMounted(() => el.value?.show()) // non-modal: background stays usable, taskbar clickable
+const slots = useSlots()
+
+/**
+ * True when this frame renders a default control that has no name. Only the controls it actually
+ * renders count, and a consumer who replaced the `controls` slot renders their own buttons, which
+ * are not the library's to label.
+ */
+function unnamedControls(): boolean {
+  if (slots.controls) return false
+  if (d.minimizable && !labels.value.minimize) return true
+  if (d.closable && !labels.value.close) return true
+  return win.isPinnable(d.id) && !labels.value.pin
+}
+
+onMounted(() => {
+  el.value?.show() // non-modal: background stays usable, taskbar clickable
+  // Dev-only, and the one place the library says anything in English: the default controls are
+  // glyphs, so without a name they reach a screen reader as "–", "✕" and "▲".
+  if (!import.meta.env.DEV || warnedApps.has(options) || !unnamedControls()) return
+  warnedApps.add(options)
+  console.warn(
+    '[vue3-dialogs-lib] the default window controls have no accessible name. Pass labels: ' +
+      '{ minimize, close, pin } to createWindows(), per window via open(), or replace the ' +
+      'controls slot.',
+  )
+})
 
 /**
  * A child window makes its owner inert — the owner's own `<dialog>` and nothing else. No top layer,
@@ -325,6 +370,7 @@ function onHeadDblclick(e: MouseEvent) {
           class="vw__btn"
           type="button"
           data-vw-nodrag
+          :aria-label="labels.minimize"
           :disabled="closing"
           @click="win.minimize(d.id)"
         >
@@ -335,6 +381,7 @@ function onHeadDblclick(e: MouseEvent) {
           class="vw__btn"
           type="button"
           data-vw-nodrag
+          :aria-label="labels.close"
           :disabled="closing"
           @click="win.requestClose(d.id)"
         >
@@ -347,6 +394,8 @@ function onHeadDblclick(e: MouseEvent) {
           class="vw__btn"
           type="button"
           data-vw-nodrag
+          :aria-label="labels.pin"
+          :aria-pressed="pinned"
           :data-vw-pinned="pinned || undefined"
           @click="win.setPinned(d.id, !pinned)"
         >

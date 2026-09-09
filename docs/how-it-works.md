@@ -315,6 +315,33 @@ snapped onto one anyway.
 The cost is explicit and accepted: a reload brings a pinned window back unpinned and draggable, in
 exactly the way it brings a snapped one back undocked.
 
+## Control labels
+
+The default controls are glyphs, and the library ships no strings, so their accessible names are
+the consumer's. They are the fourth piece of runtime-only per-window state, beside `docks`, `pins`
+and `owners`, and for a reason of its own: a label belongs to the locale of the app that is
+running, not to the window. A persisted label would restore last month's translation into a page
+that has since been re-installed with a new one.
+
+```
+controlLabels: Map<id, ControlLabels>   // runtime-only, beside `pins` — never persisted
+```
+
+```
+createWindows({ labels })  → the app-wide names, on ResolvedOptions
+open(..., { labels })      → { ...spec.labels, ...opts.labels }, stored only if non-empty
+labelsFor(id)              → { ...options.labels, ...controlLabels.get(id) }
+render                     → :aria-label on –, ✕ and ▲; undefined renders no attribute
+pin button                 → :aria-pressed="pinned", so one name covers both directions
+dev warning                → once per resolved options object, from BaseWindow's onMounted
+close / closeAll /
+  hydrate                  → the entry is dropped where the `pins` entry is
+```
+
+The warning is keyed on the resolved options object in a module-level `WeakSet`, which is why it
+lives in a plain `<script>` block in `BaseWindow.vue`: everything in `<script setup>` runs per
+component instance, so a set declared there would be one set per frame and would dedupe nothing.
+
 ## Owned child windows
 
 A window may own another one. `open(name, props, { owner: id })` records the link in a runtime map

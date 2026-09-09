@@ -81,7 +81,12 @@ function closeLockedPanel() {
  * window keeps its ✕ and its –, and the pin button in its own header lets the user let go of it.
  */
 function openPinnedPanel() {
-  win.open('logViewer', { source: 'pinned' }, { x: 260, y: 60, w: 380, h: 240, fixed: true })
+  win.open(
+    'logViewer',
+    { source: 'pinned' },
+    // Per-window labels merge over the app-wide ones: this window renames only its ✕.
+    { x: 260, y: 60, w: 380, h: 240, fixed: true, labels: { close: 'Close the pinned log' } },
+  )
 }
 
 function openConstrained() {

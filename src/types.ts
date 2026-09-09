@@ -30,6 +30,21 @@ export interface WindowDescriptor {
   maxH: number | null
 }
 
+/**
+ * Accessible names for the default header controls, rendered as `aria-label` and nothing else.
+ * There are no defaults: visible text and labels alike come from the consumer, and a library that
+ * shipped English here would be wrong in every app that is not English. In dev a frame that
+ * renders a default control with no name warns once.
+ *
+ * The pin button is a toggle and carries `aria-pressed` with its state, so `pin` names the control
+ * rather than the direction — one string covers both "pin this" and "unpin this".
+ */
+export interface ControlLabels {
+  minimize?: string
+  close?: string
+  pin?: string
+}
+
 /** Everything a window can be configured with, whether per open() call or per component. */
 export interface WindowDefaults {
   title?: string
@@ -54,6 +69,15 @@ export interface WindowDefaults {
    * gives it the button; a window that never mentions it renders exactly as it does today.
    */
   fixed?: boolean
+  /**
+   * Accessible names for this window's default controls, merged key by key over the app-wide
+   * `labels` option: a window that names only `close` keeps the app-wide `minimize`.
+   *
+   * Not on the descriptor and **not persisted**, for the reason `fixed` is not: a label belongs to
+   * the running app's locale rather than to the window, so it lives in a runtime-only map and the
+   * app-wide option is simply read again on the next install.
+   */
+  labels?: ControlLabels
 }
 
 export interface OpenOptions extends WindowDefaults {
@@ -338,6 +362,8 @@ export interface WindowsOptions {
   async?: AsyncWindowOptions
   /** Keyboard shortcuts for snapping and window switching. On by default, every binding movable. */
   keymap?: KeymapOptions
+  /** Accessible names for the default header controls. No defaults; per window under `labels` too. */
+  labels?: ControlLabels
 }
 
 export interface ResolvedOptions {
@@ -350,6 +376,8 @@ export interface ResolvedOptions {
   zIndexBase: number
   beforeClose: BeforeCloseGuard | null
   keymap: ResolvedKeymap
+  /** App-wide control names, empty when the consumer set none. */
+  labels: ControlLabels
   /** Memoized component resolution; loader functions become async components. */
   resolve(name: string): Component
   /** The `WindowSpec` defaults for a name, or an empty object. */
