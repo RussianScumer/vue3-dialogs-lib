@@ -200,6 +200,18 @@ describe('store', () => {
     expect(win.isRestored(win.open('editor', { id: 9 }).id)).toBe(false)
   })
 
+  it('emits close for a window a hydration drops, and nothing for a survivor', () => {
+    const win = store()
+    const gone = win.open('editor', { id: 1 }).id
+    const kept = win.open('editor', { id: 2 }).id
+    const seen: string[] = []
+    win.on('close', (e) => seen.push(e.id))
+
+    win.hydrate([win.byId(kept)!], 12)
+
+    expect(seen).toEqual([gone])
+  })
+
   it('focus does not write when the window is already on top', () => {
     const win = store()
     const a = win.open('editor', { id: 1 }).id
