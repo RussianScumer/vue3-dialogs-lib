@@ -96,7 +96,6 @@ VW-13 stale frame         (S)    ├─ separate files, land in this order, one 
 VW-15 pagehide flush      (S)   ─┘
 VW-16 geometry events     (M)   — after VW-13 (neighbouring edits in WindowHost/BaseWindow)
 VW-17 hydrate hardening   (S)   — after VW-15 (both in persist.ts)
-VW-18 packaging + CI      (S)   — independent, any time
 VW-20 minor batch         (S)   — last, sweeps leftovers
 VW-19 control labels      (M)   — separate release, needs an option-shape decision first
 VW-21 modal windows       (L)   — independent of the above; reopens a documented non-goal, so it
@@ -282,30 +281,6 @@ re-hydration drops.
 - `persist.spec.ts`: a blob with `w: 10` and `minW: 160` hydrates at 160.
 - `state.spec.ts`: `hydrate()` that drops an id fires `close` once for it and nothing for
   survivors.
-
----
-
-### VW-18 — Packaging and CI
-
-**Roadmap:** none · **Size:** S · **Depends on:** nothing · **Status:** open.
-
-#### Do
-
-- `package.json`: add `"default": "./dist/vue3-dialogs-lib.js"` under `exports["."]`; add
-  `"prepack": "npm run build"` so `npm publish` cannot ship a stale `dist/`.
-- README Development: `npm run test` runs both projects and needs
-  `npx playwright install chromium` once.
-- `bitbucket-pipelines.yml`: Node 24 image, `npm ci`, `npx playwright install --with-deps chromium`,
-  `npm run lint`, `npm run type-check`, `npx vitest run`, `npm run build`. Cache
-  `~/.cache/ms-playwright`.
-- `CLAUDE.md`: drop "no CI".
-
-#### Done when
-
-- `npm pack --dry-run` lists `dist/` after a clean checkout.
-- A `node -e "import('@korneevec/vue3-dialogs-lib')"` from a consumer resolves with the `default`
-  condition.
-- The pipeline is green on a push to a branch.
 
 ---
 
