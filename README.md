@@ -16,6 +16,8 @@ hidden), and with persistence on it survives a page reload.
 - [How it works](./docs/how-it-works.md) — the descriptor model, the render path, geometry,
   persistence, and why the windows are non-modal.
 - [Recipes](./docs/recipes.md) — complete use cases with code.
+- [Motion](./docs/motion.md) — the frame lifecycle, `--vtd-motion-duration`, replacing the
+  animation, the fly-to-taskbar minimize, and per-window overrides.
 - [Performance](./docs/performance.md) — benchmark suite, measured numbers, and what they imply.
 - [Build and pack](./docs/build.md) — pnpm setup, what `pnpm build` emits, and the local tarball.
 

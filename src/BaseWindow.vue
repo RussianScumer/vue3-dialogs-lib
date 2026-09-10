@@ -129,7 +129,7 @@ function unnamedControls(): boolean {
 onMounted(() => {
   el.value?.show() // non-modal: background stays usable, taskbar clickable
   // Dev-only, and the one place the library says anything in English: the default controls are
-  // glyphs, so without a name they reach a screen reader as "–", "✕" and "▲".
+  // glyphs, so without a name they reach a screen reader as "–", "✕" and "▲"/"▼".
   if (!import.meta.env.DEV || warnedApps.has(options) || !unnamedControls()) return
   warnedApps.add(options)
   console.warn(
@@ -422,7 +422,7 @@ function onHeadDblclick(e: MouseEvent) {
           :data-vw-pinned="pinned || undefined"
           @click="win.setPinned(d.id, !pinned)"
         >
-          ▲
+          {{ pinned ? '▼' : '▲' }}
         </button>
       </slot>
     </header>
