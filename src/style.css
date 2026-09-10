@@ -27,7 +27,19 @@
      does. `inherit` keeps the no-theme case exactly as it was — the page's scheme. */
   --_vtd-color-scheme: var(--vtd-color-scheme, inherit);
 
+  /* Native scrollbars inside the frame. `color-scheme` above only picks the browser's light or
+     dark rendering of them; this tints them. The default is derived from the frame's own colours,
+     so every palette — and every hand-set `--vtd-fg` — is followed with nothing declared per
+     theme. `currentColor` and not `var(--_vtd-fg)`: that one defaults to the keyword `inherit`,
+     which is not a colour and would drop the whole `color-mix()`. `scrollbar-color` inherits, so
+     declaring it on the frame also reaches a scroller a consumer puts inside the body. */
+  --_vtd-scrollbar-thumb: var(--vtd-scrollbar-thumb, color-mix(in srgb, currentColor 30%, transparent));
+  --_vtd-scrollbar-track: var(--vtd-scrollbar-track, transparent);
+  --_vtd-scrollbar-width: var(--vtd-scrollbar-width, auto);
+
   color-scheme: var(--_vtd-color-scheme);
+  scrollbar-color: var(--_vtd-scrollbar-thumb) var(--_vtd-scrollbar-track);
+  scrollbar-width: var(--_vtd-scrollbar-width);
   font-family: var(--_vtd-font);
   font-size: var(--_vtd-font-size);
   border: var(--_vtd-border);

@@ -286,6 +286,9 @@ level above the windows — nothing in the library declares them on `.vw`, so no
   --vtd-body-pad: 12px;
   --vtd-foot-pad: 8px 12px;
   --vtd-btn-hover-bg: rgba(255, 255, 255, 0.2);
+  --vtd-scrollbar-thumb: rgba(17, 17, 17, 0.3); /* thumb, track; `thin` for a narrow bar */
+  --vtd-scrollbar-track: transparent;
+  --vtd-scrollbar-width: auto;
 }
 
 /* a theme class works the same way — plain inheritance */
@@ -364,7 +367,10 @@ is more convenient — including on one window, since `BaseWindow` has a single 
 
 A palette reaches windows only. The page keeps its own background, its own scrollbars and its own
 form controls even with the attribute on `<html>`, because a theme never declares `color-scheme`
-itself — it sets `--vtd-color-scheme`, and `style.css` applies that on `.vw`. Anything you draw
+itself — it sets `--vtd-color-scheme`, and `style.css` applies that on `.vw`. The window's own
+scrollbar is tinted there too, from the frame's text colour, so it follows the palette rather than
+only switching between the browser's light and dark bar; `--vtd-scrollbar-thumb`,
+`--vtd-scrollbar-track` and `--vtd-scrollbar-width` override it. Anything you draw
 yourself, a taskbar most of all, is outside the library's CSS and so keeps its own colours; read the
 tokens to opt it in:
 

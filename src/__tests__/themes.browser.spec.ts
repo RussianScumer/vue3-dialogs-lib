@@ -114,4 +114,28 @@ describe('theme presets, resolved', () => {
     // Untouched tokens still come from the palette.
     expect(getComputedStyle(dialog).color).toBe('rgb(248, 248, 242)')
   })
+
+  it('tints the body scrollbar from the palette and leaves the page scrollbar alone', async () => {
+    // `color-scheme` alone only picks the UA's light or dark scrollbar; the thumb is derived from
+    // the frame's own colour, so a palette tints it with nothing declared per theme. The body is
+    // the only scroller the library makes, and it gets the value by inheritance from the frame.
+    const before = getComputedStyle(document.documentElement).scrollbarColor
+    const dialog = await themedWindow('dracula')
+    const body = dialog.querySelector('.vw__body') as HTMLElement
+
+    // 0.972549 is dracula's #f8f8f2 at the 30% the baseline sheet mixes; the track stays clear.
+    expect(getComputedStyle(body).scrollbarColor).toBe(
+      'color(srgb 0.972549 0.972549 0.94902 / 0.3) rgba(0, 0, 0, 0)',
+    )
+    expect(getComputedStyle(document.documentElement).scrollbarColor).toBe(before)
+  })
+
+  it('lets a consumer override the scrollbar tint the palette derived', async () => {
+    override = document.createElement('style')
+    override.textContent = ':root { --vtd-scrollbar-thumb: rgb(4, 5, 6); }'
+    document.head.append(override)
+    const dialog = await themedWindow('dracula')
+
+    expect(getComputedStyle(dialog).scrollbarColor).toContain('rgb(4, 5, 6)')
+  })
 })

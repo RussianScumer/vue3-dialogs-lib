@@ -650,7 +650,8 @@ Restyle through the `--vtd-*` custom properties: `--vtd-font`, `--vtd-font-size`
 `--vtd-border`, `--vtd-shadow`, `--vtd-bg`, `--vtd-fg`, `--vtd-accent`, `--vtd-head-bg`,
 `--vtd-head-fg`, `--vtd-head-pad`, `--vtd-body-pad`, `--vtd-foot-pad`, `--vtd-btn-hover-bg`,
 `--vtd-ghost-bg`,
-`--vtd-ghost-outline`, `--vtd-ghost-radius`.
+`--vtd-ghost-outline`, `--vtd-ghost-radius`, `--vtd-scrollbar-thumb`, `--vtd-scrollbar-track`,
+`--vtd-scrollbar-width`.
 
 The stylesheet reads these properties and never declares them, so set them wherever it suits —
 `:root`, a theme class, an inline style on `<html>` — and inheritance carries them into the
@@ -692,9 +693,15 @@ Shipped: `dracula`, `nord`, `solarized-light`, `solarized-dark`, `gruvbox-dark`,
 `kanagawa-wave`, `github-light`, `github-dark`, `ayu-dark`, `material-darker`, `nightfox`.
 
 A palette tints windows and nothing else. Even `color-scheme` is scoped: each theme sets it as
-`--vtd-color-scheme`, which `style.css` applies on `.vw`, so native scrollbars and form controls
-inside a window match the palette while the page around them — its canvas, its own scrollbars, its
-own controls — is left exactly as your CSS had it, even with the attribute on `<html>`.
+`--vtd-color-scheme`, which `style.css` applies on `.vw`, so native form controls inside a window
+match the palette while the page around them — its canvas, its own scrollbars, its own controls —
+is left exactly as your CSS had it, even with the attribute on `<html>`.
+
+The body's scrollbar follows too, and by more than the light/dark switch: `style.css` sets
+`scrollbar-color` on `.vw` from the frame's own text colour, so every palette tints it without
+declaring anything of its own. Override it with `--vtd-scrollbar-thumb` and `--vtd-scrollbar-track`,
+or drop to a narrow scrollbar with `--vtd-scrollbar-width: thin`. The property is inherited, so a
+scroller of your own inside the body gets the same tint.
 
 Anything you draw yourself that should follow the palette can read the same tokens; the playground's
 taskbar does this with `background: var(--vtd-head-bg, #26262b)`.
