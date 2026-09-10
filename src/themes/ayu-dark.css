@@ -1,0 +1,23 @@
+/* Ayu Dark. Palette tokens only — pair with the library's style.css, which is what
+   reads them. Set the attribute or the class on <html>, on a wrapper, or on a single
+   window; :where() keeps this at zero specificity so a consumer declaration still wins. It
+   tints windows only — the page around them is not touched, not even its color-scheme.
+
+   Colours only: radius, fonts, padding and motion are left to the consumer. */
+:where([data-vtd-theme='ayu-dark'], .vtd-theme-ayu-dark) {
+  --vtd-color-scheme: dark;
+
+  --vtd-bg: #0b0e14;
+  --vtd-fg: #bfbdb6;
+  --vtd-head-bg: #0d1017;
+  --vtd-head-fg: #bfbdb6;
+  --vtd-accent: #e6b450;
+  --vtd-border: 1px solid #1c2028;
+  --vtd-border-active: 1px solid #e6b450;
+  --vtd-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --vtd-shadow-active: 0 14px 38px rgba(0, 0, 0, 0.55);
+  --vtd-btn-hover-bg: color-mix(in srgb, #bfbdb6 14%, transparent);
+  --vtd-ghost-bg: color-mix(in srgb, #e6b450 18%, transparent);
+  --vtd-ghost-outline: 2px solid color-mix(in srgb, #e6b450 60%, transparent);
+  --vtd-scrim-bg: rgba(0, 0, 0, 0.6);
+}

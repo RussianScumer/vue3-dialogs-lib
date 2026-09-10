@@ -304,6 +304,84 @@ const win = useWindows()
 Не импортируйте таблицу вовсе — окна всё равно будут работать: раскладка и позиционирование заданы
 инлайново.
 
+### Готовые палитры и переключение во время работы
+
+Блок `--vtd-*` выше — это и есть тема, поэтому библиотека поставляет двадцать две готовые палитры,
+заполненные по опубликованным спецификациям: `dracula`, `nord`, `solarized-light`, `solarized-dark`,
+`gruvbox-dark`, `catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`, `catppuccin-mocha`,
+`tokyo-night`, `one-dark`, `one-light`, `monokai`, `monokai-pro`, `rose-pine`, `everforest-dark`,
+`kanagawa-wave`, `github-light`, `github-dark`, `ayu-dark`, `material-darker`, `nightfox`.
+
+Одна тема — один импорт:
+
+```js
+import '@korneevec/vue3-dialogs-lib/style.css'
+import '@korneevec/vue3-dialogs-lib/themes/nord.css'
+```
+
+```html
+<html data-vtd-theme="nord">
+```
+
+Для переключателя импортируйте их все один раз и меняйте один атрибут — без повторного импорта,
+без перезагрузки и без пропа на каждом окне:
+
+```vue
+<script setup>
+import { ref, watchEffect } from 'vue'
+import '@korneevec/vue3-dialogs-lib/themes/all.css'
+
+const THEMES = ['dracula', 'nord', 'solarized-light', 'catppuccin-mocha', 'github-dark']
+const theme = ref('')
+
+watchEffect(() => {
+  const root = document.documentElement
+  if (theme.value) root.setAttribute('data-vtd-theme', theme.value)
+  else root.removeAttribute('data-vtd-theme') // назад к умолчаниям библиотеки
+})
+</script>
+
+<template>
+  <select v-model="theme">
+    <option value="">По умолчанию</option>
+    <option v-for="name in THEMES" :key="name" :value="name">{{ name }}</option>
+  </select>
+</template>
+```
+
+`.vtd-theme-nord` — то же самое правило, что и `[data-vtd-theme="nord"]`, поэтому класс работает
+там, где класс удобнее, — в том числе на одном окне: у `BaseWindow` один корневой элемент, и `class`
+проваливается на него.
+
+Палитра достаёт только до окон. Страница сохраняет свой фон, свои полосы прокрутки и свои элементы
+форм даже когда атрибут стоит на `<html>`: тема никогда не объявляет `color-scheme` сама — она задаёт
+`--vtd-color-scheme`, а `style.css` применяет его на `.vw`. Всё, что вы рисуете сами, и в первую
+очередь панель окон, лежит вне CSS библиотеки и сохраняет свои цвета; читайте те же токены, чтобы
+подключить её к палитре:
+
+```css
+.taskbar {
+  background: var(--vtd-head-bg, #26262b);
+  color: var(--vtd-head-fg, #e5e7eb);
+  color-scheme: var(--vtd-color-scheme, inherit);
+}
+```
+
+Ещё два замечания. Палитры задают только цвета — `--vtd-radius`, токены `*-pad`, `--vtd-font` и
+`--vtd-motion-duration` не трогаются, поэтому выбор палитры не отменяет вашу геометрию. И каждая
+палитра обёрнута в `:where()`, то есть держится на нулевой специфичности: блок из начала этого
+рецепта по-прежнему перебивает палитру, так что «Gruvbox, но с прямыми углами и своим акцентом» —
+это
+
+```css
+:root {
+  --vtd-radius: 0;
+  --vtd-accent: #fe8019;
+}
+```
+
+поверх `data-vtd-theme="gruvbox-dark"`, без единого `!important`.
+
 ## 10 · Отдать ESC вашему содержимому
 
 ESC сворачивает сфокусированное окно. Компонент, которому ESC нужен для собственного выпадающего

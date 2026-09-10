@@ -1,0 +1,23 @@
+/* Catppuccin Latte. Palette tokens only — pair with the library's style.css, which is what
+   reads them. Set the attribute or the class on <html>, on a wrapper, or on a single
+   window; :where() keeps this at zero specificity so a consumer declaration still wins. It
+   tints windows only — the page around them is not touched, not even its color-scheme.
+
+   Colours only: radius, fonts, padding and motion are left to the consumer. */
+:where([data-vtd-theme='catppuccin-latte'], .vtd-theme-catppuccin-latte) {
+  --vtd-color-scheme: light;
+
+  --vtd-bg: #eff1f5;
+  --vtd-fg: #4c4f69;
+  --vtd-head-bg: #e6e9ef;
+  --vtd-head-fg: #4c4f69;
+  --vtd-accent: #8839ef;
+  --vtd-border: 1px solid #bcc0cc;
+  --vtd-border-active: 1px solid #8839ef;
+  --vtd-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  --vtd-shadow-active: 0 14px 38px rgba(0, 0, 0, 0.22);
+  --vtd-btn-hover-bg: color-mix(in srgb, #4c4f69 14%, transparent);
+  --vtd-ghost-bg: color-mix(in srgb, #8839ef 18%, transparent);
+  --vtd-ghost-outline: 2px solid color-mix(in srgb, #8839ef 60%, transparent);
+  --vtd-scrim-bg: rgba(0, 0, 0, 0.4);
+}

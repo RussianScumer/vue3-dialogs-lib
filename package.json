@@ -13,7 +13,7 @@
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build-css": "node -e \"require('node:fs').copyFileSync('src/style.css','dist/style.css')\"",
+    "build-css": "node -e \"const fs=require('node:fs');fs.copyFileSync('src/style.css','dist/style.css');fs.cpSync('src/themes','dist/themes',{recursive:true})\"",
     "bench": "vitest bench --run",
     "prepack": "pnpm run build"
   },
@@ -59,6 +59,7 @@
       "import": "./dist/vue3-dialogs-lib.js"
     },
     "./style.css": "./dist/style.css",
+    "./themes/*.css": "./dist/themes/*.css",
     "./package.json": "./package.json"
   },
   "peerDependencies": {

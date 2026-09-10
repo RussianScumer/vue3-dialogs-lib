@@ -1,0 +1,23 @@
+/* Material Theme Darker. Palette tokens only — pair with the library's style.css, which is what
+   reads them. Set the attribute or the class on <html>, on a wrapper, or on a single
+   window; :where() keeps this at zero specificity so a consumer declaration still wins. It
+   tints windows only — the page around them is not touched, not even its color-scheme.
+
+   Colours only: radius, fonts, padding and motion are left to the consumer. */
+:where([data-vtd-theme='material-darker'], .vtd-theme-material-darker) {
+  --vtd-color-scheme: dark;
+
+  --vtd-bg: #212121;
+  --vtd-fg: #eeffff;
+  --vtd-head-bg: #1a1a1a;
+  --vtd-head-fg: #eeffff;
+  --vtd-accent: #89ddff;
+  --vtd-border: 1px solid #424242;
+  --vtd-border-active: 1px solid #89ddff;
+  --vtd-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --vtd-shadow-active: 0 14px 38px rgba(0, 0, 0, 0.55);
+  --vtd-btn-hover-bg: color-mix(in srgb, #eeffff 14%, transparent);
+  --vtd-ghost-bg: color-mix(in srgb, #89ddff 18%, transparent);
+  --vtd-ghost-outline: 2px solid color-mix(in srgb, #89ddff 60%, transparent);
+  --vtd-scrim-bg: rgba(0, 0, 0, 0.6);
+}

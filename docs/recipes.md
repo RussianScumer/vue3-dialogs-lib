@@ -302,6 +302,94 @@ restores the default.
 
 Skip the import entirely and windows still work — layout and positioning are inline.
 
+### Shipped palettes, switched at runtime
+
+The `--vtd-*` block above is what a theme *is*, so the library ships twenty-two of them prefilled
+from the published palettes: `dracula`, `nord`, `solarized-light`, `solarized-dark`, `gruvbox-dark`,
+`catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`, `catppuccin-mocha`, `tokyo-night`,
+`one-dark`, `one-light`, `monokai`, `monokai-pro`, `rose-pine`, `everforest-dark`, `kanagawa-wave`,
+`github-light`, `github-dark`, `ayu-dark`, `material-darker`, `nightfox`.
+
+One theme, one import:
+
+```js
+import '@korneevec/vue3-dialogs-lib/style.css'
+import '@korneevec/vue3-dialogs-lib/themes/nord.css'
+```
+
+```html
+<html data-vtd-theme="nord">
+```
+
+For a picker, import them all once and switch with a single attribute — no re-import, no reload,
+no per-window prop:
+
+```vue
+<script setup>
+import { ref, watchEffect } from 'vue'
+import '@korneevec/vue3-dialogs-lib/themes/all.css'
+
+const THEMES = ['dracula', 'nord', 'solarized-light', 'catppuccin-mocha', 'github-dark']
+const theme = ref('')
+
+watchEffect(() => {
+  const root = document.documentElement
+  if (theme.value) root.setAttribute('data-vtd-theme', theme.value)
+  else root.removeAttribute('data-vtd-theme') // back to the library defaults
+})
+</script>
+
+<template>
+  <select v-model="theme">
+    <option value="">Default</option>
+    <option v-for="name in THEMES" :key="name" :value="name">{{ name }}</option>
+  </select>
+</template>
+```
+
+`.vtd-theme-nord` is the same rule as `[data-vtd-theme="nord"]`, so a class works wherever a class
+is more convenient — including on one window, since `BaseWindow` has a single root element and a
+`class` falls through onto it:
+
+```vue
+<WindowHost>
+  <template #header="{ descriptor }">…</template>
+</WindowHost>
+
+<!-- or scope a palette to part of the page -->
+<div class="vtd-theme-github-light">
+  <WindowHost />
+</div>
+```
+
+A palette reaches windows only. The page keeps its own background, its own scrollbars and its own
+form controls even with the attribute on `<html>`, because a theme never declares `color-scheme`
+itself — it sets `--vtd-color-scheme`, and `style.css` applies that on `.vw`. Anything you draw
+yourself, a taskbar most of all, is outside the library's CSS and so keeps its own colours; read the
+tokens to opt it in:
+
+```css
+.taskbar {
+  background: var(--vtd-head-bg, #26262b);
+  color: var(--vtd-head-fg, #e5e7eb);
+  color-scheme: var(--vtd-color-scheme, inherit);
+}
+```
+
+Two more things to know. Palettes declare colours only — `--vtd-radius`, the `*-pad` tokens, `--vtd-font`
+and `--vtd-motion-duration` are left alone, so picking one does not undo your shape choices. And
+every palette is wrapped in `:where()`, which holds it at zero specificity: the block from the top
+of this recipe still wins over a palette, so "Gruvbox but with square corners and my own accent" is
+
+```css
+:root {
+  --vtd-radius: 0;
+  --vtd-accent: #fe8019;
+}
+```
+
+on top of `data-vtd-theme="gruvbox-dark"`, with no `!important` anywhere.
+
 ## 10 · Let ESC belong to your content
 
 ESC minimizes the focused window. A component that needs ESC for its own dropdown takes it first:

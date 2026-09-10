@@ -379,6 +379,15 @@ function clearStorage() {
               here they go straight onto <code>&lt;html&gt;</code>. Turn the switch off and the library defaults, dark
               mode included, come back.
             </p>
+            <p>
+              The theme picker is the shipped palettes: one attribute on <code>&lt;html&gt;</code> swaps every colour at
+              once. Watch what does <em>not</em> change — this page. A palette only feeds the <code>--vtd-*</code> the
+              windows read, and even <code>color-scheme</code> is scoped to the frame through
+              <code>--vtd-color-scheme</code>, so the demo keeps its own background and scrollbars. The taskbar below
+              follows along only because it opts in by reading <code>--vtd-head-bg</code> itself, the way any
+              consumer-drawn dock would. The knobs below layer on top of whichever palette is picked, because the
+              palettes are held at zero specificity.
+            </p>
             <ThemeControls />
           </section>
 
@@ -812,12 +821,18 @@ button { margin-right: 8px; margin-bottom: 4px; }
 .taskbar__item.is-closing { opacity: 0.6; }
 .taskbar {
   position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 8px;
-  padding: 6px 10px; background: #26262b; color: #e5e7eb; z-index: 2147483000; font: 13px system-ui, sans-serif;
+  padding: 6px 10px; z-index: 2147483000; font: 13px system-ui, sans-serif;
+  /* The dock is consumer-drawn, so a palette does not reach it by itself — reading the same
+     tokens the windows read is what makes it follow the picker. Fallbacks are the old literals,
+     so with no theme picked the taskbar looks exactly as it did. */
+  background: var(--vtd-head-bg, #26262b);
+  color: var(--vtd-head-fg, #e5e7eb);
+  color-scheme: var(--vtd-color-scheme, inherit);
 }
 .taskbar__label { opacity: 0.7; }
 .taskbar__item { padding: 4px 10px; opacity: 0.65; }
 .taskbar__item.is-min { font-style: italic; }
-.taskbar__item.is-active { opacity: 1; outline: 2px solid #60a5fa; }
+.taskbar__item.is-active { opacity: 1; outline: 2px solid var(--vtd-accent, #60a5fa); }
 .side tr.is-active td { font-weight: 600; }
 .taskbar__close { margin-left: 6px; opacity: 0.7; }
 /* Not scoped to the window's own DOM — the slot content belongs to this component. */

@@ -52,6 +52,48 @@ const presets = {
 const t = reactive<Tokens>({ ...presets.brand.tokens })
 const on = ref(false)
 
+/**
+ * The shipped palettes, imported once as `themes/all.css` in `main.ts`. Switching is one attribute
+ * on <html> — no re-import, no per-window prop, and the knobs below still layer on top because the
+ * palettes sit at zero specificity.
+ *
+ * On <html> and yet the page stays as it is: a palette declares only `--vtd-*`, which nothing
+ * outside the windows reads, and its `color-scheme` travels as `--vtd-color-scheme` for `.vw` to
+ * apply. The taskbar in App.vue joins in by reading the tokens on purpose.
+ */
+const THEMES = [
+  ['dracula', 'Dracula'],
+  ['nord', 'Nord'],
+  ['solarized-light', 'Solarized Light'],
+  ['solarized-dark', 'Solarized Dark'],
+  ['gruvbox-dark', 'Gruvbox Dark'],
+  ['catppuccin-latte', 'Catppuccin Latte'],
+  ['catppuccin-frappe', 'Catppuccin Frappé'],
+  ['catppuccin-macchiato', 'Catppuccin Macchiato'],
+  ['catppuccin-mocha', 'Catppuccin Mocha'],
+  ['tokyo-night', 'Tokyo Night'],
+  ['one-dark', 'One Dark'],
+  ['one-light', 'One Light'],
+  ['monokai', 'Monokai'],
+  ['monokai-pro', 'Monokai Pro'],
+  ['rose-pine', 'Rosé Pine'],
+  ['everforest-dark', 'Everforest Dark'],
+  ['kanagawa-wave', 'Kanagawa Wave'],
+  ['github-light', 'GitHub Light'],
+  ['github-dark', 'GitHub Dark'],
+  ['ayu-dark', 'Ayu Dark'],
+  ['material-darker', 'Material Darker'],
+  ['nightfox', 'Nightfox'],
+] as const
+
+const theme = ref('')
+
+watchEffect(() => {
+  const root = document.documentElement
+  if (theme.value) root.setAttribute('data-vtd-theme', theme.value)
+  else root.removeAttribute('data-vtd-theme')
+})
+
 const shadows = {
   none: 'none',
   soft: '0 10px 30px rgba(0, 0, 0, 0.25)',
@@ -94,6 +136,21 @@ function apply(key: string) {
 
 <template>
   <div class="tc">
+    <div class="tc__row">
+      <label>
+        Theme
+        <select v-model="theme">
+          <option value="">none (library defaults)</option>
+          <option
+            v-for="[slug, label] in THEMES"
+            :key="slug"
+            :value="slug"
+          >{{ label }}</option>
+        </select>
+      </label>
+      <code>data-vtd-theme="{{ theme || '' }}"</code>
+    </div>
+
     <div class="tc__row">
       <label><input
         v-model="on"

@@ -5,6 +5,7 @@ import { components } from './components'
 import WindowError from './windows/WindowError.vue'
 import { log } from './eventLog'
 import '../src/style.css'
+import '../src/themes/all.css'
 
 createApp(App)
   .use(

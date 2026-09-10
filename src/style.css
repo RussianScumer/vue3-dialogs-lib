@@ -21,7 +21,13 @@
   --_vtd-body-pad: var(--vtd-body-pad, 12px);
   --_vtd-foot-pad: var(--vtd-foot-pad, 8px 12px);
   --_vtd-btn-hover-bg: var(--vtd-btn-hover-bg, rgba(0, 0, 0, 0.08));
+  /* Scoped to the frame on purpose: a palette that set `color-scheme` on its own selector would
+     repaint the whole page the moment it was activated on <html>. Read here instead, so native
+     scrollbars and form controls inside a window follow the window's palette and nothing else
+     does. `inherit` keeps the no-theme case exactly as it was — the page's scheme. */
+  --_vtd-color-scheme: var(--vtd-color-scheme, inherit);
 
+  color-scheme: var(--_vtd-color-scheme);
   font-family: var(--_vtd-font);
   font-size: var(--_vtd-font-size);
   border: var(--_vtd-border);

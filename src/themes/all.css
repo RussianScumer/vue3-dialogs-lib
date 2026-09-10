@@ -1,0 +1,24 @@
+/* Every shipped palette in one file, for a runtime theme picker. Importing this
+   pulls all 22 themes; import a single file instead if you only ever use one. */
+@import './ayu-dark.css';
+@import './catppuccin-frappe.css';
+@import './catppuccin-latte.css';
+@import './catppuccin-macchiato.css';
+@import './catppuccin-mocha.css';
+@import './dracula.css';
+@import './everforest-dark.css';
+@import './github-dark.css';
+@import './github-light.css';
+@import './gruvbox-dark.css';
+@import './kanagawa-wave.css';
+@import './material-darker.css';
+@import './monokai.css';
+@import './monokai-pro.css';
+@import './nightfox.css';
+@import './nord.css';
+@import './one-dark.css';
+@import './one-light.css';
+@import './rose-pine.css';
+@import './solarized-dark.css';
+@import './solarized-light.css';
+@import './tokyo-night.css';

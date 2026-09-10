@@ -658,6 +658,49 @@ windows; there is no `.vw` declaration to out-specify. Leave one unset and the b
 applies, including the `prefers-color-scheme: dark` values. The playground's case 8 has a live
 editor for all of them.
 
+### Theme presets
+
+Ready-made palettes ship alongside the baseline sheet. They declare the colour tokens and nothing
+else — no radius, fonts, padding or motion — so they compose with whatever shape you already set.
+
+```js
+import '@korneevec/vue3-dialogs-lib/style.css'
+import '@korneevec/vue3-dialogs-lib/themes/dracula.css'
+```
+
+```html
+<html data-vtd-theme="dracula">
+```
+
+The attribute and the class `vtd-theme-dracula` are equivalent, and either works on `<html>`, on a
+wrapper, or on a single window (`BaseWindow` has one root element, so a `class` falls through). For
+a runtime picker, import `themes/all.css` once and swap the attribute:
+
+```js
+import '@korneevec/vue3-dialogs-lib/themes/all.css'
+
+document.documentElement.dataset.vtdTheme = 'nord'
+delete document.documentElement.dataset.vtdTheme // back to the library defaults
+```
+
+Every palette is wrapped in `:where()`, so it sits at zero specificity: your own `--vtd-*`
+declarations still win, and you can pick a palette and override two tokens on top of it.
+
+Shipped: `dracula`, `nord`, `solarized-light`, `solarized-dark`, `gruvbox-dark`,
+`catppuccin-latte`, `catppuccin-frappe`, `catppuccin-macchiato`, `catppuccin-mocha`, `tokyo-night`,
+`one-dark`, `one-light`, `monokai`, `monokai-pro`, `rose-pine`, `everforest-dark`,
+`kanagawa-wave`, `github-light`, `github-dark`, `ayu-dark`, `material-darker`, `nightfox`.
+
+A palette tints windows and nothing else. Even `color-scheme` is scoped: each theme sets it as
+`--vtd-color-scheme`, which `style.css` applies on `.vw`, so native scrollbars and form controls
+inside a window match the palette while the page around them — its canvas, its own scrollbars, its
+own controls — is left exactly as your CSS had it, even with the attribute on `<html>`.
+
+Anything you draw yourself that should follow the palette can read the same tokens; the playground's
+taskbar does this with `background: var(--vtd-head-bg, #26262b)`.
+
+### Active window and grips
+
 The top window carries `data-vw-active`, so `.vw[data-vw-active]` is yours to style;
 `--vtd-border-active` and `--vtd-shadow-active` are shortcuts that default to the inactive values,
 leaving the baseline look unchanged. Resize grips are `.vw__grip` elements carrying
