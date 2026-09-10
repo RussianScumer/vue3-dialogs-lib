@@ -170,6 +170,50 @@ function unsnapAll() {
 }
 
 /**
+ * Placement is the third level of the same precedence chain as everything else: `open()` over the
+ * preset over the component's spec. `center` reads the live viewport; an explicit `x` or `y` still
+ * wins, one axis at a time.
+ */
+function openCentered() {
+  win.open('logViewer', { source: 'centered' }, { placement: 'center', title: 'Centred' })
+}
+
+/** The default: `40 + (index % 8) * 28`, so three in a row step down the desktop. */
+function openCascade() {
+  for (let i = 0; i < 3; i++) {
+    win.open('logViewer', { source: `cascade-${i}` }, { title: `Cascade ${i + 1}`, dedupe: false })
+  }
+}
+
+/** `center` with one axis pinned: the window is centred horizontally and sits at y = 80. */
+function openHalfPlaced() {
+  win.open('logViewer', { source: 'half-placed' }, { placement: 'center', y: 80, title: 'Centred, y pinned' })
+}
+
+/**
+ * The mutation API against whatever is active. Each of these writes the descriptor, so the change
+ * survives a minimize and a reload — and `setTitle` and `setGeometry` show up in the log, because
+ * both emit. `updateProps` re-renders the content in place without remounting the frame.
+ */
+function mutateActive() {
+  const id = win.activeId.value
+  if (!id) return log('nothing active to mutate')
+  const w = win.byId(id)!
+  win.setTitle(id, `${w.name} · renamed`)
+  win.setGeometry(id, { w: w.w + 40, h: w.h + 20 })
+  win.setMeta(id, { ...w.meta, touchedAt: Date.now() })
+  if (w.name === 'logViewer') win.updateProps(id, { source: `mutated-${Math.round(Math.random() * 99)}` })
+  log(`mutated: title, geometry, meta${w.name === 'logViewer' ? ' and props' : ''} — no remount`)
+}
+
+/** A second tab on the same persist key: whichever tab does not write last stands down. */
+function openSecondTab() {
+  const tab = window.open(location.href, '_blank')
+  if (tab) log('opened a second tab on the same key — move a window there, then watch this one stand down')
+  else log('the browser blocked the popup — open this URL in a second tab by hand instead')
+}
+
+/**
  * The motion duration is one property on <html>, and the host reads it back off the window element
  * — so this slider changes both the animation and how long the frame is retained, with no second
  * API. `null` removes it and the baseline sheet's own 180ms comes back.
@@ -388,7 +432,47 @@ function clearStorage() {
               consumer-drawn dock would. The knobs below layer on top of whichever palette is picked, because the
               palettes are held at zero specificity.
             </p>
+            <p>
+              Two of the knobs reach parts of a window you have to go looking for: the scrim behind case 21's modal,
+              and the native scrollbars inside a frame — with nothing set those mix <code>currentColor</code>, so they
+              already follow whichever palette is picked, and <code>--vtd-scrollbar-*</code> is how a theme overrides
+              that. Open a modal, or case 16's long document, with the switch on.
+            </p>
             <ThemeControls />
+          </section>
+
+          <section>
+            <h2>9 · Where a window opens</h2>
+            <p>
+              With no <code>x</code>/<code>y</code>, <code>placement</code> decides.
+              <code>cascade</code> is the default — <code>40 + (index % 8) * 28</code>, so a run of windows steps down
+              the desktop — and <code>center</code> reads the live viewport instead. An explicit coordinate still wins,
+              one axis at a time: pass <code>y</code> alongside <code>placement: 'center'</code> and the window is
+              centred horizontally at the <code>y</code> you gave.
+            </p>
+            <p>
+              <code>placement</code> sits on the same three levels as every other default, with the same precedence:
+              <code>open()</code> over the preset over the component's spec. Case 21's <code>dialog</code> preset is
+              nothing but that — <code>placement: 'center'</code> bundled with a size and no chrome.
+            </p>
+            <button
+              type="button"
+              @click="openCascade"
+            >
+              Three cascaded
+            </button>
+            <button
+              type="button"
+              @click="openCentered"
+            >
+              Centred
+            </button>
+            <button
+              type="button"
+              @click="openHalfPlaced"
+            >
+              Centred with y pinned
+            </button>
           </section>
 
           <section>
@@ -488,6 +572,42 @@ function clearStorage() {
           </section>
 
           <section>
+            <h2>15 · Mutating an open window</h2>
+            <p>
+              <code>setTitle</code>, <code>setGeometry</code>, <code>updateProps</code> and <code>setMeta</code> all
+              write the descriptor from outside the window, so every change survives a minimize and a reload.
+              <code>setGeometry</code> is re-clamped against the window's own size limits, so it cannot put a window
+              somewhere a grip could not; <code>updateProps</code> re-renders the content in place rather than
+              remounting the frame, which is why the live-mount count in case 2 does not move and a log viewer's tick
+              does not restart. What re-renders is the template — a log viewer's <code>source:</code> line follows the
+              new prop, while the title it set from the same prop in <code>setup</code> does not, because a re-render
+              is not a remount.
+            </p>
+            <p>
+              Only the two that a user could have done by hand emit — <code>title</code> and <code>geometry</code> —
+              so the log below gets two lines, not four. <code>meta</code> is the serializable slot case 23 uses.
+            </p>
+            <button
+              type="button"
+              @click="mutateActive"
+            >
+              Mutate the active window
+            </button>
+            <button
+              type="button"
+              @click="win.focusNext()"
+            >
+              focusNext()
+            </button>
+            <button
+              type="button"
+              @click="win.focusPrev()"
+            >
+              focusPrev()
+            </button>
+          </section>
+
+          <section>
             <h2>16 · Body scroll and a sticky footer</h2>
             <p>
               <code>.vw__body</code> scrolls; the header and the <code>footer</code> slot around it do not. The footer
@@ -504,7 +624,7 @@ function clearStorage() {
           </section>
 
           <section>
-            <h2>15 · Loading and failure</h2>
+            <h2>17 · Loading and failure</h2>
             <p>
               A window's component is a chunk that may be slow, may never arrive, or may throw once it
               does. Open the last one alongside any other window: only its own frame turns into the
@@ -638,10 +758,10 @@ function clearStorage() {
             </p>
             <p>
               The scrim stops the pointer and nothing stops Tab, so this playground sets
-              <code>modal: {{ "{ inertRoot: '.page' }" }}</code> — the case list beside you goes untabbable while a modal
-              is open. It names the page content <em>beside</em> <code>WindowHost</code>, never an ancestor of it: the
-              topbar and the taskbar stay reachable, and pointing it at <code>#app</code> would make the modal itself
-              inert (the library warns and ignores it).
+              <code>modal: {{ "{ inertRoot: '.desktop' }" }}</code> — the topbar, the case list beside you and the
+              taskbar all go untabbable while a modal is open. It names everything the desktop floats over, which is a
+              sibling of <code>WindowHost</code> and never an ancestor of it: pointing it at <code>#app</code> would
+              make the modal itself inert, and the library warns and ignores one that does.
             </p>
             <p>
               Modality is <em>runtime-only and unpersisted</em> — stronger than the pin, which merely comes back off: a
@@ -669,7 +789,7 @@ function clearStorage() {
           </section>
 
           <section>
-            <h2>17 · Transitions and where the window went</h2>
+            <h2>22 · Transitions and where the window went</h2>
             <p>
               <code>data-vw-state</code> goes <code>entering</code> → <code>open</code> → <code>leaving</code> on the
               <code>&lt;dialog&gt;</code>, and the host keeps a leaving frame mounted for exactly
@@ -698,7 +818,64 @@ function clearStorage() {
           </section>
 
           <section>
-            <h2>16 · Small screens</h2>
+            <h2>23 · Staleness is yours to resolve</h2>
+            <p>
+              A preserved draft can be older than the server's copy, and the library does not fetch, so it cannot
+              resolve that for you. What it gives you is two things: <code>descriptor.meta</code>, a serializable slot
+              for a version or an ETag, and <code>isRestored</code> from <code>useWindowContext()</code> — true when
+              this mount came back from storage rather than from a fresh <code>open()</code>.
+            </p>
+            <p>
+              The item editor does exactly that. It stashes <code>meta.version</code> when the draft starts and, on a
+              restored mount only, refetches and compares — the stand-in server has moved to v2, so a restored editor
+              offers the choice between the draft and the server copy. Open one, type a name, reload: the banner is the
+              pattern working. Silently overwriting a concurrent edit is the sharpest edge this design creates, which is
+              why the choice is the consumer's and not the library's.
+            </p>
+            <button
+              type="button"
+              @click="openItem"
+            >
+              Open item editor
+            </button>
+            <button
+              type="button"
+              @click="reload"
+            >
+              Reload page
+            </button>
+          </section>
+
+          <section>
+            <h2>24 · Two tabs on one key</h2>
+            <p>
+              Two tabs sharing <code>persist.key</code> would otherwise overwrite each other's layout every write. When
+              a tab sees a foreign write on its key it stops persisting and calls <code>onExternalChange</code> —
+              it never hydrates on its own, because adopting the other tab's snapshot would replace this tab's windows,
+              drafts included.
+            </p>
+            <p>
+              This playground logs the notice and parks <code>info.resume()</code> on
+              <code>window.__vwResume()</code>. Open a second tab, move a window there, and watch this tab's log:
+              from that point on nothing here is written. Call <code>__vwResume()</code> in the console to adopt the
+              other tab's snapshot and start writing again.
+            </p>
+            <button
+              type="button"
+              @click="openSecondTab"
+            >
+              Open a second tab
+            </button>
+            <button
+              type="button"
+              @click="clearStorage"
+            >
+              Clear storage
+            </button>
+          </section>
+
+          <section>
+            <h2>25 · Small screens</h2>
             <p>
               Below {{ options.mobileBreakpoint }}px windows go fullscreen and drag/resize turn inert; the stored geometry
               is untouched. Narrow the browser to see it.

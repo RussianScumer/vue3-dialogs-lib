@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watchEffect } from 'vue'
 
 /**
- * Case 7 in the flesh: every knob here writes a `--vtd-*` property onto <html>.
+ * Case 8 in the flesh: every knob here writes a `--vtd-*` property onto <html>.
  * Nothing targets `.vw`, so this is the whole restyle surface — inheritance
  * carries the values into windows that render outside this component's subtree.
  */
@@ -20,6 +20,9 @@ type Tokens = {
   bodyPad: number
   font: string
   shadow: 'none' | 'soft' | 'hard' | 'glow'
+  scrim: string
+  scrimAlpha: number
+  scrollbar: 'palette' | 'accent' | 'hidden'
 }
 
 const presets = {
@@ -29,6 +32,7 @@ const presets = {
       bg: '#ffffff', fg: '#111827', headBg: '#4338ca', headFg: '#ffffff', accent: '#4338ca',
       borderColor: '#4338ca', borderWidth: 2, radius: 2, bodyPad: 12,
       font: 'system-ui, sans-serif', shadow: 'glow',
+      scrim: '#1e1b4b', scrimAlpha: 45, scrollbar: 'accent',
     },
   },
   terminal: {
@@ -37,6 +41,7 @@ const presets = {
       bg: '#0b1120', fg: '#22d3ee', headBg: '#020617', headFg: '#22d3ee', accent: '#22d3ee',
       borderColor: '#155e75', borderWidth: 1, radius: 0, bodyPad: 10,
       font: 'ui-monospace, SFMono-Regular, monospace', shadow: 'hard',
+      scrim: '#020617', scrimAlpha: 70, scrollbar: 'accent',
     },
   },
   paper: {
@@ -45,6 +50,7 @@ const presets = {
       bg: '#fffdf7', fg: '#1c1917', headBg: '#f5e9d0', headFg: '#57534e', accent: '#b45309',
       borderColor: '#d6c8ab', borderWidth: 1, radius: 14, bodyPad: 18,
       font: 'Georgia, serif', shadow: 'soft',
+      scrim: '#57534e', scrimAlpha: 35, scrollbar: 'palette',
     },
   },
 } satisfies Record<string, Preset>
@@ -114,15 +120,34 @@ const vars = computed<Record<string, string>>(() => ({
   '--vtd-btn-hover-bg': `color-mix(in srgb, ${t.headFg} 22%, transparent)`,
   '--vtd-shadow':
     t.shadow === 'glow' ? `0 12px 40px color-mix(in srgb, ${t.accent} 45%, transparent)` : shadows[t.shadow],
+  // The dim behind a modal window — the scrim is a library element, so it is a token like the rest.
+  '--vtd-scrim-bg': `color-mix(in srgb, ${t.scrim} ${t.scrimAlpha}%, transparent)`,
+  // Native scrollbars inside the frame. The default mixes `currentColor`, so a window's bars follow
+  // its own palette with nothing set; these two override that per theme.
+  ...(t.scrollbar === 'palette'
+    ? {}
+    : t.scrollbar === 'hidden'
+      ? { '--vtd-scrollbar-width': 'none' }
+      : {
+          '--vtd-scrollbar-thumb': `color-mix(in srgb, ${t.accent} 60%, transparent)`,
+          '--vtd-scrollbar-track': `color-mix(in srgb, ${t.accent} 12%, transparent)`,
+        }),
 }))
 
 // Off removes the properties entirely, so the library's own defaults (including
 // its prefers-color-scheme dark values) come back — proof they are fallbacks.
+// The previous keys are remembered because the set is not fixed: the scrollbar knob drops its two
+// properties rather than setting them to a value, and a stale one left on <html> would win.
+let applied: string[] = []
+
 watchEffect(() => {
   const root = document.documentElement.style
+  for (const name of applied) if (!(name in vars.value) || !on.value) root.removeProperty(name)
+  applied = []
+  if (!on.value) return
   for (const [name, value] of Object.entries(vars.value)) {
-    if (on.value) root.setProperty(name, value)
-    else root.removeProperty(name)
+    root.setProperty(name, value)
+    applied.push(name)
   }
 })
 
@@ -215,6 +240,25 @@ function apply(key: string) {
           <option value="system-ui, sans-serif">system-ui</option>
           <option value="Georgia, serif">Georgia</option>
           <option value="ui-monospace, SFMono-Regular, monospace">monospace</option>
+        </select>
+      </label>
+      <label>Scrim<input
+        v-model="t.scrim"
+        type="color"
+      ></label>
+      <label>Scrim {{ t.scrimAlpha }}%<input
+        v-model.number="t.scrimAlpha"
+        type="range"
+        min="0"
+        max="100"
+        step="5"
+      ></label>
+      <label>
+        Scrollbars
+        <select v-model="t.scrollbar">
+          <option value="palette">follow the window</option>
+          <option value="accent">accent</option>
+          <option value="hidden">hidden</option>
         </select>
       </label>
       <label>

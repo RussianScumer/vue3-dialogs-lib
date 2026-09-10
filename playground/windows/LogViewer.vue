@@ -25,6 +25,12 @@ onUnmounted(() => {
   <p class="hint">
     Ticks once a second. Minimize: the timer is gone, not paused.
   </p>
+  <!-- The prop, live: case 15's `updateProps` swaps it and this line follows without a remount, so
+       the tick below never restarts. The title does not follow, because `setTitle` above runs in
+       setup and setup is exactly what a re-render does not re-run. -->
+  <p class="hint">
+    <code>source: {{ source }}</code>
+  </p>
   <ol>
     <li
       v-for="(l, i) in lines.slice(0, 15)"
