@@ -2,9 +2,10 @@
   "name": "@korneevec/vue3-dialogs-lib",
   "version": "0.3.0",
   "type": "module",
+  "packageManager": "pnpm@10.28.1",
   "scripts": {
     "dev": "vite",
-    "build": "run-p type-check \"build-only {@}\" -- && npm run build-types && npm run build-css",
+    "build": "run-p type-check \"build-only {@}\" -- && pnpm run build-types && pnpm run build-css",
     "build-only": "vite build",
     "build-types": "vue-tsc -p tsconfig.lib.json",
     "type-check": "vue-tsc --build",
@@ -13,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build-css": "node -e \"require('node:fs').copyFileSync('src/style.css','dist/style.css')\"",
-    "bench": "vitest bench --run"
+    "bench": "vitest bench --run",
+    "prepack": "pnpm run build"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",

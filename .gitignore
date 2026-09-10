@@ -43,3 +43,6 @@ __screenshots__/
 .claude/*
 !.claude/skills/
 !.claude/settings.json
+
+# Pack artifacts
+*.tgz

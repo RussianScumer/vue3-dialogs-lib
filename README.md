@@ -17,11 +17,13 @@ hidden), and with persistence on it survives a page reload.
   persistence, and why the windows are non-modal.
 - [Recipes](./docs/recipes.md) — complete use cases with code.
 - [Performance](./docs/performance.md) — benchmark suite, measured numbers, and what they imply.
+- [Build and pack](./docs/build.md) — pnpm setup, what `pnpm build` emits, and the local tarball.
 
 ## Install
 
 ```sh
-npm install @korneevec/vue3-dialogs-lib
+pnpm add @korneevec/vue3-dialogs-lib
+# or: npm install @korneevec/vue3-dialogs-lib
 ```
 
 Vue 3.5 or newer is the only requirement — it is a peer dependency, and the library has no runtime
@@ -689,11 +691,14 @@ an `inert` sweep, per window, with the top layer and the trap still out.
 
 ## Development
 
+The repository is developed with pnpm (`packageManager` pins the version); `pnpm install` first.
+
 ```sh
-npm run dev          # playground at playground/
-npm run test         # unit tests
-npm run bench        # performance benchmarks
-npm run type-check
-npm run build        # library build (dist/)
+pnpm dev          # playground at playground/
+pnpm test         # unit tests
+pnpm bench        # performance benchmarks
+pnpm type-check
+pnpm build        # library build (dist/)
+pnpm pack         # local tarball; prepack rebuilds dist/ first
 ```
 

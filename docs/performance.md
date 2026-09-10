@@ -6,7 +6,7 @@ cheap to mutate at interactive rates. This document says how both are measured, 
 were, and where the costs actually are.
 
 ```sh
-npm run bench      # vitest bench --run
+pnpm bench      # vitest bench --run
 ```
 
 ## What is measured
@@ -129,7 +129,7 @@ swap `storage` for an adapter that writes asynchronously.
 
 ## Real-browser check
 
-Measured in Chrome on the playground (`npm run dev`), 8 log-viewer windows each running a 1s timer:
+Measured in Chrome on the playground (`pnpm dev`), 8 log-viewer windows each running a 1s timer:
 
 | State | DOM nodes | JS heap |
 |---|---:|---:|

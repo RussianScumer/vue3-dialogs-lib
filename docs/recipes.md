@@ -1,6 +1,6 @@
 # Recipes
 
-Every snippet below is a complete, working use case. The playground (`npm run dev`) runs cases
+Every snippet below is a complete, working use case. The playground (`pnpm dev`) runs cases
 1–14 side by side.
 
 ## 1 · Install and mount
