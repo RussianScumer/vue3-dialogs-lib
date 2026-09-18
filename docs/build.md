@@ -23,8 +23,8 @@ Three stages, in order:
    `vite build` writes the ES bundle to `dist/vue3-dialogs-lib.js`. Vue is external — the bundle
    imports it, it is not inlined.
 2. `build-types` (`vue-tsc -p tsconfig.lib.json`) emits declarations to `dist/types/`.
-3. `build-css` copies `src/style.css` to `dist/style.css` verbatim. It is a plain file copy, not a
-   bundler output.
+3. `build-css` copies `src/style.css` to `dist/style.css` and `src/themes/` to `dist/themes/`
+   verbatim. It is a plain file copy, not a bundler output.
 
 The stages are chained with `&&`, so **if `build-types` fails, `build-css` never runs and `dist/`
 is left without a stylesheet**. A build that printed a `vue-tsc` error did not produce a shippable
@@ -39,6 +39,10 @@ Expected output:
 dist/
   vue3-dialogs-lib.js
   style.css
+  themes/
+    all.css
+    dracula.css
+    ...
   types/
     index.d.ts
     ...
@@ -54,13 +58,13 @@ Writes `korneevec-vue3-dialogs-lib-<version>.tgz` in the repository root. This i
 operation — it never contacts a registry and is not a publish.
 
 `prepack` runs `pnpm build` first, so the tarball always carries a fresh `dist/`. `files: ["dist"]`
-keeps everything else out; npm adds `package.json` and `README.md` on its own. `src/`,
-`playground/`, `_doc/` and the tests are not in the tarball.
+keeps everything else out; npm adds `package.json`, `README.md` and `LICENSE` on its own. `src/`,
+`docs/`, `playground/` and the tests are not in the tarball.
 
 Inspect it:
 
 ```sh
-tar -tzf korneevec-vue3-dialogs-lib-0.3.0.tgz
+tar -tzf korneevec-vue3-dialogs-lib-<version>.tgz
 ```
 
 Tarballs are gitignored (`*.tgz`).
@@ -72,7 +76,7 @@ The one check that proves `exports` and `types` point at files that exist:
 ```sh
 mkdir /tmp/consume && cd /tmp/consume
 pnpm init
-pnpm add vue /path/to/vue-dialog-lib/korneevec-vue3-dialogs-lib-0.3.0.tgz
+pnpm add vue /path/to/vue3-dialogs-lib/korneevec-vue3-dialogs-lib-<version>.tgz
 ```
 
 ```js
@@ -100,5 +104,19 @@ pnpm exec playwright install chromium
 
 ## Releasing
 
-Out of scope here. Version bumps and `CHANGELOG.md` are manual, and the publish process is
-undecided — `pnpm pack` is as far as this document goes.
+Releases are manual. The package is scoped and `publishConfig.access` is already `public`, so the
+whole flow is:
+
+```sh
+# 1. bump "version" in package.json (semver), commit it
+# 2. see exactly what would be uploaded — prepack rebuilds dist/ first
+pnpm publish --dry-run
+# 3. publish
+pnpm publish
+# 4. tag the commit
+git tag v<version> && git push --tags
+```
+
+`pnpm publish` runs `prepack`, so `dist/` is always rebuilt from the commit being released; a
+`vue-tsc` error aborts the publish before anything is uploaded. The dry run prints the file list —
+check it against the expected `dist/` tree above and that `LICENSE` and `README.md` are in it.

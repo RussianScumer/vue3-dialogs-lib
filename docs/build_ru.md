@@ -24,8 +24,8 @@ pnpm build
    `vite build` пишет ES-бандл в `dist/vue3-dialogs-lib.js`. Vue вынесен во внешние зависимости —
    бандл импортирует его, а не включает в себя.
 2. `build-types` (`vue-tsc -p tsconfig.lib.json`) выпускает декларации в `dist/types/`.
-3. `build-css` копирует `src/style.css` в `dist/style.css` как есть. Это обычное копирование файла,
-   а не вывод сборщика.
+3. `build-css` копирует `src/style.css` в `dist/style.css` и `src/themes/` в `dist/themes/` как есть.
+   Это обычное копирование файлов, а не результат бандлера.
 
 Стадии соединены через `&&`, поэтому **если `build-types` упадёт, `build-css` не выполнится и
 `dist/` останется без стилей**. Сборка, напечатавшая ошибку `vue-tsc`, не дала пригодный к отправке
@@ -40,6 +40,10 @@ pnpm build
 dist/
   vue3-dialogs-lib.js
   style.css
+  themes/
+    all.css
+    dracula.css
+    ...
   types/
     index.d.ts
     ...
@@ -55,13 +59,13 @@ pnpm pack
 не обращается к реестру и не является публикацией.
 
 `prepack` сначала запускает `pnpm build`, поэтому в архиве всегда свежий `dist/`. Поле
-`files: ["dist"]` отсекает всё остальное; `package.json` и `README.md` npm добавляет сам. `src/`,
-`playground/`, `_doc/` и тесты в архив не попадают.
+`files: ["dist"]` отсекает всё остальное; `package.json`, `README.md` и `LICENSE` npm добавляет сам.
+`src/`, `docs/`, `playground/` и тесты в архив не попадают.
 
 Посмотреть содержимое:
 
 ```sh
-tar -tzf korneevec-vue3-dialogs-lib-0.3.0.tgz
+tar -tzf korneevec-vue3-dialogs-lib-<версия>.tgz
 ```
 
 Архивы игнорируются гитом (`*.tgz`).
@@ -73,7 +77,7 @@ tar -tzf korneevec-vue3-dialogs-lib-0.3.0.tgz
 ```sh
 mkdir /tmp/consume && cd /tmp/consume
 pnpm init
-pnpm add vue /путь/к/vue-dialog-lib/korneevec-vue3-dialogs-lib-0.3.0.tgz
+pnpm add vue /путь/к/vue3-dialogs-lib/korneevec-vue3-dialogs-lib-<версия>.tgz
 ```
 
 ```js
@@ -101,5 +105,20 @@ pnpm exec playwright install chromium
 
 ## Релиз
 
-Вне рамок этого документа. Поднятие версии и `CHANGELOG.md` делаются вручную, процесс публикации не
-определён — дальше `pnpm pack` здесь ничего нет.
+Релизы делаются вручную. Пакет scoped, и `publishConfig.access` уже стоит в `public`, так что весь
+процесс такой:
+
+```sh
+# 1. поднять "version" в package.json (semver), закоммитить
+# 2. посмотреть, что именно уйдёт в реестр — prepack сначала пересоберёт dist/
+pnpm publish --dry-run
+# 3. опубликовать
+pnpm publish
+# 4. пометить коммит тегом
+git tag v<версия> && git push --tags
+```
+
+`pnpm publish` запускает `prepack`, поэтому `dist/` всегда пересобирается из релизного коммита;
+ошибка `vue-tsc` прервёт публикацию до того, как что-либо будет загружено. Dry run печатает список
+файлов — сверьте его с ожидаемым деревом `dist/` выше и убедитесь, что `LICENSE` и `README.md` в нём
+есть.

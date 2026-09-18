@@ -15,9 +15,9 @@ Vue 3.5 window/dialog library (`@korneevec/vue3-dialogs-lib`), pnpm, ES-only Vit
 - `pnpm bench` — Vitest benchmarks (`src/__bench__/`).
 - `pnpm dev` — playground at `playground/` (`index.html`), the real-browser test surface.
 - `pnpm pack` — local tarball, no registry contact. `prepack` runs `pnpm build` first, so the tarball always carries a fresh `dist/`. `files: ["dist"]` keeps everything else out.
-- `docs/build.md` (and `docs/build_ru.md`) is the long-form version of all of the above. Keep it in sync when a script changes.
+- `docs/build.md` (and `docs/build_ru.md`) is the long-form version of all of the above. Keep it in sync when a script changes. Every doc has a `_ru` twin (`README_ru.md`, `docs/*_ru.md`); edit both.
 
-## Global constraints (from `_doc/TASKS-tier1.md`)
+## Global constraints
 
 A change that violates one of these is rejected even if it works.
 
@@ -45,7 +45,6 @@ A change that violates one of these is rejected even if it works.
 
 ## Workflow
 
-- One task per branch, one PR (remote is Bitbucket). Branch `vw-NN-slug` off `master`. `/start-task VW-NN slug` scaffolds it.
-- Task contracts (Goal / Do / Done when / Status) live in `_doc/TASKS-*.md`; reasoning in `_doc/ROADMAP-gaps.md`. Read the roadmap section named in the task before starting.
+- One task per branch, one PR. Public remote is GitHub (`RussianScumer/vue3-dialogs-lib`). Branch off `master` with a short slug.
 - Commits: Conventional Commits, lowercase sentence-style subject, e.g. `feat(keymap): keyboard snapping and window switching`, `fix(drag): undock on drag, not on pointerdown`; `!` after the scope for breaking changes.
-- Do not bump `package.json` version or edit `CHANGELOG.md` unless asked. Releases are manual and the publish process is undecided.
+- Do not bump `package.json` version unless asked. Releases are manual: `pnpm publish` (see `docs/build.md` "Releasing").

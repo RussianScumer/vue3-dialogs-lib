@@ -43,6 +43,27 @@
     "node": "^22.18.0 || >=24.12.0"
   },
   "description": "Window manager for Vue 3: minimizable, draggable, persistable windows on the native <dialog> element.",
+  "keywords": [
+    "vue",
+    "vue3",
+    "dialog",
+    "window",
+    "window-manager",
+    "modal",
+    "draggable",
+    "resizable",
+    "persist",
+    "taskbar"
+  ],
+  "author": "Korneevec Ilia",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RussianScumer/vue3-dialogs-lib.git"
+  },
+  "homepage": "https://github.com/RussianScumer/vue3-dialogs-lib#readme",
+  "bugs": {
+    "url": "https://github.com/RussianScumer/vue3-dialogs-lib/issues"
+  },
   "license": "MIT",
   "sideEffects": [
     "*.css"

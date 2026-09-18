@@ -1,6 +1,6 @@
 ---
 name: verify-task
-description: Run the three definition-of-done gates for a vw-NN task in order — lint + type-check, vitest (unit + browser projects), then exercise the change in the playground in a real browser via the Chrome tools. Use after finishing a task, before opening a PR, or when asked to verify a change end-to-end.
+description: Run the three definition-of-done gates for a task in order — lint + type-check, vitest (unit + browser projects), then exercise the change in the playground in a real browser via the Chrome tools. Use after finishing a task, before opening a PR, or when asked to verify a change end-to-end.
 ---
 
 Run the three gates from CLAUDE.md "Global constraints" §9, in order. Stop at the first failing gate and report; do not continue to the next one.
@@ -23,7 +23,7 @@ Runs both projects (`unit` jsdom, `browser` Playwright Chromium). If the browser
 
 ## Gate 3 — playground in a real browser
 
-1. Find what to exercise: read the task's entry in `_doc/TASKS-*.md` (the "Done when" list) or, if there is no task entry, derive it from the diff (`git diff master --stat`).
+1. Find what to exercise: derive it from the diff (`git diff master --stat`) and the task as the user stated it.
 2. Start the dev server in the background and capture the URL it prints (default `http://localhost:5173`):
    ```
    pnpm dev

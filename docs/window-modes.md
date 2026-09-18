@@ -529,4 +529,4 @@ win.isRestored(id)                 // true for a window that came from storage
 - [How it works](./how-it-works.md) — the descriptor model, the render bands, the runtime-only maps
   and why each one is where it is.
 - [Recipes](./recipes.md) — complete, copy-pasteable use cases.
-- [README](../README.md) — the full option and API reference.
+- [API reference](./api.md) — the full option and API reference.
