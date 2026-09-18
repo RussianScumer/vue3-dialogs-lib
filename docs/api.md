@@ -1,6 +1,6 @@
 # API reference
 
-Every option, method and behaviour of `@korneevec/vue3-dialogs-lib`, in one place. The
+Every option, method and behaviour of `@korneevecin/vue3-dialogs-lib`, in one place. The
 [README](../README.md) covers install and the first window; this document is what you read after
 that.
 
@@ -28,8 +28,8 @@ that.
 Everything `createWindows()` accepts. Only `components` is required.
 
 ```js
-import { createWindows } from '@korneevec/vue3-dialogs-lib'
-import '@korneevec/vue3-dialogs-lib/style.css' // optional baseline
+import { createWindows } from '@korneevecin/vue3-dialogs-lib'
+import '@korneevecin/vue3-dialogs-lib/style.css' // optional baseline
 
 app.use(createWindows({
   components: {                          // name -> component (async loader recommended)
@@ -105,7 +105,7 @@ is minimized, instead of the element that opened it.
 Works anywhere, including outside `setup()`:
 
 ```js
-import { useWindows } from '@korneevec/vue3-dialogs-lib'
+import { useWindows } from '@korneevecin/vue3-dialogs-lib'
 
 const win = useWindows()
 const { id, result } = win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })
@@ -285,7 +285,7 @@ saved.ok && saved.data.name // SavedItem
 
 ```vue
 <script setup>
-import { useWindowState, useWindowContext } from '@korneevec/vue3-dialogs-lib'
+import { useWindowState, useWindowContext } from '@korneevecin/vue3-dialogs-lib'
 
 const props = defineProps({ id: Number, windowId: String })
 
@@ -660,8 +660,8 @@ Ready-made palettes ship alongside the baseline sheet. They declare the colour t
 else — no radius, fonts, padding or motion — so they compose with whatever shape you already set.
 
 ```js
-import '@korneevec/vue3-dialogs-lib/style.css'
-import '@korneevec/vue3-dialogs-lib/themes/dracula.css'
+import '@korneevecin/vue3-dialogs-lib/style.css'
+import '@korneevecin/vue3-dialogs-lib/themes/dracula.css'
 ```
 
 ```html
@@ -673,7 +673,7 @@ wrapper, or on a single window (`BaseWindow` has one root element, so a `class` 
 a runtime picker, import `themes/all.css` once and swap the attribute:
 
 ```js
-import '@korneevec/vue3-dialogs-lib/themes/all.css'
+import '@korneevecin/vue3-dialogs-lib/themes/all.css'
 
 document.documentElement.dataset.vtdTheme = 'nord'
 delete document.documentElement.dataset.vtdTheme // back to the library defaults

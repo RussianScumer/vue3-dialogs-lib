@@ -1,6 +1,6 @@
 # Справочник API
 
-Каждая опция, метод и поведение `@korneevec/vue3-dialogs-lib` в одном месте. [README](../README_ru.md)
+Каждая опция, метод и поведение `@korneevecin/vue3-dialogs-lib` в одном месте. [README](../README_ru.md)
 рассказывает про установку и первое окно; этот документ читают после него.
 
 - [Опции](#опции)
@@ -27,8 +27,8 @@
 Всё, что принимает `createWindows()`. Обязателен только `components`.
 
 ```js
-import { createWindows } from '@korneevec/vue3-dialogs-lib'
-import '@korneevec/vue3-dialogs-lib/style.css' // необязательная базовая таблица стилей
+import { createWindows } from '@korneevecin/vue3-dialogs-lib'
+import '@korneevecin/vue3-dialogs-lib/style.css' // необязательная базовая таблица стилей
 
 app.use(createWindows({
   components: {                          // имя -> компонент (рекомендуется async-загрузчик)
@@ -102,7 +102,7 @@ app.use(createWindows({
 Работает откуда угодно, в том числе вне `setup()`:
 
 ```js
-import { useWindows } from '@korneevec/vue3-dialogs-lib'
+import { useWindows } from '@korneevecin/vue3-dialogs-lib'
 
 const win = useWindows()
 const { id, result } = win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })
@@ -283,7 +283,7 @@ saved.ok && saved.data.name // SavedItem
 
 ```vue
 <script setup>
-import { useWindowState, useWindowContext } from '@korneevec/vue3-dialogs-lib'
+import { useWindowState, useWindowContext } from '@korneevecin/vue3-dialogs-lib'
 
 const props = defineProps({ id: Number, windowId: String })
 
@@ -668,8 +668,8 @@ win.focusPrev()
 формой, которую вы уже задали.
 
 ```js
-import '@korneevec/vue3-dialogs-lib/style.css'
-import '@korneevec/vue3-dialogs-lib/themes/dracula.css'
+import '@korneevecin/vue3-dialogs-lib/style.css'
+import '@korneevecin/vue3-dialogs-lib/themes/dracula.css'
 ```
 
 ```html
@@ -681,7 +681,7 @@ import '@korneevec/vue3-dialogs-lib/themes/dracula.css'
 переключателя тем в рантайме подключите один раз `themes/all.css` и меняйте атрибут:
 
 ```js
-import '@korneevec/vue3-dialogs-lib/themes/all.css'
+import '@korneevecin/vue3-dialogs-lib/themes/all.css'
 
 document.documentElement.dataset.vtdTheme = 'nord'
 delete document.documentElement.dataset.vtdTheme // обратно к значениям библиотеки по умолчанию

@@ -49,8 +49,8 @@
 
 ```js
 import { createApp } from 'vue'
-import { createWindows } from '@korneevec/vue3-dialogs-lib'
-import '@korneevec/vue3-dialogs-lib/style.css' // необязательная базовая таблица стилей
+import { createWindows } from '@korneevecin/vue3-dialogs-lib'
+import '@korneevecin/vue3-dialogs-lib/style.css' // необязательная базовая таблица стилей
 
 const components = {
   itemEditor: () => import('./windows/ItemEditor.vue'),
@@ -131,7 +131,7 @@ win.open('logViewer', { source: 'app' }, {
 
 ```vue
 <script setup>
-import { useWindowContext, useWindowState } from '@korneevec/vue3-dialogs-lib'
+import { useWindowContext, useWindowState } from '@korneevecin/vue3-dialogs-lib'
 
 const props = defineProps({ windowId: String, id: Number })
 const { setTitle, resolve, dismiss, onBeforeClose } = useWindowContext()

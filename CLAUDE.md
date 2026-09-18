@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Vue 3.5 window/dialog library (`@korneevec/vue3-dialogs-lib`), pnpm, ES-only Vite lib build, no CI.
+Vue 3.5 window/dialog library (`@korneevecin/vue3-dialogs-lib`), pnpm, ES-only Vite lib build, no CI.
 
 ## Commands
 

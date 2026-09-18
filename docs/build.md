@@ -54,7 +54,7 @@ dist/
 pnpm pack
 ```
 
-Writes `korneevec-vue3-dialogs-lib-<version>.tgz` in the repository root. This is a local
+Writes `korneevecin-vue3-dialogs-lib-<version>.tgz` in the repository root. This is a local
 operation — it never contacts a registry and is not a publish.
 
 `prepack` runs `pnpm build` first, so the tarball always carries a fresh `dist/`. `files: ["dist"]`
@@ -64,7 +64,7 @@ keeps everything else out; npm adds `package.json`, `README.md` and `LICENSE` on
 Inspect it:
 
 ```sh
-tar -tzf korneevec-vue3-dialogs-lib-<version>.tgz
+tar -tzf korneevecin-vue3-dialogs-lib-<version>.tgz
 ```
 
 Tarballs are gitignored (`*.tgz`).
@@ -76,12 +76,12 @@ The one check that proves `exports` and `types` point at files that exist:
 ```sh
 mkdir /tmp/consume && cd /tmp/consume
 pnpm init
-pnpm add vue /path/to/vue3-dialogs-lib/korneevec-vue3-dialogs-lib-<version>.tgz
+pnpm add vue /path/to/vue3-dialogs-lib/korneevecin-vue3-dialogs-lib-<version>.tgz
 ```
 
 ```js
-import { createWindows } from '@korneevec/vue3-dialogs-lib'
-import '@korneevec/vue3-dialogs-lib/style.css'
+import { createWindows } from '@korneevecin/vue3-dialogs-lib'
+import '@korneevecin/vue3-dialogs-lib/style.css'
 ```
 
 ## Other commands

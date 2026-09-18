@@ -267,7 +267,7 @@ function clearStorage() {
     </header>
 
     <main class="page">
-      <h1>@korneevec/vue3-dialogs-lib playground</h1>
+      <h1>@korneevecin/vue3-dialogs-lib playground</h1>
       <p class="lede">
         Every case below is a claim the library makes. The log on the right records what happened.
       </p>

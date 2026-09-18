@@ -55,7 +55,7 @@ dist/
 pnpm pack
 ```
 
-Пишет `korneevec-vue3-dialogs-lib-<версия>.tgz` в корень репозитория. Это локальная операция — она
+Пишет `korneevecin-vue3-dialogs-lib-<версия>.tgz` в корень репозитория. Это локальная операция — она
 не обращается к реестру и не является публикацией.
 
 `prepack` сначала запускает `pnpm build`, поэтому в архиве всегда свежий `dist/`. Поле
@@ -65,7 +65,7 @@ pnpm pack
 Посмотреть содержимое:
 
 ```sh
-tar -tzf korneevec-vue3-dialogs-lib-<версия>.tgz
+tar -tzf korneevecin-vue3-dialogs-lib-<версия>.tgz
 ```
 
 Архивы игнорируются гитом (`*.tgz`).
@@ -77,12 +77,12 @@ tar -tzf korneevec-vue3-dialogs-lib-<версия>.tgz
 ```sh
 mkdir /tmp/consume && cd /tmp/consume
 pnpm init
-pnpm add vue /путь/к/vue3-dialogs-lib/korneevec-vue3-dialogs-lib-<версия>.tgz
+pnpm add vue /путь/к/vue3-dialogs-lib/korneevecin-vue3-dialogs-lib-<версия>.tgz
 ```
 
 ```js
-import { createWindows } from '@korneevec/vue3-dialogs-lib'
-import '@korneevec/vue3-dialogs-lib/style.css'
+import { createWindows } from '@korneevecin/vue3-dialogs-lib'
+import '@korneevecin/vue3-dialogs-lib/style.css'
 ```
 
 ## Остальные команды

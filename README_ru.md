@@ -1,6 +1,6 @@
-# @korneevec/vue3-dialogs-lib
+# @korneevecin/vue3-dialogs-lib
 
-[![npm](https://img.shields.io/npm/v/%40korneevec%2Fvue3-dialogs-lib)](https://www.npmjs.com/package/@korneevec/vue3-dialogs-lib)
+[![npm](https://img.shields.io/npm/v/%40korneevecin%2Fvue3-dialogs-lib)](https://www.npmjs.com/package/@korneevecin/vue3-dialogs-lib)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/RussianScumer/vue3-dialogs-lib/blob/master/LICENSE)
 
 [English](https://github.com/RussianScumer/vue3-dialogs-lib/blob/master/README.md) · **Русский**
@@ -39,8 +39,8 @@
 ## Установка
 
 ```sh
-pnpm add @korneevec/vue3-dialogs-lib
-# или: npm install @korneevec/vue3-dialogs-lib
+pnpm add @korneevecin/vue3-dialogs-lib
+# или: npm install @korneevecin/vue3-dialogs-lib
 ```
 
 Единственное требование — Vue 3.5 или новее (peer-зависимость). Стили опциональны: без них окна
@@ -52,8 +52,8 @@ pnpm add @korneevec/vue3-dialogs-lib
 
 ```js
 // main.js
-import { createWindows } from '@korneevec/vue3-dialogs-lib'
-import '@korneevec/vue3-dialogs-lib/style.css' // опционально
+import { createWindows } from '@korneevecin/vue3-dialogs-lib'
+import '@korneevecin/vue3-dialogs-lib/style.css' // опционально
 
 app.use(createWindows({
   components: {
@@ -87,7 +87,7 @@ app.use(createWindows({
 Открывайте окна откуда угодно, внутри `setup()` и снаружи:
 
 ```js
-import { useWindows } from '@korneevec/vue3-dialogs-lib'
+import { useWindows } from '@korneevecin/vue3-dialogs-lib'
 
 const win = useWindows()
 const { id, result } = win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })
@@ -102,7 +102,7 @@ const saved = await result   // { ok: true, data } | { ok: false, reason: 'close
 
 ```vue
 <script setup>
-import { useWindowState, useWindowContext } from '@korneevec/vue3-dialogs-lib'
+import { useWindowState, useWindowContext } from '@korneevecin/vue3-dialogs-lib'
 
 const props = defineProps({ id: Number, windowId: String })
 

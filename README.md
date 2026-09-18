@@ -1,6 +1,6 @@
-# @korneevec/vue3-dialogs-lib
+# @korneevecin/vue3-dialogs-lib
 
-[![npm](https://img.shields.io/npm/v/%40korneevec%2Fvue3-dialogs-lib)](https://www.npmjs.com/package/@korneevec/vue3-dialogs-lib)
+[![npm](https://img.shields.io/npm/v/%40korneevecin%2Fvue3-dialogs-lib)](https://www.npmjs.com/package/@korneevecin/vue3-dialogs-lib)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/RussianScumer/vue3-dialogs-lib/blob/master/LICENSE)
 
 **English** · [Русский](https://github.com/RussianScumer/vue3-dialogs-lib/blob/master/README_ru.md)
@@ -38,8 +38,8 @@ content is unmounted, not hidden), and with persistence on it survives a page re
 ## Install
 
 ```sh
-pnpm add @korneevec/vue3-dialogs-lib
-# or: npm install @korneevec/vue3-dialogs-lib
+pnpm add @korneevecin/vue3-dialogs-lib
+# or: npm install @korneevecin/vue3-dialogs-lib
 ```
 
 Vue 3.5 or newer is the only requirement (a peer dependency). The stylesheet is optional: without
@@ -51,8 +51,8 @@ Register your window components once and mount the host above the router outlet:
 
 ```js
 // main.js
-import { createWindows } from '@korneevec/vue3-dialogs-lib'
-import '@korneevec/vue3-dialogs-lib/style.css' // optional
+import { createWindows } from '@korneevecin/vue3-dialogs-lib'
+import '@korneevecin/vue3-dialogs-lib/style.css' // optional
 
 app.use(createWindows({
   components: {
@@ -86,7 +86,7 @@ app.use(createWindows({
 Open windows from anywhere, inside or outside `setup()`:
 
 ```js
-import { useWindows } from '@korneevec/vue3-dialogs-lib'
+import { useWindows } from '@korneevecin/vue3-dialogs-lib'
 
 const win = useWindows()
 const { id, result } = win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })
@@ -101,7 +101,7 @@ Inside a window's content:
 
 ```vue
 <script setup>
-import { useWindowState, useWindowContext } from '@korneevec/vue3-dialogs-lib'
+import { useWindowState, useWindowContext } from '@korneevecin/vue3-dialogs-lib'
 
 const props = defineProps({ id: Number, windowId: String })
 

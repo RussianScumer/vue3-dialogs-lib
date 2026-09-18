@@ -49,8 +49,8 @@ to dismiss.
 
 ```js
 import { createApp } from 'vue'
-import { createWindows } from '@korneevec/vue3-dialogs-lib'
-import '@korneevec/vue3-dialogs-lib/style.css' // optional baseline
+import { createWindows } from '@korneevecin/vue3-dialogs-lib'
+import '@korneevecin/vue3-dialogs-lib/style.css' // optional baseline
 
 const components = {
   itemEditor: () => import('./windows/ItemEditor.vue'),
@@ -131,7 +131,7 @@ Inside the window's own component:
 
 ```vue
 <script setup>
-import { useWindowContext, useWindowState } from '@korneevec/vue3-dialogs-lib'
+import { useWindowContext, useWindowState } from '@korneevecin/vue3-dialogs-lib'
 
 const props = defineProps({ windowId: String, id: Number })
 const { setTitle, resolve, dismiss, onBeforeClose } = useWindowContext()

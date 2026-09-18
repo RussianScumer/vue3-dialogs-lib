@@ -8,8 +8,8 @@
 ```js
 // main.js
 import { createApp } from 'vue'
-import { createWindows } from '@korneevec/vue3-dialogs-lib'
-import '@korneevec/vue3-dialogs-lib/style.css' // необязательная базовая таблица стилей
+import { createWindows } from '@korneevecin/vue3-dialogs-lib'
+import '@korneevecin/vue3-dialogs-lib/style.css' // необязательная базовая таблица стилей
 import App from './App.vue'
 
 createApp(App)
@@ -34,14 +34,14 @@ createApp(App)
 </template>
 
 <script setup>
-import { WindowHost } from '@korneevec/vue3-dialogs-lib'
+import { WindowHost } from '@korneevecin/vue3-dialogs-lib'
 </script>
 ```
 
 ## 2 · Открыть окно
 
 ```js
-import { useWindows } from '@korneevec/vue3-dialogs-lib'
+import { useWindows } from '@korneevecin/vue3-dialogs-lib'
 
 const win = useWindows()
 const { id } = win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })
@@ -67,7 +67,7 @@ win.open('itemEditor', { id: 43 })  // другая сущность, второ
 
 ```js
 // notifications.js
-import { useWindows } from '@korneevec/vue3-dialogs-lib'
+import { useWindows } from '@korneevecin/vue3-dialogs-lib'
 
 export function onServerAlert(alert) {
   useWindows().open('logViewer', { source: alert.source }, { title: `Alert ${alert.id}` })
@@ -80,7 +80,7 @@ export function onServerAlert(alert) {
 
 ```vue
 <script setup>
-import { useWindowContext } from '@korneevec/vue3-dialogs-lib'
+import { useWindowContext } from '@korneevecin/vue3-dialogs-lib'
 
 const props = defineProps({ id: Number, windowId: String })
 const { setTitle, minimize, close, descriptor, isRestored } = useWindowContext()
@@ -101,7 +101,7 @@ setTitle(`Item ${props.id}`)
 
 ```vue
 <script setup>
-import { useWindowState } from '@korneevec/vue3-dialogs-lib'
+import { useWindowState } from '@korneevecin/vue3-dialogs-lib'
 
 const props = defineProps({ windowId: String })
 
@@ -125,7 +125,7 @@ const form = useWindowState(props.windowId, () => ({ name: '', note: '' }))
 ```vue
 <script setup>
 import { onMounted, ref } from 'vue'
-import { useWindowContext, useWindowState } from '@korneevec/vue3-dialogs-lib'
+import { useWindowContext, useWindowState } from '@korneevecin/vue3-dialogs-lib'
 
 const props = defineProps({ id: Number, windowId: String })
 const form = useWindowState(props.windowId, () => ({ name: '' }))
@@ -221,7 +221,7 @@ function takeServerCopy() {
 
 ```vue
 <script setup>
-import { WindowHost, useWindows } from '@korneevec/vue3-dialogs-lib'
+import { WindowHost, useWindows } from '@korneevecin/vue3-dialogs-lib'
 
 const win = useWindows()
 </script>
@@ -318,8 +318,8 @@ const win = useWindows()
 Одна тема — один импорт:
 
 ```js
-import '@korneevec/vue3-dialogs-lib/style.css'
-import '@korneevec/vue3-dialogs-lib/themes/nord.css'
+import '@korneevecin/vue3-dialogs-lib/style.css'
+import '@korneevecin/vue3-dialogs-lib/themes/nord.css'
 ```
 
 ```html
@@ -332,7 +332,7 @@ import '@korneevec/vue3-dialogs-lib/themes/nord.css'
 ```vue
 <script setup>
 import { ref, watchEffect } from 'vue'
-import '@korneevec/vue3-dialogs-lib/themes/all.css'
+import '@korneevecin/vue3-dialogs-lib/themes/all.css'
 
 const THEMES = ['dracula', 'nord', 'solarized-light', 'catppuccin-mocha', 'github-dark']
 const theme = ref('')
@@ -438,7 +438,7 @@ createWindows({ components, persist: { key: 'app:windows', storage: remote } })
 ## 12 · Закрыть всё при выходе из системы
 
 ```js
-import { useWindows } from '@korneevec/vue3-dialogs-lib'
+import { useWindows } from '@korneevecin/vue3-dialogs-lib'
 
 export function logout() {
   useWindows().closeAll()             // черновики предыдущего пользователя исчезли
@@ -481,7 +481,7 @@ function tile() {
 Стор не зависит от DOM, поэтому большинству проверок браузер не нужен:
 
 ```js
-import { createWindows, useWindows } from '@korneevec/vue3-dialogs-lib'
+import { createWindows, useWindows } from '@korneevecin/vue3-dialogs-lib'
 import { mount } from '@vue/test-utils'
 
 const plugin = createWindows({ components: { editor: ItemEditor } })
@@ -570,7 +570,7 @@ createWindows({
 
 ```ts
 // windows.ts
-import { useWindows } from '@korneevec/vue3-dialogs-lib'
+import { useWindows } from '@korneevecin/vue3-dialogs-lib'
 
 export const components = {
   itemEditor: () => import('./windows/ItemEditor.vue'), // defineProps<{ id: number }>()
@@ -741,7 +741,7 @@ onBeforeClose(async () => !form.name || (await ask(`Отбросить черн�
 
 ```vue
 <script setup>
-import { useWindowContext } from '@korneevec/vue3-dialogs-lib'
+import { useWindowContext } from '@korneevecin/vue3-dialogs-lib'
 
 const { resolve, dismiss } = useWindowContext()
 
