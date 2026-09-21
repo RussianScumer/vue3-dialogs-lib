@@ -848,7 +848,11 @@ export function createStore(options: ResolvedOptions) {
     const arrived = new Set(stack.map((w) => w.id))
     const departed = s.stack.filter((w) => !arrived.has(w.id)).map((w) => w.id)
     s.stack = stack
-    s.topZ = Math.max(topZ, ...stack.map((w) => w.z), 10)
+    // A loop, not a spread: `Math.max(...stack)` is an argument list, and a crafted blob long
+    // enough overflows it. A non-finite `topZ` would poison every later `++s.topZ`.
+    let top = Number.isFinite(topZ) ? topZ : 10
+    for (const w of stack) if (w.z > top) top = w.z
+    s.topZ = Math.max(top, 10)
     restoredIds.clear()
     owners.clear()
     docks.clear()

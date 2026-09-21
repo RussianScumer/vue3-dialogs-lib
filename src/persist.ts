@@ -67,7 +67,9 @@ function normalize(v: WindowDescriptor, options: ResolvedOptions): WindowDescrip
   d.title = typeof d.title === 'string' ? d.title : ''
   d.props = d.props && typeof d.props === 'object' ? d.props : {}
   d.meta = d.meta && typeof d.meta === 'object' ? d.meta : {}
-  d.state = d.state ?? null
+  // A draft is whatever `useWindowState` handed the content: an object, or nothing yet. Anything
+  // else in the blob is a hand edit, and a content component would trip over it on first read.
+  d.state = typeof d.state === 'object' ? d.state : null
   d.closable = bool(d.closable, defs.closable ?? true)
   d.minimizable = bool(d.minimizable, defs.minimizable ?? true)
   d.draggable = bool(d.draggable, defs.draggable ?? true)
@@ -80,6 +82,18 @@ function normalize(v: WindowDescriptor, options: ResolvedOptions): WindowDescrip
   // its `minW`, or edited by hand, would otherwise render under the minimum until the first resize.
   Object.assign(d, clampSize(d.w, d.h, d))
   return d
+}
+
+/**
+ * `openWindow` evicts past `maxWindows` one open at a time; a blob longer than the limit would sit
+ * over it until the next `open()`. The highest `z` are the most recently used, so those survive,
+ * in their original stack order. A blob never carries owned windows, so every entry is a root.
+ */
+function trim(stack: WindowDescriptor[], maxWindows: number): WindowDescriptor[] {
+  const limit = Math.max(1, maxWindows)
+  if (stack.length <= limit) return stack
+  const keep = new Set([...stack].sort((a, b) => b.z - a.z).slice(0, limit).map((d) => d.id))
+  return stack.filter((d) => keep.has(d.id))
 }
 
 function read(options: ResolvedOptions): Snapshot | null {
@@ -98,8 +112,17 @@ function read(options: ResolvedOptions): Snapshot | null {
     if (!parsed || !Array.isArray(parsed.stack)) return null
     // Dropping a readable blob would throw away every open window on upgrade; migrate instead.
     if (parsed.schema !== SCHEMA && !MIGRATABLE.has(parsed.schema as number)) return null
-    const stack = parsed.stack.filter((d) => isDescriptor(d, options)).map((d) => normalize(d, options))
-    return { schema: SCHEMA, topZ: typeof parsed.topZ === 'number' ? parsed.topZ : 10, stack }
+    const seen = new Set<string>()
+    const stack: WindowDescriptor[] = []
+    for (const d of parsed.stack) {
+      // Two descriptors with one id would collide in `byId` and in the frame `v-for`; the first wins.
+      if (!isDescriptor(d, options) || seen.has(d.id)) continue
+      seen.add(d.id)
+      stack.push(normalize(d, options))
+    }
+    // `Infinity` parses fine (`1e999`) and would make every later `++topZ` a no-op, so no window
+    // could ever be raised again. `size()` asks the same finite question the descriptors get.
+    return { schema: SCHEMA, topZ: size(parsed.topZ, 10), stack: trim(stack, options.maxWindows) }
   } catch {
     return null
   }
@@ -112,6 +135,22 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
 
   const token = newToken()
   let timer: ReturnType<typeof setTimeout> | undefined
+  /** The blob this tab would write for the data it was last hydrated with; see `write()`. */
+  let hydrated: string | undefined
+
+  // Owned and modal windows are dropped on the way out, not filtered on the way in: both links
+  // live in a runtime map, so a persisted child would come back as an ordinary window with no
+  // owner and no way to be answered, and a persisted modal as a question with nobody asking it —
+  // dimming the page on load over an answer that was given yesterday.
+  const serialize = (): string => {
+    const data: Snapshot = {
+      schema: SCHEMA,
+      topZ: store.s.topZ,
+      stack: store.s.stack.filter((w) => !store.ownerOf(w.id) && !store.isModal(w.id)),
+      writer: token,
+    }
+    return JSON.stringify(data)
+  }
 
   function hydrateFromStorage(): void {
     const snapshot = read(options)
@@ -119,6 +158,11 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
     const view = { w: window.innerWidth, h: window.innerHeight }
     for (const d of snapshot.stack) clampDescriptor(d, view, options.bounds)
     store.hydrate(snapshot.stack, snapshot.topZ)
+    // Replacing the stack wakes the deep watcher like any edit, and the write it schedules would
+    // put the same data back under this tab's token: a foreign write to every other tab, which
+    // stops them all, and a loop between two tabs that both `resume()`. The blob just hydrated
+    // cannot have a cycle, so this cannot throw.
+    hydrated = serialize()
   }
 
   hydrateFromStorage()
@@ -129,18 +173,14 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
 
   const write = (): void => {
     if (stopped) return
-    // Owned and modal windows are dropped on the way out, not filtered on the way in: both links
-    // live in a runtime map, so a persisted child would come back as an ordinary window with no
-    // owner and no way to be answered, and a persisted modal as a question with nobody asking it —
-    // dimming the page on load over an answer that was given yesterday.
-    const data: Snapshot = {
-      schema: SCHEMA,
-      topZ: store.s.topZ,
-      stack: store.s.stack.filter((w) => !store.ownerOf(w.id) && !store.isModal(w.id)),
-      writer: token,
-    }
     try {
-      p.storage.setItem(p.key, JSON.stringify(data))
+      const raw = serialize()
+      // The first write after a hydrate is skipped only if it would say nothing new; an edit that
+      // landed inside the same debounce window changes the blob and goes through as usual.
+      const quiet = raw === hydrated
+      hydrated = undefined
+      if (quiet) return
+      p.storage.setItem(p.key, raw)
     } catch {
       /* storage full or unavailable — drop the write, keep the app alive */
     }
@@ -191,6 +231,9 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
   const onStorage = (e: StorageEvent): void => {
     // `key` is null when the whole store was cleared, which is a foreign write to this key too.
     if (e.key !== null && e.key !== p.key) return
+    // `sessionStorage` and `localStorage` can share a key name, and a write to the other one is
+    // not a write to ours. An event with no area (a synthetic one) is judged by its key alone.
+    if (e.storageArea && e.storageArea !== p.storage) return
     const raw = e.key === null ? null : e.newValue
     if (!isForeign(raw)) return
 

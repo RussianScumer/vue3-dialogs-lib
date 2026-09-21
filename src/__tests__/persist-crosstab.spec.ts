@@ -208,4 +208,70 @@ describe('cross-tab persistence', () => {
     fire('k', foreignBlob())
     expect(onExternalChange).not.toHaveBeenCalled()
   })
+
+  it('ignores a storage event from a different storage area', () => {
+    const onExternalChange = vi.fn()
+    const options = resolveOptions({
+      components: { editor: Stub },
+      persist: { key: 'k', storage: window.localStorage, onExternalChange },
+    })
+    const store = createStore(options)
+    scope = effectScope(true)
+    scope.run(() => setupPersist(store, options))
+
+    // Same key name in `sessionStorage`: not a write to ours.
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'k', newValue: foreignBlob(), storageArea: window.sessionStorage,
+    }))
+    expect(onExternalChange).not.toHaveBeenCalled()
+
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'k', newValue: foreignBlob(), storageArea: window.localStorage,
+    }))
+    expect(onExternalChange).toHaveBeenCalledTimes(1)
+    window.localStorage.clear()
+  })
+
+  it('resume() alone does not write the hydrated blob back under this tab’s token', async () => {
+    vi.useFakeTimers()
+    const { store, storage } = setup((info) => {
+      storage.data.set('k', info.newValue!)
+      info.resume()
+    })
+    const setItem = vi.spyOn(storage, 'setItem')
+    store.open('editor')
+    await nextTick()
+    vi.advanceTimersByTime(300)
+    setItem.mockClear()
+
+    // Every other tab would read a write-back as foreign and stop; two tabs that both resume
+    // would ping-pong the same data forever.
+    fire('k', foreignBlob('from-b'))
+    await nextTick()
+    vi.advanceTimersByTime(400)
+    expect(setItem).not.toHaveBeenCalled()
+    expect(JSON.parse(storage.data.get('k')!).writer).toBe('another-tab')
+
+    // A real edit after the resume persists as usual, once.
+    store.setGeometry('from-b', { x: 55, y: 55 })
+    await nextTick()
+    vi.advanceTimersByTime(300)
+    expect(setItem).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(storage.data.get('k')!).writer).not.toBe('another-tab')
+  })
+
+  it('an edit inside the same debounce as resume() still persists', async () => {
+    vi.useFakeTimers()
+    const { store, storage } = setup((info) => {
+      storage.data.set('k', info.newValue!)
+      info.resume()
+      store.setGeometry('from-b', { x: 77, y: 77 })
+    })
+    store.open('editor')
+
+    fire('k', foreignBlob('from-b'))
+    await nextTick()
+    vi.advanceTimersByTime(300)
+    expect(JSON.parse(storage.data.get('k')!).stack[0]).toMatchObject({ x: 77, y: 77 })
+  })
 })

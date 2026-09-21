@@ -139,4 +139,51 @@ describe('persist', () => {
     expect(storage.data.get('k')).toBeUndefined()
     vi.useRealTimers()
   })
+
+  it('hydrates a non-finite topZ as 10 so windows can still be raised', () => {
+    // `1e999` parses to `Infinity`; `Math.max(Infinity, …)` would then poison every later `++topZ`.
+    const storage = memoryStorage(`{"schema":${SCHEMA},"topZ":1e999,"stack":[${JSON.stringify(descriptor())}]}`)
+    const options = resolveOptions({ components: { editor: Stub }, persist: { key: 'k', storage } })
+    const store = createStore(options)
+    setupPersist(store, options)
+
+    expect(store.s.topZ).toBe(11) // the finite z of the one hydrated window
+    const id = store.open('editor').id
+    expect(Number.isFinite(store.byId(id)!.z)).toBe(true)
+    expect(store.byId(id)!.z).toBeGreaterThan(11)
+  })
+
+  it('hydrates a topZ that is not a number as 10', () => {
+    const { store } = setup({ schema: SCHEMA, topZ: 'top', stack: [] })
+    expect(store.s.topZ).toBe(10)
+  })
+
+  it('keeps the first of two descriptors that share an id', () => {
+    const { store } = setup({
+      schema: SCHEMA, topZ: 12,
+      stack: [descriptor({ title: 'first' }), descriptor({ title: 'second', z: 12 })],
+    })
+    expect(store.s.stack).toHaveLength(1)
+    expect(store.byId('a')!.title).toBe('first')
+  })
+
+  it('keeps at most maxWindows descriptors, the most recently used ones, in stack order', () => {
+    const stack = Array.from({ length: 20 }, (_, i) => descriptor({ id: `w${i}`, z: 100 - i }))
+    const storage = memoryStorage(JSON.stringify({ schema: SCHEMA, topZ: 100, stack }))
+    const options = resolveOptions({ components: { editor: Stub }, persist: { key: 'k', storage } })
+    const store = createStore(options)
+    setupPersist(store, options)
+
+    // Default limit is 8; the eight highest `z` are w0…w7, and they keep their original order.
+    expect(store.s.stack.map((w) => w.id)).toEqual(['w0', 'w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7'])
+  })
+
+  it('replaces a draft state that is not an object with null', () => {
+    const { store } = setup({
+      schema: SCHEMA, topZ: 11,
+      stack: [descriptor({ state: 'draft' as unknown as null }), descriptor({ id: 'b', state: { ok: 1 } })],
+    })
+    expect(store.byId('a')!.state).toBeNull()
+    expect(store.byId('b')!.state).toEqual({ ok: 1 })
+  })
 })

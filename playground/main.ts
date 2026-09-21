@@ -19,8 +19,15 @@ createApp(App)
         // windows replace this tab's, drafts included.
         // Deliberately not confirm(): a modal blocks the page, and the point of the default is
         // that nothing happens until the consumer asks for it. Call __vwResume() from the console
-        // to adopt the other tab's snapshot and start writing again.
+        // to adopt the other tab's snapshot and start writing again. `?follow` in the URL adopts
+        // every foreign write at once: two such tabs follow each other without stopping or looping,
+        // because resuming does not write the adopted blob back.
         onExternalChange: (info) => {
+          if (new URLSearchParams(location.search).has('follow')) {
+            info.resume()
+            log(`another tab wrote ${info.key} — adopted it (?follow)`)
+            return
+          }
           log(`another tab wrote ${info.key} — this tab stopped persisting; __vwResume() to adopt it`)
           Object.assign(window, {
             __vwResume: () => {
