@@ -197,6 +197,124 @@ const Guarded = defineComponent({
   },
 })
 
+describe('maxWindows eviction honours guards', () => {
+  function limited(maxWindows: number, beforeClose?: BeforeCloseGuard) {
+    return createStore(resolveOptions({ components: { editor: Stub }, maxWindows, beforeClose }))
+  }
+
+  /** Lets every fire-and-forget `requestClose` from the eviction run its guard to the end. */
+  const settle = () => new Promise<void>((r) => setTimeout(r, 0))
+
+  it('keeps the oldest window when its guard refuses: the new one opens over the limit, and dev warns once', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const win = limited(2)
+    const a = win.open('editor', { id: 1 }).id
+    const guard = vi.fn(() => false)
+    win.onBeforeClose(a, guard)
+    const b = win.open('editor', { id: 2 }).id
+
+    const c = win.open('editor', { id: 3 }).id
+    await settle()
+
+    expect(guard).toHaveBeenCalledTimes(1)
+    expect(win.byId(a)).toBeDefined()
+    // The refusal does not cost the next-oldest window its place: the user chose to keep `a`.
+    expect(win.byId(b)).toBeDefined()
+    expect(win.byId(c)).toBeDefined()
+    expect(win.s.stack).toHaveLength(3)
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]?.[0]).toMatch(/maxWindows/)
+  })
+
+  it('evicts the oldest window once its guard allows, with no warning', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const win = limited(2)
+    const a = win.open('editor', { id: 1 }).id
+    const answer = deferred()
+    const guard = vi.fn(() => answer.promise)
+    win.onBeforeClose(a, guard)
+    win.open('editor', { id: 2 })
+
+    const c = win.open('editor', { id: 3 }).id
+    // `open()` is synchronous: the guard has been asked, the window is still there.
+    expect(guard).toHaveBeenCalledTimes(1)
+    expect(win.isClosing(a)).toBe(true)
+    expect(win.byId(a)).toBeDefined()
+    expect(win.byId(c)).toBeDefined()
+    expect(win.s.stack).toHaveLength(3)
+
+    answer.settle(true)
+    await settle()
+    expect(win.byId(a)).toBeUndefined()
+    expect(win.s.stack).toHaveLength(2)
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('the app-wide guard counts as a guard for eviction', async () => {
+    const beforeClose = vi.fn(() => false)
+    const win = limited(2, beforeClose)
+    const a = win.open('editor', { id: 1 }).id
+    win.open('editor', { id: 2 })
+    win.open('editor', { id: 3 })
+    await settle()
+
+    expect(beforeClose).toHaveBeenCalledTimes(1)
+    expect(beforeClose.mock.calls[0]?.[0]).toMatchObject({ id: a })
+    expect(win.byId(a)).toBeDefined()
+    expect(win.s.stack).toHaveLength(3)
+  })
+
+  it('a guard-free root is evicted synchronously, as before', () => {
+    const win = limited(2)
+    const a = win.open('editor', { id: 1 }).id
+    const b = win.open('editor', { id: 2 }).id
+    win.onBeforeClose(b, () => false)
+
+    win.open('editor', { id: 3 })
+    expect(win.byId(a)).toBeUndefined()
+    expect(win.byId(b)).toBeDefined()
+    expect(win.s.stack).toHaveLength(2)
+  })
+
+  it('asks as many roots as have to go: a guarded and a guard-free one when the limit is lowered', async () => {
+    // `maxWindows` is fixed per store, so build the overshoot from a refusal first.
+    const win = limited(2)
+    const a = win.open('editor', { id: 1 }).id
+    win.onBeforeClose(a, () => false)
+    const b = win.open('editor', { id: 2 }).id
+    const c = win.open('editor', { id: 3 }).id
+    await settle()
+    expect(win.s.stack).toHaveLength(3)
+
+    // Three roots at a limit of two: two have to go. `a` is asked again and refuses again, `b`
+    // has no guard and closes on the spot; `c` and the newcomer stay.
+    const d = win.open('editor', { id: 4 }).id
+    await settle()
+    expect(win.byId(a)).toBeDefined()
+    expect(win.byId(b)).toBeUndefined()
+    expect(win.byId(c)).toBeDefined()
+    expect(win.byId(d)).toBeDefined()
+    expect(win.s.stack).toHaveLength(3)
+  })
+
+  it('a pending request is joined, not asked twice', async () => {
+    const win = limited(2)
+    const a = win.open('editor', { id: 1 }).id
+    const answer = deferred()
+    const guard = vi.fn(() => answer.promise)
+    win.onBeforeClose(a, guard)
+    win.open('editor', { id: 2 })
+    const first = win.requestClose(a)
+
+    win.open('editor', { id: 3 })
+    expect(guard).toHaveBeenCalledTimes(1)
+
+    answer.settle(false)
+    await expect(first).resolves.toBe(false)
+    expect(win.byId(a)).toBeDefined()
+  })
+})
+
 describe('the pending state in the view', () => {
   it('disables the default close and minimize controls while a guard is out', async () => {
     answer.current = deferred()

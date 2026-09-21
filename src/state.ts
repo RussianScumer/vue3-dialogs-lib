@@ -588,10 +588,27 @@ export function createStore(options: ResolvedOptions) {
         warn(`maxWindows is ${limit}; treating it as 1`)
         limit = 1
       }
-      let roots = s.stack.filter((w) => !owners.has(w.id))
-      while (roots.length >= limit && roots[0]) {
-        close(roots[0].id)
-        roots = s.stack.filter((w) => !owners.has(w.id))
+      const roots = s.stack.filter((w) => !owners.has(w.id))
+      // How many have to go for the new one to fit. Oldest first, and each one is asked the way
+      // the ✕ would ask it: a root with no guard closes on the spot as before, a guarded root gets
+      // a `requestClose` it may refuse. `open()` is synchronous and hands back a handle, so the
+      // answer cannot be awaited here — the guarded root counts as an eviction in flight and the
+      // walk stops once enough have been asked, without reaching for a younger, unguarded window
+      // in its place. A refusal is the user's decision to keep that window, and the desktop is one
+      // over the limit until they close something themselves.
+      let need = roots.length - limit + 1
+      const asked: Promise<boolean>[] = []
+      for (const root of roots) {
+        if (need <= 0) break
+        if (closeGuards.has(root.id) || options.beforeClose) asked.push(requestClose(root.id))
+        else close(root.id)
+        need--
+      }
+      if (asked.length) {
+        void Promise.all(asked).then((answers) => {
+          const refused = answers.filter((ok) => !ok).length
+          if (refused) warn(`maxWindows is ${limit}; ${refused} guarded window(s) refused to close and the limit is exceeded`)
+        })
       }
     }
 

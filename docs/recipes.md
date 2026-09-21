@@ -544,10 +544,11 @@ onBeforeClose(async () => {
 buttons; the library's default ✕ and – disable themselves. Clicking ✕ again joins the same request
 rather than asking a second time, and a guard that throws keeps the window open.
 
-Guards run on `requestClose(id)` and on the ✕ button. They are deliberately *not* run by
-`close(id)`, `closeAll()`, or `maxWindows` eviction — a logout must not be blockable, and the
-eviction is silent by design. If losing the oldest window's draft matters, raise `maxWindows` or
-watch for it:
+Guards run on `requestClose(id)`, on the ✕ button, and on `maxWindows` eviction: the oldest window
+is asked to close, not closed, and if its guard refuses, the new window opens over the limit
+instead. They are deliberately *not* run by `close(id)` or `closeAll()` — a logout must not be
+blockable. A window with no guard at all is still evicted silently, so if losing its draft matters,
+give it a guard, raise `maxWindows`, or watch for it:
 
 ```js
 win.on('close', (e) => saveDraftSomewhere(e.id))

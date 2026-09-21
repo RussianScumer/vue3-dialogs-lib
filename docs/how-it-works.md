@@ -63,7 +63,7 @@ win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })  → { 
   │
   ├─ unknown name?            → throw immediately (typos fail loudly, not silently)
   ├─ same name + same props?  → restore + focus the existing window, hand back its id and result
-  ├─ at maxWindows?           → close the oldest
+  ├─ at maxWindows?           → close the oldest, or requestClose it when it has a guard
   └─ push descriptor { id, name, props, cascade geometry, z: ++topZ }
        │                       + record the unsettled result, before the `open` event fires
        │
@@ -88,7 +88,9 @@ close(id)    → descriptor removed from the stack; everything about it is gone
 `requestClose()` is the guarded path — the window's own guard first (registered by its mounted
 content), then the app-wide `beforeClose` option. Only the second one can see a **minimized**
 window, whose content is unmounted and whose guard therefore no longer exists. The ✕ button calls
-`requestClose`; `maxWindows` eviction calls `close`.
+`requestClose`. `maxWindows` eviction calls `close` on a root that has no guard and `requestClose`
+on one that has, without awaiting it — `open()` is synchronous — so a refusing guard leaves the
+desktop one window over the limit rather than costing a younger window its place.
 
 Both guards are awaited, so a window sits in a *closing* state for as long as they take. That state
 is a reactive set beside `docks` — runtime-only, so the descriptor and the schema stay where they

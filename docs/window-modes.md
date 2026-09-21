@@ -108,7 +108,7 @@ What you get without asking for anything:
 | Size | `640 × 480`, minimum `160 × 80`, no maximum |
 | Position | cascaded: `40 + (index % 8) * 28` on both axes |
 | Stacking | `z` is bumped on `pointerdown` and on restore |
-| Limit | `maxWindows: 8` — opening a ninth closes the oldest |
+| Limit | `maxWindows: 8` — opening a ninth closes the oldest, or asks it if it has a close guard |
 | Dedupe | same window type + shallow-equal props joins the window already open |
 
 Override any of it per call:

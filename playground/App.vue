@@ -353,7 +353,11 @@ function clearStorage() {
 
           <section>
             <h2>5 · maxWindows evicts the oldest</h2>
-            <p>Limit is {{ options.maxWindows }}; opening past it closes the oldest window.</p>
+            <p>
+              Limit is {{ options.maxWindows }}; opening past it closes the oldest window. A window with a close guard
+              is asked instead of closed: open an item editor, type a name, then flood — the editor asks and, refused,
+              survives one over the limit (the console warns in dev).
+            </p>
             <button
               type="button"
               @click="floodMaxWindows"
@@ -529,8 +533,9 @@ function clearStorage() {
               down, and a second click joins the same request instead of asking twice. That guard is registered by the
               content, so minimizing the window unmounts it along with everything else. A minimized window is covered
               only by the app-wide <code>beforeClose</code>, which is why closing a minimized dirty draft from the
-              taskbar is refused too. <code>close()</code>, <code>closeAll()</code> and <code>maxWindows</code> eviction
-              never consult either, pending guard or not.
+              taskbar is refused too. <code>close()</code> and <code>closeAll()</code> never consult either, pending
+              guard or not; <code>maxWindows</code> eviction asks a guarded window through <code>requestClose</code>
+              and opens over the limit if it refuses (case 5).
             </p>
             <button
               type="button"

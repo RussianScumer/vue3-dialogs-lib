@@ -370,15 +370,8 @@ describe('requestClose', () => {
     await expect(win.requestClose(id)).resolves.toBe(true)
   })
 
-  it('close, closeAll and maxWindows eviction all ignore guards', async () => {
+  it('close and closeAll ignore guards', async () => {
     const win = store(2)
-    const a = win.open('editor', { id: 1 }).id
-    win.onBeforeClose(a, () => false)
-
-    win.open('editor', { id: 2 })
-    win.open('editor', { id: 3 }) // evicts `a` past maxWindows, guard or no guard
-    expect(win.byId(a)).toBeUndefined()
-
     const b = win.open('editor', { id: 4 }).id
     win.onBeforeClose(b, () => false)
     win.close(b)

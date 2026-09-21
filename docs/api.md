@@ -139,7 +139,10 @@ for it.
 
 `open()` deduplicates: the same `name` plus shallow-equal `props` restores and raises the existing
 window instead of opening a second one. Pass `{ dedupe: false }` when you really want two. Past
-`maxWindows`, the oldest window is closed — silently, and without consulting any guard.
+`maxWindows`, the oldest window is closed to make room: with no guard on it — neither its own nor
+an app-wide `beforeClose` — it closes on the spot, as `close()` would; with one, it is asked through
+`requestClose()`, and if the guard refuses, the new window opens over the limit and the desktop
+stays one over until something is closed by hand (a DEV-mode warning names the count).
 
 ## Window capabilities
 
