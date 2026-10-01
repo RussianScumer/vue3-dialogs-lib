@@ -20,6 +20,7 @@ import { RESIZE_DIRS, RESIZE_STYLES, useWindowResize } from './useWindowResize'
 import { useWindowFocus } from './useWindowFocus'
 import { provideWindowContext } from './useWindowContext'
 import { useViewport } from './useViewport'
+import { ownsEscape } from './useKeymap'
 import type { WindowDescriptor, WindowVisualState } from './types'
 
 const props = defineProps<{
@@ -261,21 +262,6 @@ const footStyle = { flex: '0 0 auto' } as const
 
 function handleStyle(dir: (typeof RESIZE_DIRS)[number]) {
   return { position: 'absolute' as const, touchAction: 'none', ...RESIZE_STYLES[dir] }
-}
-
-/**
- * A native picker owns ESC: the popup closes and the window must stay. Chromium does *not* mark
- * that keydown `defaultPrevented`, measured rather than assumed, so the escape hatch below cannot
- * cover it. Nothing exposes whether a picker's popup is open either, which makes the element type
- * the only guard available: ESC on a focused picker never minimizes, popup open or not.
- */
-const PICKERS = ['date', 'datetime-local', 'month', 'time', 'week', 'color', 'file']
-
-function ownsEscape(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null
-  if (!el) return false
-  if (el.tagName === 'SELECT') return true
-  return el.tagName === 'INPUT' && PICKERS.includes((el as HTMLInputElement).type)
 }
 
 /**

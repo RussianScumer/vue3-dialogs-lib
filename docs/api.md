@@ -52,6 +52,7 @@ app.use(createWindows({
     enabled: true,                       // false removes every binding, store API unaffected
     bindings: { snapLeft: 'Ctrl+Alt+ArrowLeft' }, // per action: a chord, several, or null
   },
+  closeOnOutsideEscape: true,            // ESC with focus outside every window closes the active one
   labels: {                              // accessible names for the default –, ✕ and ▲ controls
     minimize: 'Minimize', close: 'Close', pin: 'Keep on top', // no defaults; see Control labels
   },
@@ -365,6 +366,13 @@ edits is the sharpest edge this design creates.
   first, the window is not the active one (Tab can reach a background window without raising it),
   the key was aimed at a native picker (`<select>`, `<input type="date">` and friends, which take
   ESC for themselves without marking the event handled), or the window is `minimizable: false`.
+- **ESC with focus outside every window closes the active one** — the top window still on screen,
+  the same one the keymap acts on (an open modal outranks whatever it blocks). This is the state
+  after clicking the page background or a window's plain text, where no frame sees the key. It goes
+  through `requestClose(id)`, so guards still run, and pressing it again closes the next one. It
+  stands down when the page took the key first (`preventDefault()`), when it was typed into a text
+  field or a native picker on the page, and for a key from inside any `<dialog>` — a frame that
+  chose not to act on ESC is never overridden. `closeOnOutsideEscape: false` turns it off.
 - Opening a window moves focus into it — its first tabbable element, or the header. Minimizing or
   closing one hands focus on, in this order: the window now on top, by its header; the taskbar, if
   it opted in with `registerFocusTarget` and this was a minimize; the element that opened the

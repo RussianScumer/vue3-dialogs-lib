@@ -19,6 +19,41 @@ function editable(target: EventTarget | null): boolean {
 }
 
 /**
+ * A native picker owns ESC: the popup closes and the window must stay. Chromium does *not* mark
+ * that keydown `defaultPrevented`, measured rather than assumed, so the escape hatch cannot cover
+ * it. Nothing exposes whether a picker's popup is open either, which makes the element type the
+ * only guard available: ESC on a focused picker never minimizes or closes, popup open or not.
+ * Shared by the frame's own ESC and the outside-every-window one below.
+ */
+const PICKERS = ['date', 'datetime-local', 'month', 'time', 'week', 'color', 'file']
+
+export function ownsEscape(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el) return false
+  if (el.tagName === 'SELECT') return true
+  return el.tagName === 'INPUT' && PICKERS.includes((el as HTMLInputElement).type)
+}
+
+/**
+ * ESC with focus outside every window closes the active one. A keystroke from inside a window is
+ * that window's own: `BaseWindow` already answered it, or deliberately stood down (a background
+ * window, `minimizable: false`, a picker) — and that decision must not be overridden here. Any
+ * `<dialog>` counts, so a consumer's own dialog keeps its ESC too.
+ *
+ * A modal outranks `z`: when one is open, whatever it blocks is not the question being asked.
+ */
+function closeOnEscape(e: KeyboardEvent, win: WindowsApi): void {
+  const el = e.target as Element | null
+  if (el?.closest?.('dialog') || ownsEscape(el)) return
+  let id = win.activeId.value
+  if (!id) return
+  const top = win.topModalId()
+  if (top && win.isBlockedByModal(id)) id = top
+  e.preventDefault()
+  void win.requestClose(id)
+}
+
+/**
  * The app's single keymap listener. Created once by the plugin inside its effect scope, next to the
  * viewport tracker and for the same reasons — one listener however many windows are open, removed
  * when the app unmounts, and inert without a DOM.
@@ -43,6 +78,10 @@ export function setupKeymap(win: WindowsApi, options: ResolvedOptions, view: Vie
 
   function onKeydown(e: KeyboardEvent) {
     if (e.defaultPrevented || editable(e.target)) return
+    if (e.key === 'Escape') {
+      if (options.closeOnOutsideEscape) closeOnEscape(e, win)
+      return
+    }
     const action = matchKeymap(e, options.keymap)
     if (!action) return
 

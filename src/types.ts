@@ -389,6 +389,12 @@ export interface WindowsOptions {
   async?: AsyncWindowOptions
   /** Keyboard shortcuts for snapping and window switching. On by default, every binding movable. */
   keymap?: KeymapOptions
+  /**
+   * ESC pressed with focus outside every window — on the page background, or after clicking a
+   * window's plain text — closes the active window through `requestClose`, so its guards still run.
+   * On by default; false leaves such a keystroke to the page.
+   */
+  closeOnOutsideEscape?: boolean
   /** Accessible names for the default header controls. No defaults; per window under `labels` too. */
   labels?: ControlLabels
   /**
@@ -427,6 +433,7 @@ export interface ResolvedOptions {
   zIndexBase: number
   beforeClose: BeforeCloseGuard | null
   keymap: ResolvedKeymap
+  closeOnOutsideEscape: boolean
   /** App-wide control names, empty when the consumer set none. */
   labels: ControlLabels
   /** App-wide modal behaviour; `inertRoot` is null unless the consumer asked for it. */

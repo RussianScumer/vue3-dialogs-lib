@@ -219,6 +219,7 @@ export function resolveOptions(options: WindowsOptions): ResolvedOptions {
     zIndexBase: options.zIndexBase ?? 0,
     beforeClose: options.beforeClose ?? null,
     keymap: resolveKeymap(options.keymap),
+    closeOnOutsideEscape: options.closeOnOutsideEscape ?? true,
     labels: options.labels ?? NO_LABELS,
     modal: { inertRoot: options.modal?.inertRoot ?? null },
     resolve(name) {
