@@ -46,5 +46,6 @@ A change that violates one of these is rejected even if it works.
 ## Workflow
 
 - One task per branch, one PR. Public remote is GitHub (`RussianScumer/vue3-dialogs-lib`). Branch off `master` with a short slug.
+- Tasks live in yman (`.yman/`, synced through `origin` as `refs/tasks/main`). Pick: `yman ls -n 10 --assignee -`; read: `yman show <id> -n 3`; claim: `yman set <id> --status doing -a <me> -m "on it"`; close: `yman done <id> -m "what changed"`. Never `yman edit`/`-e`; change a body with `yman set <id> --body "..."`. Contract bodies carry Goal / Do / Done when; the review they were imported from is `FABLE_REVIEW_AND_PLAN_2.md` at 7ee11b1 (file since removed).
 - Commits: Conventional Commits, lowercase sentence-style subject, e.g. `feat(keymap): keyboard snapping and window switching`, `fix(drag): undock on drag, not on pointerdown`; `!` after the scope for breaking changes.
 - Do not bump `package.json` version unless asked. Releases are manual: `pnpm publish` (see `docs/build.md` "Releasing").
