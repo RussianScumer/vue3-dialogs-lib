@@ -124,14 +124,46 @@ await result             // what the window settled with — see Window results
 win.resultOf(id)         // the same promise, for a window you did not open yourself
 
 win.activeId.value       // id of the top non-minimized window, or null
-const off = win.on('close', (e) => console.log(e.id)) // 'open' | 'close' | 'focus' | 'minimize' |
-                                                     // 'restore' | 'geometry' | 'title' | '*'
+const off = win.on('close', (e) => console.log(e.id, e.reason)) // any type below, or '*'
 ```
+
+### Events
+
+`win.on(type, cb)` subscribes to one transition, `win.on('*', cb)` to all of them; both return the
+unsubscribe. Every event is `{ type, id }` plus the payload for its type, so a listener reads what
+it needs off the event rather than asking the store. `WindowEvent` is a union discriminated on
+`type`: narrow on it under `'*'`, while a named type hands the listener its payload directly.
+
+| `type` | Fires when | Payload beside `type` and `id` |
+| --- | --- | --- |
+| `open` | `open()` creates a window (not on dedupe, not on hydration) | — |
+| `close` | a window leaves the stack | `reason`, `result`, `descriptor` |
+| `focus` | `focus()` actually raises a window | — |
+| `minimize` | a window is minimized | — |
+| `restore` | a minimized window comes back | — |
+| `geometry` | a gesture ends, `setGeometry()`, `snap()` | `rect: { x, y, w, h }` |
+| `title` | `setTitle()` changes the title | — |
+| `pin` | `setPinned()` changes whether the window is pinned | `pinned` |
+| `snap` | a window enters a zone, changes zone, or stops being snapped | `zone` (`null` when unsnapped) |
+| `active` | a different window becomes active | `previous` (id or `null`) |
+| `props` | `updateProps()` | `props` |
+| `meta` | `setMeta()` | `meta` |
+
+`close.reason` says why the window went: `closed` (`close()`, `closeAll()`, or its owner closing),
+`resolved` (`resolve()`), `dismissed` (a `requestClose()` whose guards agreed — the ✕, ESC on a
+modal), `evicted` (`maxWindows` making room) or `restored` (a hydration that no longer carries it).
+`close.result` is what the result promise settled with, and `close.descriptor` is the window as it
+was when it left — the store no longer has it by the time the listener runs.
 
 `geometry` fires once per drag, resize or arrow-key nudge — at the end of the gesture, not per
 frame — and on `snap()` and `setGeometry()`. A drop into a snap zone reports once, from the snap.
-
 Re-clamping the whole stack after a viewport resize is silent.
+
+`active` is derived, not set, so it is reported once the transition that changed it has settled —
+after that transition's own events, on Vue's next scheduler flush — and only once however many
+windows were briefly on top while a group re-stacked. Nothing fires when the last window goes:
+`id` is always a window. `restore()` of a window whose `z` is already the top one emits `restore`
+and no `focus`, since nothing was raised.
 
 Outside `setup()` there is nothing to inject from, so `useWindows()` falls back to the most
 recently installed app's store. On a server that fallback is shared across requests: in SSR code,

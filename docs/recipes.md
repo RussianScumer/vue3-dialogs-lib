@@ -551,7 +551,9 @@ blockable. A window with no guard at all is still evicted silently, so if losing
 give it a guard, raise `maxWindows`, or watch for it:
 
 ```js
-win.on('close', (e) => saveDraftSomewhere(e.id))
+win.on('close', (e) => {
+  if (e.reason === 'evicted') saveDraftSomewhere(e.descriptor)
+})
 ```
 
 ## 16 · Give a window type its own defaults
@@ -621,7 +623,7 @@ A window type with no marker settles with `unknown`, exactly as un-inferable pro
 
 ```js
 const off = win.on('*', (e) => analytics.track(`window:${e.type}`, { id: e.id }))
-// 'open' | 'close' | 'focus' | 'minimize' | 'restore' | 'geometry' | 'title' | '*'
+// every type and its payload: API reference, Events
 ```
 
 Events cover store transitions only. `geometry` reports one event per gesture — a drag, a resize or

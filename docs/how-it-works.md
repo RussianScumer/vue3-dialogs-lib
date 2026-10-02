@@ -144,7 +144,16 @@ window. The store owns the header registry because the first step is a question 
 window.
 
 Each transition emits an event (`open`, `close`, `focus`, `minimize`, `restore`, `geometry`,
-`title`), subscribable with `win.on(type, cb)`. A gesture reports through the store once it is
+`title`, `pin`, `snap`, `active`, `props`, `meta`), subscribable with `win.on(type, cb)`. An event
+is `{ type, id }` plus a payload for its type, discriminated on `type`, so a listener never has to
+go back to the store — and for `close` it could not: `remove()` captures the descriptor before the
+stack lets go of it and hands it over on the event, together with the reason and the result the
+promise settled with. Every single-window exit funnels through that one `remove(id, reason)`;
+`close()`, `resolve()`, a guarded `requestClose()` and eviction differ only in the reason they pass.
+`active` is the one event with no setter behind it, since `activeId` is derived from `z`: a `watch`
+inside the store reports it at the default flush, so a group re-stacking one `z` at a time yields
+one event rather than one per window briefly on top. None of it is stored, and nothing here touches
+the descriptor or the persisted shape. A gesture reports through the store once it is
 over: drag, resize and the arrow keys write x/y/w/h straight onto the descriptor frame by frame,
 then hand the result to `setGeometry`, so `geometry` fires once per gesture rather than per frame,
 and a drop into a snap zone fires it once, from `snap()`. Note what this deliberately cannot see:

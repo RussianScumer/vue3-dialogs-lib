@@ -14,14 +14,12 @@ const events = useEventLog()
 let nextItem = 1
 const stack = computed(() => win.s.stack)
 
-// Every store transition, straight into the log. Titles are kept alongside because a `close`
-// event arrives after the descriptor has already left the stack.
-const titles = new Map<string, string>()
+// Every store transition, straight into the log. A `close` arrives after the descriptor has left
+// the stack, so it is named from the descriptor the event carries.
 win.on('*', (e) => {
-  const w = win.byId(e.id)
-  if (w) titles.set(e.id, w.title || w.name)
-  log(`${e.type} · ${titles.get(e.id) ?? e.id.slice(0, 8)}`)
-  if (e.type === 'close') titles.delete(e.id)
+  const w = e.type === 'close' ? e.descriptor : win.byId(e.id)
+  const name = w ? w.title || w.name : e.id.slice(0, 8)
+  log(`${e.type} · ${name}${e.type === 'close' ? ` (${e.reason})` : ''}`)
 })
 
 /**
@@ -573,6 +571,12 @@ function clearStorage() {
               there: typing in a draft, and the frames within a gesture. Both write straight onto the descriptor without
               passing through a store method, which is exactly why persistence watches the stack deeply instead of
               listening to events.
+            </p>
+            <p>
+              Each event carries its payload, so the log never asks the store: a <code>close</code> line is named from
+              the descriptor on the event and says why the window went — <code>closed</code>, <code>resolved</code>,
+              <code>dismissed</code>, <code>evicted</code> or <code>restored</code>. Pinning, snapping, a change of
+              active window and <code>updateProps</code> / <code>setMeta</code> each log a line of their own.
             </p>
           </section>
 
