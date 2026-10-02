@@ -246,6 +246,46 @@ describe('modal windows — render', () => {
     await wrapper.find('dialog.vw').trigger('keydown.escape')
     expect(win.byId(id)!.minimized).toBe(true)
   })
+
+  it('keeps `inertRoot` inert until the leaving modal and its scrim are gone', async () => {
+    vi.useFakeTimers()
+    // jsdom never resolves the custom property, so the host is told the leave lasts 200ms.
+    const real = window.getComputedStyle.bind(window)
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(
+      (el, pseudo) =>
+        ({
+          getPropertyValue: (prop: string) =>
+            prop === '--vtd-motion-duration' ? '200ms' : real(el, pseudo).getPropertyValue(prop),
+        }) as unknown as CSSStyleDeclaration,
+    )
+    const page = document.createElement('div')
+    page.id = 'page-behind'
+    document.body.prepend(page)
+
+    try {
+      const { wrapper, win } = app({ modal: { inertRoot: '#page-behind' } })
+      const id = win.open('editor', { id: 1 }, { modal: true }).id
+      await nextTick()
+      expect(page.hasAttribute('inert')).toBe(true)
+
+      win.close(id)
+      await nextTick()
+      await nextTick()
+      // The store has forgotten the modal, but its frame and the scrim are still on screen.
+      expect(wrapper.findAll('.vw-scrim')).toHaveLength(1)
+      expect(page.hasAttribute('inert')).toBe(true)
+
+      vi.advanceTimersByTime(200)
+      await nextTick()
+      expect(wrapper.findAll('.vw-scrim')).toHaveLength(0)
+      expect(page.hasAttribute('inert')).toBe(false)
+      wrapper.unmount()
+    } finally {
+      page.remove()
+      vi.restoreAllMocks()
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('modal windows — persistence', () => {
