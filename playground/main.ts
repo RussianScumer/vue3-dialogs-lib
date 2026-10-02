@@ -46,7 +46,13 @@ createApp(App)
       zIndexBase: 1000,
       // The library ships no strings, so the glyph controls have no accessible name until an app
       // gives them one. In dev an app that gives none is warned about, once.
-      labels: { minimize: 'Minimize window', close: 'Close window', pin: 'Keep window on top' },
+      labels: {
+        minimize: 'Minimize window',
+        close: 'Close window',
+        pin: 'Keep window on top',
+        maximize: 'Maximize window',
+        restore: 'Restore window size',
+      },
       // The whole el-dialog shape as one named bundle: the call site says `{ preset: 'dialog' }`
       // and nothing else. A preset outranks the component's own spec and loses to the options of
       // the call that named it.

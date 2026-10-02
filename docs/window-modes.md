@@ -239,7 +239,14 @@ win.snap(id, 'left', view)   // 'left' | 'right' | 'max' | 'top-left' | 'top-rig
                              // | 'bottom-left' | 'bottom-right'
 win.snap(id, 'none', view)   // back to the geometry it had before the first snap
 win.dockZone(id)             // the current zone, or null
+
+win.toggleMaximize(id)       // maximize without a viewport to hand; also maximize / unmaximize
+win.isMaximized(id)
 ```
+
+`maximizable: true` on a window gives it a maximize/restore button after its other controls — the
+same `toggleMaximize` the double-click calls, named by `labels.maximize` and `labels.restore`.
+Opt-in, and only shown while the window is resizable and snapping is on.
 
 Keep snapped windows clear of your own furniture with insets, and turn the whole thing off if it is
 not wanted:

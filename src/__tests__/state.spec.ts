@@ -331,6 +331,60 @@ describe('store', () => {
     expect(win.byId(id)!.props).toEqual({ id: 2 })
     expect(win.byId(id)!.meta).toEqual({ version: 7 })
   })
+
+  it('maximize docks to max at the attached viewport, and unmaximize gives the rect back', () => {
+    const win = store()
+    win.attachViewport({ w: 1200, h: 700 })
+    const a = win.open('editor', {}, { x: 30, y: 40, w: 300, h: 200 }).id
+
+    win.maximize(a)
+    expect(win.isMaximized(a)).toBe(true)
+    expect(win.dockZone(a)).toBe('max')
+    expect(win.byId(a)).toMatchObject({ x: 0, y: 0, w: 1200, h: 700 })
+
+    win.unmaximize(a)
+    expect(win.isMaximized(a)).toBe(false)
+    expect(win.dockZone(a)).toBeNull()
+    expect(win.byId(a)).toMatchObject({ x: 30, y: 40, w: 300, h: 200 })
+  })
+
+  it('toggleMaximize alternates, and isMaximized follows the dock whoever set it', () => {
+    const win = store()
+    const a = win.open('editor', {}, { x: 30, y: 40, w: 300, h: 200 }).id
+
+    win.toggleMaximize(a)
+    expect(win.isMaximized(a)).toBe(true)
+    win.toggleMaximize(a)
+    expect(win.isMaximized(a)).toBe(false)
+    expect(win.byId(a)).toMatchObject({ x: 30, y: 40, w: 300, h: 200 })
+
+    win.snap(a, 'max', view)
+    expect(win.isMaximized(a)).toBe(true)
+    win.snap(a, 'left', view)
+    expect(win.isMaximized(a)).toBe(false)
+    // Snapped elsewhere is not maximized: unmaximize leaves it alone, toggle maximizes it.
+    win.unmaximize(a)
+    expect(win.dockZone(a)).toBe('left')
+    win.toggleMaximize(a)
+    expect(win.dockZone(a)).toBe('max')
+  })
+
+  it('maximizable comes from open(), then the component spec, and never reaches the descriptor', () => {
+    const win = createStore(
+      resolveOptions({ components: { editor: Stub, viewer: { component: Stub, maximizable: true } } }),
+    )
+    const plain = win.open('editor', {}).id
+    const opted = win.open('editor', { id: 2 }, { maximizable: true }).id
+    const spec = win.open('viewer', {}).id
+    const refused = win.open('viewer', { id: 2 }, { maximizable: false }).id
+
+    expect([plain, opted, spec, refused].map((id) => win.isMaximizable(id))).toEqual([false, true, true, false])
+    expect(JSON.stringify(win.s.stack)).not.toContain('maximizable')
+
+    // A hydration clears the call's own choice; the spec's is read again.
+    win.hydrate(win.s.stack.map((d) => ({ ...d })), 20)
+    expect([plain, opted, spec, refused].map((id) => win.isMaximizable(id))).toEqual([false, false, true, true])
+  })
 })
 
 describe('requestClose', () => {

@@ -50,6 +50,13 @@ const modal = computed(() => win.isModal(d.id))
 const interactive = () => !mobile.value && !leaving.value && !pinned.value
 const canDrag = () => interactive() && d.draggable
 const canResize = computed(() => interactive() && d.resizable)
+/** Docked to `max`; drives the button's state and `data-vw-maximized`, whichever path maximized it. */
+const maximized = computed(() => win.isMaximized(d.id))
+/**
+ * The maximize button is opt-in through `maximizable`, and only offered where maximizing can work:
+ * a window that can be resized, on a desktop that snaps — maximize is the `max` snap.
+ */
+const canMaximize = computed(() => canResize.value && options.snap.enabled && win.isMaximizable(d.id))
 const active = computed(() => win.activeId.value === d.id)
 /**
  * A `requestClose` is out with the guards. The default controls stand down until it settles: a
@@ -124,19 +131,21 @@ function unnamedControls(): boolean {
   if (slots.controls) return false
   if (d.minimizable && !labels.value.minimize) return true
   if (d.closable && !labels.value.close) return true
+  // Both names, whichever state the window opens in: the button flips between them.
+  if (canMaximize.value && (!labels.value.maximize || !labels.value.restore)) return true
   return win.isPinnable(d.id) && !labels.value.pin
 }
 
 onMounted(() => {
   el.value?.show() // non-modal: background stays usable, taskbar clickable
   // Dev-only, and the one place the library says anything in English: the default controls are
-  // glyphs, so without a name they reach a screen reader as "–", "✕" and "▲"/"▼".
+  // glyphs, so without a name they reach a screen reader as "–", "✕", "▲"/"▼" and "□"/"❐".
   if (!import.meta.env.DEV || warnedApps.has(options) || !unnamedControls()) return
   warnedApps.add(options)
   console.warn(
     '[vue3-dialogs-lib] the default window controls have no accessible name. Pass labels: ' +
-      '{ minimize, close, pin } to createWindows(), per window via open(), or replace the ' +
-      'controls slot.',
+      '{ minimize, close, pin, maximize, restore } to createWindows(), per window via open(), or ' +
+      'replace the controls slot.',
   )
 })
 
@@ -335,7 +344,7 @@ function onPointerdown() {
 function onHeadDblclick(e: MouseEvent) {
   if (!options.snap.enabled || !canDrag()) return
   if ((e.target as Element | null)?.closest('[data-vw-nodrag]')) return
-  win.snap(d.id, win.dockZone(d.id) === 'max' ? 'none' : 'max', view)
+  win.toggleMaximize(d.id)
 }
 </script>
 
@@ -347,6 +356,7 @@ function onHeadDblclick(e: MouseEvent) {
     :aria-label="d.title || undefined"
     :data-vw-active="active || undefined"
     :data-vw-error="failure ? '' : undefined"
+    :data-vw-maximized="maximized || undefined"
     :data-vw-state="visual"
     @keydown.escape="onEscape"
     @pointerdown="onPointerdown"
@@ -409,6 +419,19 @@ function onHeadDblclick(e: MouseEvent) {
           @click="win.setPinned(d.id, !pinned)"
         >
           {{ pinned ? '▼' : '▲' }}
+        </button>
+        <!-- Appended for the same reason as the pin: positional indexes keep their meaning. -->
+        <button
+          v-if="canMaximize"
+          class="vw__btn"
+          type="button"
+          data-vw-nodrag
+          data-vw-maximize
+          :aria-label="maximized ? labels.restore : labels.maximize"
+          :aria-pressed="maximized"
+          @click="win.toggleMaximize(d.id)"
+        >
+          {{ maximized ? '❐' : '□' }}
         </button>
       </slot>
     </header>

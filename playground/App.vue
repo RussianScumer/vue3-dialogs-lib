@@ -387,7 +387,9 @@ function clearStorage() {
             <h2>7 · Snap a window to an edge</h2>
             <p>
               Drag a header against the left or right edge for a half, into a corner for a quarter, or against the top to
-              maximize — a ghost shows the drop first. Double-click a header to toggle maximize. Drag a snapped window
+              maximize — a ghost shows the drop first. Double-click a header to toggle maximize; an item editor also has a
+              maximize button after its other controls (<code>maximizable</code>), and both go through
+              <code>toggleMaximize</code>. Drag a snapped window
               away and it gets its old size back under the cursor; resize it by the corner and it stops being snapped.
               Snapping keeps clear of the taskbar (<code>snap.insets.bottom</code>), and snapped windows follow the
               viewport when you resize the browser.

@@ -243,7 +243,14 @@ win.snap(id, 'left', view)   // 'left' | 'right' | 'max' | 'top-left' | 'top-rig
                              // | 'bottom-left' | 'bottom-right'
 win.snap(id, 'none', view)   // обратно к геометрии, которая была до первого примагничивания
 win.dockZone(id)             // текущая зона или null
+
+win.toggleMaximize(id)       // разворот без вьюпорта на руках; есть и maximize / unmaximize
+win.isMaximized(id)
 ```
+
+`maximizable: true` даёт окну кнопку максимизации/восстановления после остальных кнопок — тот же
+`toggleMaximize`, что вызывает двойной клик, с именами из `labels.maximize` и `labels.restore`. По
+запросу и только пока окно можно ресайзить и примагничивание включено.
 
 Держите примагниченные окна подальше от собственной мебели интерфейса с помощью insets, а если всё
 это не нужно — выключите целиком:
