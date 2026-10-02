@@ -248,6 +248,12 @@ export interface ExternalChangeInfo {
   key: string
   /** The blob the other writer left, or `null` if the key was removed or cleared. */
   newValue: string | null
+  /**
+   * Re-read the blob, hydrate from it and start persisting again. Resuming does not by itself
+   * write the blob back: the hydrated data is not re-broadcast under this tab's token, so a tab
+   * that resumes on every foreign change does not stop, or loop with, the tab it adopted from.
+   * The next real edit persists as usual.
+   */
   resume(): void
 }
 

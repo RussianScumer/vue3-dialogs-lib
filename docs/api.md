@@ -395,6 +395,14 @@ On load, a descriptor whose `name` is no longer registered is dropped, and one m
 older schema, or a hand-edited blob — is repaired from that component's defaults rather than
 thrown away. A snapshot from a schema too old to read is dropped whole.
 
+The blob is user-editable — anyone can open DevTools and change it — so treat it as input, not as
+your own data. The library validates what it needs to stay consistent: `topZ` and every
+descriptor's geometry must be finite numbers, ids are unique (the first of two wins), at most
+`maxWindows` windows are kept (the highest `z`), `state` is an object or `null`, and the size is
+clamped to the component's limits. `title`, `props`, `state` and `meta` are handed to your content
+component **as they are** — the frame renders `title` as text, but a component that puts a prop or
+the title into `v-html` has an XSS from its own storage.
+
 ### Two tabs on one key
 
 Every blob carries the token of the tab that wrote it. When a `storage` event brings a value this
@@ -419,7 +427,12 @@ persist: {
 
 Regaining focus does **not** resume writing — resuming is how the data loss happens. Only
 `resume()` or a page reload does. Note that `resume()` hydrates, so it replaces this tab's windows
-with the other tab's; unsaved draft state in `useWindowState` goes with them.
+with the other tab's; unsaved draft state in `useWindowState` goes with them. It does not write the
+adopted blob back: the next write happens on the next real edit, so two tabs that both `resume()`
+in `onExternalChange` follow each other without stopping or looping.
+
+A `storage` event from a different storage area is ignored: a `sessionStorage` write to the same
+key name while `storage` is `localStorage` neither stops this tab nor calls `onExternalChange`.
 
 Only `localStorage` emits `storage` events. A different adapter — IndexedDB, server-backed —
 silently keeps today's last-writer-wins behaviour, with no warning and no detection. Use

@@ -467,11 +467,14 @@ and `style.css` is cosmetics only.
 install → read(storage[key])
             ├─ missing / unparsable / wrong `schema`      → ignore, start empty
             ├─ descriptor whose `name` is not registered  → dropped
+            ├─ non-finite geometry, duplicate id, past `maxWindows` (lowest `z`) → dropped
+            ├─ non-finite `topZ` → 10; `state` not an object → null
             └─ survivors: clamp to the current viewport, hydrate, mark as restored
 watch(stack, deep) → debounce 300ms → storage[key] = { schema, topZ, stack, writer }
+                                       (skipped when it would only echo what was just hydrated)
 pagehide → a pending debounced write is flushed synchronously (nothing once stopped)
-storage event on key → writer !== ours → stop writing, onExternalChange(info)
-                                          └─ info.resume() → re-read, hydrate, write again
+storage event on key, from our storage area → writer !== ours → stop writing, onExternalChange(info)
+                                          └─ info.resume() → re-read, hydrate, write on the next edit
 ```
 
 On a schema mismatch the snapshot is *migrated* where it can be — every capability field a
@@ -512,6 +515,18 @@ not take the listener down.
 
 The flag is never cleared on its own. Resuming on focus, or on the next mutation, is precisely how
 one session eats another, so only `info.resume()` clears it, and it hydrates from storage first.
+
+Hydrating replaces the stack, which wakes the deep watcher like any edit. Left alone, the write it
+schedules would put the adopted data back under this tab's token — a foreign write to every other
+tab, so each of them stops, and two tabs that both `resume()` would ping-pong the same blob every
+300 ms for as long as both stay open. `hydrateFromStorage` therefore remembers the blob it would
+write for the data it just hydrated, and the next `write()` compares against it: identical means
+nothing to say, skip; different means an edit landed inside the same debounce window, write as
+usual. The comparison is consumed either way, so it never suppresses a later write.
+
+The event's `storageArea` is checked against the configured `storage`: `sessionStorage` and
+`localStorage` can share a key name, and a write to one is not a write to the other. An event with
+no area passes on its key alone; a custom adapter never fires one.
 
 Only `localStorage` fires `storage` events; every other adapter simply never reaches this path, with
 no warning and no capability detection. The listener is added in the plugin's `effectScope` and
