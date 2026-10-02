@@ -140,7 +140,11 @@ export function onWindowKeydown(e: KeyboardEvent, d: WindowDescriptor, options: 
   if (e.shiftKey) {
     if (!d.resizable) return
     e.preventDefault()
-    Object.assign(d, clampSize(d.w + dx, d.h + dy, d))
+    // As the pointer grips: `bounds.minVisible` governs position, the viewport governs size. Growing
+    // east or south stops at the viewport edge, never below the current size.
+    const w = Math.min(d.w + dx, Math.max(d.w, options.view.w - d.x))
+    const h = Math.min(d.h + dy, Math.max(d.h, options.view.h - d.y))
+    Object.assign(d, clampSize(w, h, d))
     options.onChange?.()
     return
   }

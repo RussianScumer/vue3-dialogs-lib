@@ -72,6 +72,13 @@ export function useWindowResize(d: WindowDescriptor, options: ResizeOptions) {
       w: east ? start.w + dx : west ? start.w - dx : start.w,
       h: south ? start.h + dy : north ? start.h - dy : start.h,
     }
+    // `bounds.minVisible` governs where a window may sit; the viewport governs how big it may grow.
+    // East, south and west stop at the viewport edge they pull towards, so the descriptor never holds
+    // a size the frame cannot paint. Never below the starting size: a window already wider than the
+    // room left keeps its width rather than shrinking the moment a grip is touched.
+    if (east) wanted.w = Math.min(wanted.w, Math.max(start.w, options.view.w - start.x))
+    if (west) wanted.w = Math.min(wanted.w, Math.max(start.w, start.x + start.w))
+    if (south) wanted.h = Math.min(wanted.h, Math.max(start.h, options.view.h - start.y))
     // A west or north grip drags the leading edge, and that edge has to stay in reach: cap the
     // size at whatever keeps it inside `bounds` before the limits are applied, so the window stops
     // growing at the top of the screen rather than pushing its own bottom edge down.
