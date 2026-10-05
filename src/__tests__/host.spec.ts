@@ -540,6 +540,52 @@ describe('capabilities', () => {
     expect(win.byId(id)!.w).toBe(396)
   })
 
+  it('an east or south grip stops growing at the viewport edge', async () => {
+    const { wrapper, win } = app()
+    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 }).id
+    await nextTick()
+
+    const grip = wrapper.find('[data-vw-grip="se"]').element
+    pointer(grip, 'pointerdown', 1, 700, 600)
+    pointer(grip, 'pointermove', 1, 3000, 3000)
+    pointer(grip, 'pointerup', 1, 3000, 3000)
+    expect(win.byId(id)).toMatchObject({ x: 300, y: 300, w: 724, h: 468 })
+  })
+
+  it('a west grip stops growing at the left edge of the viewport', async () => {
+    const { wrapper, win } = app()
+    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 }).id
+    await nextTick()
+
+    const grip = wrapper.find('[data-vw-grip="w"]').element
+    pointer(grip, 'pointerdown', 1, 300, 450)
+    pointer(grip, 'pointermove', 1, -3000, 450)
+    pointer(grip, 'pointerup', 1, -3000, 450)
+    expect(win.byId(id)).toMatchObject({ x: 0, w: 700 })
+  })
+
+  it('keyboard resize stops where the grip does, and minW still wins over the room left', async () => {
+    const { wrapper, win } = app()
+    const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 }).id
+    await nextTick()
+
+    const head = wrapper.find('.vw__head')
+    for (let i = 0; i < 40; i++) await head.trigger('keydown', { key: 'ArrowRight', shiftKey: true })
+    expect(win.byId(id)!.w).toBe(724)
+
+    win.closeAll()
+    // 124px left to the east edge, but the window may not be narrower than 300.
+    const wide = win.open('editor', { id: 2 }, { x: 900, y: 100, w: 300, h: 200, minW: 300 }).id
+    await nextTick()
+    const grip = wrapper.find('[data-vw-grip="e"]').element
+    pointer(grip, 'pointerdown', 1, 1200, 200)
+    pointer(grip, 'pointermove', 1, 1300, 200)
+    pointer(grip, 'pointerup', 1, 1300, 200)
+    expect(win.byId(wide)).toMatchObject({ x: 900, w: 300 })
+    await wrapper.find('.vw__head').trigger('keydown', { key: 'ArrowRight', shiftKey: true })
+    expect(win.byId(wide)!.w).toBe(300)
+  })
+
   it('a grip resize drops the snap without moving the window back', async () => {
     const { wrapper, win } = app()
     const id = win.open('editor', { id: 1 }, { x: 300, y: 300, w: 400, h: 300 }).id
