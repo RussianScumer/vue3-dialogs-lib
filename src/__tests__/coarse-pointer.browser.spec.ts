@@ -70,13 +70,14 @@ describe('grips under a real coarse pointer', () => {
     const hit = document.elementFromPoint(x, y)!
     expect(hit.getAttribute('data-vw-grip')).toBe('e')
 
+    // A short drag: the east edge is clamped to the viewport, and the test iframe is narrow.
     gesture(hit, 'pointerdown', x, y)
+    gesture(hit, 'pointermove', x + 20, y)
     gesture(hit, 'pointermove', x + 40, y)
-    gesture(hit, 'pointermove', x + 80, y)
-    gesture(hit, 'pointerup', x + 80, y)
+    gesture(hit, 'pointerup', x + 40, y)
     await nextTick()
 
-    expect(win.byId(id)!.w).toBe(400)
+    expect(win.byId(id)!.w).toBe(360)
     expect(win.byId(id)!.x).toBe(40)
   })
 

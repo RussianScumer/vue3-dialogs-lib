@@ -485,6 +485,7 @@ describe('setupKeymap — the listener itself', () => {
       activeId: ref<string | null>('a'),
       topModalId: () => null,
       isBlockedByModal: () => false,
+      escapeOf: () => 'close',
       requestClose,
     } as unknown as WindowsApi
     const scope = effectScope()

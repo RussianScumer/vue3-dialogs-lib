@@ -14,7 +14,7 @@ const view = { w: 1000, h: 800 }
 
 function store(over: Record<string, unknown> = {}) {
   return createStore(
-    resolveOptions({ components: { editor: Stub }, ...over } as Parameters<typeof resolveOptions>[0]),
+    resolveOptions({ components: { editor: Stub }, ...over }),
   )
 }
 

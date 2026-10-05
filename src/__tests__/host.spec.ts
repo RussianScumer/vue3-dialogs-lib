@@ -840,7 +840,7 @@ describe('non-modal', () => {
 
 describe('maximize button', () => {
   function desktop(over: Record<string, unknown> = {}) {
-    const plugin = createWindows({ components: { editor: Content }, ...over } as Parameters<typeof createWindows>[0])
+    const plugin = createWindows({ components: { editor: Content }, ...over })
     const wrapper = mount(defineComponent({ components: { WindowHost }, template: '<WindowHost />' }), {
       global: { plugins: [plugin] },
       attachTo: document.body,
