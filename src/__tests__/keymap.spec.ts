@@ -278,6 +278,43 @@ describe('keymap — window switching', () => {
     expect(win.focusNext()).toBe(child)
   })
 
+  it('stays inside an open modal, chord and store alike', async () => {
+    const { win } = app()
+    const a = win.open('editor', { id: 1 }).id
+    const b = win.open('editor', { id: 2 }).id
+    const modal = win.open('editor', { id: 3 }, { modal: true }).id
+    await nextTick()
+    const za = win.byId(a)!.z
+    const zb = win.byId(b)!.z
+
+    press({ ...BACKQUOTE, altKey: true })
+    expect(win.activeId.value).toBe(modal)
+    press({ ...BACKQUOTE, altKey: true, shiftKey: true })
+    expect(win.activeId.value).toBe(modal)
+    expect(win.focusNext()).toBe(modal)
+    expect(win.focusPrev()).toBe(modal)
+
+    // Nothing under the scrim was raised on the way.
+    expect(win.byId(a)!.z).toBe(za)
+    expect(win.byId(b)!.z).toBe(zb)
+
+    win.close(modal)
+    await nextTick()
+    expect(win.focusNext()).toBe(a)
+  })
+
+  it("lands on a modal's own sheet, never on what the modal blocks", async () => {
+    const { win } = app()
+    win.open('editor', { id: 1 })
+    const modal = win.open('editor', { id: 2 }, { modal: true }).id
+    const sheet = win.open('editor', { id: 3 }, { owner: modal }).id
+    await nextTick()
+
+    expect(win.focusNext()).toBe(sheet)
+    expect(win.focusPrev()).toBe(sheet)
+    expect(win.activeId.value).toBe(sheet)
+  })
+
   it('answers null with nothing to focus, and does not throw', async () => {
     const { win } = app()
     expect(win.focusNext()).toBeNull()

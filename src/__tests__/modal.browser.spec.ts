@@ -174,6 +174,25 @@ describe('a modal window in a real browser', () => {
     expect(seen).not.toContain(behindBtn)
   })
 
+  it('keeps Alt+` inside the modal: focus and highlight both stay on it', async () => {
+    const { win } = app()
+    win.open('editor', { tag: 'one' }, { x: 20, y: 20, w: 220, h: 150 })
+    win.open('editor', { tag: 'two' }, { x: 260, y: 20, w: 220, h: 150 })
+    win.open('editor', { tag: 'modal' }, { modal: true, x: 500, y: 20, w: 220, h: 150 })
+    await nextTick()
+
+    const modalFrame = dialogs()[2]!
+    modalFrame.querySelector<HTMLElement>('.btn')!.focus()
+    for (let i = 0; i < 3; i++) {
+      await userEvent.keyboard('{Alt>}`{/Alt}')
+      await nextTick()
+      expect(modalFrame.contains(document.activeElement)).toBe(true)
+      expect(modalFrame.hasAttribute('data-vw-active')).toBe(true)
+    }
+    expect(dialogs()[0]!.hasAttribute('data-vw-active')).toBe(false)
+    expect(dialogs()[1]!.hasAttribute('data-vw-active')).toBe(false)
+  })
+
   it('leaves the page tabbable without `modal.inertRoot` and takes it away with one', async () => {
     const btn = pageBehind()
     const open = (win: ReturnType<typeof useWindows>) =>

@@ -585,6 +585,8 @@ modal open is byte-for-byte the desktop it was.
   the desktop with nothing left to answer it.
 - **ESC dismisses it** through `requestClose(id)`, so a close guard still runs, rather than
   minimizing it.
+- **Switching stays inside it.** `Alt`+`` ` `` and `focusNext()` / `focusPrev()` walk only the modal
+  and its own children; a window it blocks is never raised or focused.
 - **Never persisted.** A modal is filtered out of the blob entirely, exactly as an owned window is:
   a question must not come back after a reload. It is decided at `open()` and never toggled from the
   header, unlike the pin.
@@ -774,7 +776,8 @@ win.focusPrev()
 ```
 
 Both skip minimized windows and any window that currently owns a child, since an owner's frame is
-`inert` while its question is on screen.
+`inert` while its question is on screen. While a modal is open they stay inside it: the ring is the
+modal and its own children, and nothing under the scrim is raised or focused.
 
 The ghost is a `.vw-ghost` element styled through `--vtd-ghost-bg`, `--vtd-ghost-outline` and
 `--vtd-ghost-radius`.
