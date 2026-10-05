@@ -53,8 +53,13 @@ function isSpec(entry: WindowEntry): entry is WindowSpec {
  *
  * Switching keeps `Shift` as its reverse in both families, which is worth more than family purity:
  * the fallback pair is `Ctrl+\`` and `Ctrl+Shift+\``, not two chords in the `Ctrl+Shift` gap.
+ * Switching carries a third pair, `Alt+Q` and `Alt+Shift+Q`: the key next to Tab, so the gesture is
+ * the one Alt+Tab already taught, and free on GNOME, KDE, Windows, macOS and in the browsers
+ * themselves. Bound by `code`, since Option+Q is `œ` on a Mac and Q is `й` on a Russian layout.
+ * Caps Lock was the other candidate and is ruled out: its toggle happens below the page, so every
+ * switch would flip the user's case, and macOS Chrome only sends its keydown on the way on.
  *
- * An override replaces both chords for that action, which is the point: a consumer who names their
+ * An override replaces every chord for that action, which is the point: a consumer who names their
  * own binding does not inherit a collision they did not ask for.
  */
 const DEFAULT_BINDINGS: Record<KeymapAction, string[]> = {
@@ -66,8 +71,8 @@ const DEFAULT_BINDINGS: Record<KeymapAction, string[]> = {
   snapTopRight: ['Meta+Shift+ArrowRight', 'Ctrl+Shift+Digit2'],
   snapBottomLeft: ['Meta+Shift+ArrowLeft', 'Ctrl+Shift+Digit3'],
   snapBottomRight: ['Meta+Shift+ArrowDown', 'Ctrl+Shift+Digit4'],
-  focusNext: ['Alt+Backquote', 'Ctrl+Backquote'],
-  focusPrev: ['Alt+Shift+Backquote', 'Ctrl+Shift+Backquote'],
+  focusNext: ['Alt+Backquote', 'Ctrl+Backquote', 'Alt+KeyQ'],
+  focusPrev: ['Alt+Shift+Backquote', 'Ctrl+Shift+Backquote', 'Alt+Shift+KeyQ'],
 }
 
 /** The zone each snap action asks for. `snapNone` gives the window its pre-snap geometry back. */

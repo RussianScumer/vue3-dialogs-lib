@@ -253,6 +253,32 @@ describe('keymap — window switching', () => {
     expect(win.activeId.value).toBe(c)
   })
 
+  it('Alt+Q switches too, by physical key, with Shift reversing it', async () => {
+    const { win } = app()
+    const a = win.open('editor', { id: 1 }).id
+    win.open('editor', { id: 2 })
+    const c = win.open('editor', { id: 3 }).id
+    await nextTick()
+
+    // Option+Q on a Mac: the key is `œ`, the code is still KeyQ.
+    press({ key: 'œ', code: 'KeyQ', altKey: true })
+    expect(win.activeId.value).toBe(a)
+    // A Russian layout: the key is `Й`.
+    press({ key: 'Й', code: 'KeyQ', altKey: true, shiftKey: true })
+    expect(win.activeId.value).toBe(c)
+  })
+
+  it('leaves Ctrl+Q and a bare Q alone', async () => {
+    const { win } = app()
+    win.open('editor', { id: 1 })
+    const b = win.open('editor', { id: 2 }).id
+    await nextTick()
+
+    press({ key: 'q', code: 'KeyQ', ctrlKey: true })
+    press({ key: 'q', code: 'KeyQ' })
+    expect(win.activeId.value).toBe(b)
+  })
+
   it('skips minimized windows', async () => {
     const { win } = app()
     const a = win.open('editor', { id: 1 }).id
