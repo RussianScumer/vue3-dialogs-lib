@@ -1046,3 +1046,54 @@ describe('escape policy', () => {
     wrapper.unmount()
   })
 })
+
+describe('render cost', () => {
+  it('a drag and a resize move the frame without re-rendering it', async () => {
+    const plugin = createWindows({ components: { editor: Content }, maxWindows: 4 })
+    let renders = 0
+    const wrapper = mount(
+      defineComponent({ components: { WindowHost }, template: '<WindowHost />' }),
+      {
+        global: {
+          plugins: [plugin],
+          mixins: [{ updated() { if (this.$options.__name === 'BaseWindow') renders++ } }],
+        },
+        attachTo: document.body,
+      },
+    )
+    const win = useWindows()
+    const id = win.open('editor', { id: 1 }, { x: 100, y: 100, w: 400, h: 300 }).id
+    await nextTick()
+    const dialog = wrapper.find('dialog.vw').element as HTMLElement
+    const head = wrapper.find('.vw__head').element
+    // The press raises the window, which is a render of its own; only the moves are counted.
+    pointer(head, 'pointerdown', 1, 200, 200)
+    await nextTick()
+    renders = 0
+
+    for (let i = 1; i <= 100; i++) {
+      pointer(head, 'pointermove', 1, 200 + i, 200 + i)
+      await nextTick()
+    }
+    expect(renders).toBe(0)
+    expect(dialog.style.transform).toBe('translate(200px, 200px)')
+    pointer(head, 'pointerup', 1, 300, 300)
+    await nextTick()
+
+    const grip = wrapper.find('[data-vw-grip="se"]').element
+    pointer(grip, 'pointerdown', 2, 600, 500)
+    await nextTick()
+    renders = 0
+    for (let i = 1; i <= 50; i++) {
+      pointer(grip, 'pointermove', 2, 600 + i, 500 + i)
+      await nextTick()
+    }
+    expect(renders).toBe(0)
+    expect(dialog.style.width).toBe('450px')
+    expect(dialog.style.height).toBe('350px')
+    pointer(grip, 'pointerup', 2, 650, 550)
+
+    expect(win.byId(id)).toMatchObject({ x: 200, y: 200, w: 450, h: 350 })
+    wrapper.unmount()
+  })
+})

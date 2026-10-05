@@ -1,4 +1,5 @@
 <script lang="ts">
+import { RESIZE_DIRS, RESIZE_STYLES, type ResizeDir } from './useWindowResize'
 import type { ResolvedOptions } from './types'
 
 /**
@@ -10,13 +11,40 @@ import type { ResolvedOptions } from './types'
  * a set declared there would be one set per frame and would never dedupe anything.
  */
 const warnedApps = new WeakSet<ResolvedOptions>()
+
+/*
+ * Every style object below is built once, for every frame on the page. A frame re-renders only when
+ * something structural changes, and when it does, none of these is allocated again.
+ */
+const HEAD_STYLE = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  flex: '0 0 auto',
+  touchAction: 'none',
+  userSelect: 'none',
+} as const
+/** The two header states, so the cursor is a choice between constants rather than a spread. */
+const HEAD_STYLE_MOVE = { ...HEAD_STYLE, cursor: 'move' } as const
+const HEAD_STYLE_STILL = { ...HEAD_STYLE, cursor: 'default' } as const
+
+// The three rows the frame is made of: header and footer are intrinsic and never shrink, the body
+// takes the rest and is the only part that scrolls. `minHeight: 0` is what lets it shrink below its
+// content when the user resizes the frame down, instead of pushing the footer out of the window.
+const BODY_STYLE = { flex: '1 1 auto', minHeight: '0', overflow: 'auto' } as const
+const FOOT_STYLE = { flex: '0 0 auto' } as const
+
+const GRIP_STYLES = {} as Record<ResizeDir, Record<string, string>>
+for (const dir of RESIZE_DIRS) {
+  GRIP_STYLES[dir] = { position: 'absolute', touchAction: 'none', ...RESIZE_STYLES[dir] }
+}
 </script>
 
 <script setup lang="ts">
-import { computed, onErrorCaptured, onMounted, ref, useSlots, watch } from 'vue'
+import { computed, onErrorCaptured, onMounted, ref, toRaw, useSlots, watch, watchEffect } from 'vue'
 import { useWindows, useWindowOptions } from './createWindows'
 import { onWindowKeydown, useWindowDrag } from './useWindowDrag'
-import { RESIZE_DIRS, RESIZE_STYLES, useWindowResize } from './useWindowResize'
+import { useWindowResize } from './useWindowResize'
 import { useWindowFocus } from './useWindowFocus'
 import { provideWindowContext } from './useWindowContext'
 import { useViewport } from './useViewport'
@@ -223,6 +251,37 @@ const band = computed(() => {
   return pinned.value ? 1 : 0
 })
 
+/**
+ * Where the frame is and how big, as the three inline values that say so. Mobile overrides all
+ * three: below the breakpoint the frame is the viewport.
+ */
+function geometry(g: Pick<WindowDescriptor, 'x' | 'y' | 'w' | 'h'>) {
+  return mobile.value
+    ? { width: '100vw', height: '100dvh', transform: 'none' }
+    : { width: `${g.w}px`, height: `${g.h}px`, transform: `translate(${g.x}px, ${g.y}px)` }
+}
+
+/**
+ * A drag writes `x`/`y` on every pointermove and a resize writes `w`/`h`. Read through the frame's
+ * `style` computed, each of those would re-render the whole frame — header, controls, grips — to
+ * change one property. They are written straight onto the element instead, once per flush, so a
+ * gesture costs one style write per frame on one element and no vdom patch at all.
+ *
+ * `post`, so it runs after the mount that gives it an element and after any render in the same
+ * flush, which writes the same values and so can never undo it.
+ */
+watchEffect(
+  () => {
+    const g = geometry(d)
+    const node = el.value
+    if (!node) return
+    node.style.width = g.width
+    node.style.height = g.height
+    node.style.transform = g.transform
+  },
+  { flush: 'post' },
+)
+
 // The UA stylesheet gives <dialog> position:absolute; margin:auto; inset:0 —
 // all three must be cleared or centering fights the transform.
 const style = computed(() => ({
@@ -241,33 +300,15 @@ const style = computed(() => ({
   // ghost at `2 * topZ + 1` — modal. Nothing persisted moves: `focus()` and `activeId` still see
   // one stack.
   zIndex: String(options.zIndexBase + band.value * win.s.topZ + d.z),
-  width: mobile.value ? '100vw' : `${d.w}px`,
-  height: mobile.value ? '100dvh' : `${d.h}px`,
-  transform: mobile.value ? 'none' : `translate(${d.x}px, ${d.y}px)`,
+  // Inlined for the first render and for server-rendered HTML, which the effect above cannot reach.
+  // Read untracked: this computed must not depend on the geometry, or every move re-renders the
+  // frame. Whenever it does re-run, it writes what the effect wrote, so the two never disagree.
+  ...geometry(toRaw(d)),
   maxWidth: '100vw',
   maxHeight: '100dvh',
   pointerEvents: leaving.value ? ('none' as const) : undefined,
   ...minTo.value,
 }))
-
-const headStyle = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  flex: '0 0 auto',
-  touchAction: 'none',
-  userSelect: 'none',
-} as const
-
-// The three rows the frame is made of: header and footer are intrinsic and never shrink, the body
-// takes the rest and is the only part that scrolls. `minHeight: 0` is what lets it shrink below its
-// content when the user resizes the frame down, instead of pushing the footer out of the window.
-const bodyStyle = { flex: '1 1 auto', minHeight: '0', overflow: 'auto' } as const
-const footStyle = { flex: '0 0 auto' } as const
-
-function handleStyle(dir: (typeof RESIZE_DIRS)[number]) {
-  return { position: 'absolute' as const, touchAction: 'none', ...RESIZE_STYLES[dir] }
-}
 
 /**
  * A non-modal <dialog> gets no close request from the UA — its `cancel` event and ESC-to-close are
@@ -366,7 +407,7 @@ function onHeadDblclick(e: MouseEvent) {
     <header
       ref="handle"
       class="vw__head"
-      :style="{ ...headStyle, cursor: canDrag() ? 'move' : 'default' }"
+      :style="canDrag() ? HEAD_STYLE_MOVE : HEAD_STYLE_STILL"
       tabindex="0"
       @keydown="onKeydown"
       @dblclick="onHeadDblclick"
@@ -440,7 +481,7 @@ function onHeadDblclick(e: MouseEvent) {
     <section
       ref="body"
       class="vw__body"
-      :style="bodyStyle"
+      :style="BODY_STYLE"
     >
       <component
         :is="errorComponent"
@@ -452,7 +493,7 @@ function onHeadDblclick(e: MouseEvent) {
     <footer
       v-if="$slots.footer"
       class="vw__foot"
-      :style="footStyle"
+      :style="FOOT_STYLE"
     >
       <slot
         name="footer"
@@ -463,7 +504,7 @@ function onHeadDblclick(e: MouseEvent) {
       v-for="dir in canResize ? RESIZE_DIRS : []"
       :key="dir"
       class="vw__grip"
-      :style="handleStyle(dir)"
+      :style="GRIP_STYLES[dir]"
       :data-vw-grip="dir"
       aria-hidden="true"
       @pointerdown="resize.onDown($event, dir)"
