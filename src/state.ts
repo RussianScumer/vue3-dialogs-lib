@@ -3,10 +3,12 @@ import {
   DEFAULT_MIN_H,
   DEFAULT_MIN_W,
   cascade,
+  cascadeRects,
   centerRect,
   clampDescriptor,
   clampSize,
   snapRect,
+  tileRects,
 } from './geometry'
 import type {
   Bounds,
@@ -844,6 +846,43 @@ export function createStore(options: ResolvedOptions) {
   }
 
   /**
+   * The windows an arrange-all command may move, bottom of the stack first so the active window
+   * lands last. The same gates a snap chord respects: nothing below `mobileBreakpoint`, where every
+   * window is fullscreen, and nothing pinned or modal. `resize` asks for `resizable` as well.
+   */
+  function arrangeable(view: Viewport, resize: boolean): WindowDescriptor[] {
+    if (view.w < options.mobileBreakpoint) return []
+    return s.stack
+      .filter((w) => !w.minimized && w.draggable && (!resize || w.resizable))
+      .filter((w) => !isPinned(w.id) && !modals.has(w.id))
+      .sort((a, b) => a.z - b.z)
+  }
+
+  /** One `geometry` event per window; the result is a plain floating window, not a snapped one. */
+  function arrange(windows: WindowDescriptor[], rects: Rect[]): string[] {
+    windows.forEach((w, i) => {
+      docks.delete(w.id)
+      setGeometry(w.id, rects[i]!)
+    })
+    return windows.map((w) => w.id)
+  }
+
+  /**
+   * Tiles every arrangeable window into a grid over the snap area. One-shot: a window opened
+   * afterwards is placed as usual, and nothing keeps the grid. Returns the ids it moved.
+   */
+  function tileAll(view: Viewport = viewport): string[] {
+    const windows = arrangeable(view, true)
+    return arrange(windows, tileRects(windows.length, view, options.snap.insets))
+  }
+
+  /** Cascades every arrangeable window from the snap area's corner, sizes kept. Returns the ids it moved. */
+  function cascadeAll(view: Viewport = viewport): string[] {
+    const windows = arrangeable(view, false)
+    return arrange(windows, cascadeRects(windows, view, options.snap.insets))
+  }
+
+  /**
    * Hands the store the app's viewport tracker. Called once by the plugin, inside its effect scope,
    * right after `createViewport()` — the store is built first, so this is the seam rather than a
    * constructor argument. Only `placement: 'center'` reads it; everything else already receives a
@@ -939,6 +978,8 @@ export function createStore(options: ResolvedOptions) {
     labelsFor,
     setPreview,
     clampAll,
+    tileAll,
+    cascadeAll,
     attachViewport,
     isRestored,
     hydrate,

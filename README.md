@@ -21,7 +21,8 @@ content is unmounted, not hidden), and with persistence on it survives a page re
 - **Drag, resize from eight grips, keyboard nudging**, min/max size limits, viewport clamping,
   fullscreen below a mobile breakpoint.
 - **Edge snapping** like a desktop: halves, quarters, maximize, a ghost preview, and a rebindable
-  keymap for snapping and window switching.
+  keymap for snapping and window switching. `tileAll()` and `cascadeAll()` arrange every window at
+  once.
 - **Persistence** to any `{ getItem, setItem, removeItem }` storage, with a schema check, repair
   of partial descriptors and a guard against two tabs writing the same key.
 - **Close guards** — app-wide and per window, sync or async — behind `requestClose()`.

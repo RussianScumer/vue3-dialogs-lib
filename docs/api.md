@@ -129,7 +129,8 @@ const off = win.on('close', (e) => console.log(e.id)) // 'open' | 'close' | 'foc
 ```
 
 `geometry` fires once per drag, resize or arrow-key nudge — at the end of the gesture, not per
-frame — and on `snap()` and `setGeometry()`. A drop into a snap zone reports once, from the snap.
+frame — and on `snap()`, `setGeometry()`, `tileAll()` and `cascadeAll()` (once per window moved). A
+drop into a snap zone reports once, from the snap.
 
 Re-clamping the whole stack after a viewport resize is silent.
 
@@ -463,6 +464,27 @@ win.dockZone(id)                                          // the current zone, o
 Snap state is **runtime-only**: it is not part of the descriptor and is not persisted. After a
 reload a snapped window comes back as a plain floating window with the geometry the snap gave it.
 
+### Arranging every window
+
+Two one-shot commands rearrange the whole desktop:
+
+```js
+win.tileAll()     // a near-square grid over the snap area; a short last row spans the full width
+win.cascadeAll()  // a staircase from the snap area's top-left corner, each window keeping its size
+```
+
+Both work bottom of the stack first, so the active window takes the last cell or the front step,
+and neither changes the stacking order or focus. Each returns the ids it moved and fires one
+`geometry` event per window. They default to the app's viewport; pass `{ w, h }` to use another.
+
+They move only windows the user could move by hand: not minimized, pinned or modal ones, and not one
+opened with `draggable: false`. Tiling also resizes, so it skips `resizable: false` windows as
+well; cascading only moves, so those take part. Size limits still apply, so a window whose `minW`
+is wider than its cell overlaps its neighbour. Below `mobileBreakpoint` both do nothing.
+
+The result is plain floating windows: a snapped window is undocked, not re-snapped, and nothing
+remembers the arrangement. A window opened afterwards is placed as usual, and the next drag is free.
+
 ## Pinned windows
 
 `fixed: true` opens a window above every other one, wherever focus goes:
@@ -757,5 +779,5 @@ reachable while the user resizes the window down.
 `showModal()` and the browser top layer, a focus-trap loop, confirm/alert helpers, data fetching or
 staleness resolution, cross-device layout sync, tiling window management (docked rails, tab stacks,
 splitters), and a bundled design system. Snapping is limited to the Windows edge gestures described
-above. [Modal windows](#modal-windows) are the narrow reading of the first two: an opt-in scrim and
+above, and `tileAll()` is a one-shot arrangement, not a layout that holds. [Modal windows](#modal-windows) are the narrow reading of the first two: an opt-in scrim and
 an `inert` sweep, per window, with the top layer and the trap still out.
