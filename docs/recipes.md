@@ -792,12 +792,13 @@ sheet's result is the guard's answer.
 ## 22 · Move the keyboard shortcuts out of the way
 
 Every action ships with two chords: the familiar one (`Meta`+arrow, `` Alt+` ``) and one that
-survives a window manager (`Ctrl`+`Shift`+arrow, `Ctrl`+`Shift`+`1`…`4`, `` Ctrl+` ``). The familiar
+survives a window manager (`Ctrl`+`Shift`+arrow, `Ctrl`+`Shift`+`1`…`4`, `` Ctrl+` ``); switching
+also answers `Alt+Q`. The familiar
 one is usually grabbed above the browser — Windows' Snap Assist, GNOME and KDE tiling, GNOME's
 switch-group, macOS Chrome's Back — which the page can neither see nor prevent, so the second chord
 is what most users will actually be pressing.
 
-If either collides with your own app, move it. An override replaces **both** defaults for that
+If either collides with your own app, move it. An override replaces **every** default for that
 action, so you never inherit the half you did not name:
 
 ```js

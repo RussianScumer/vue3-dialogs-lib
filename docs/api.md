@@ -585,6 +585,8 @@ modal open is byte-for-byte the desktop it was.
   the desktop with nothing left to answer it.
 - **ESC dismisses it** through `requestClose(id)`, so a close guard still runs, rather than
   minimizing it.
+- **Switching stays inside it.** `Alt`+`` ` `` and `focusNext()` / `focusPrev()` walk only the modal
+  and its own children; a window it blocks is never raised or focused.
 - **Never persisted.** A modal is filtered out of the blob entirely, exactly as an owned window is:
   a question must not come back after a reload. It is decided at `open()` and never toggled from the
   header, unlike the pin.
@@ -724,7 +726,7 @@ anywhere inside a window there is a keymap as well:
 | --- | --- | --- |
 | `snapLeft`, `snapRight`, `snapMax`, `snapNone` | `Meta`+`←` / `→` / `↑` / `↓` | `Ctrl`+`Shift`+ the same arrow |
 | the quarters, clockwise from the top-left | `Meta`+`Shift`+`↑` / `→` / `↓` / `←` | `Ctrl`+`Shift`+`1`…`4`, reading order |
-| `focusNext`, `focusPrev` | `Alt`+`` ` `` / `Alt`+`Shift`+`` ` `` | `Ctrl`+`` ` `` / `Ctrl`+`Shift`+`` ` `` |
+| `focusNext`, `focusPrev` | `Alt`+`` ` `` / `Alt`+`Shift`+`` ` `` | `Ctrl`+`` ` `` / `Ctrl`+`Shift`+`` ` ``, or `Alt`+`Q` / `Alt`+`Shift`+`Q` |
 
 **Why two chords.** The familiar one usually never arrives: Windows takes `Win`+arrow for Snap
 Assist, GNOME and KDE take `Super`+arrow for tiling, GNOME takes `Alt`+`` ` `` for switch-group, and
@@ -734,6 +736,11 @@ everything a desktop reserves, and is what the feature runs on in practice. The 
 reuse the arrows there, since `Ctrl`+`Shift`+arrow is already a half, so they are the digits in
 reading order — matched by `event.code`, because `Shift`+`1` is `!` on one layout and something else
 on the next.
+
+Switching gets a third pair, `Alt`+`Q` / `Alt`+`Shift`+`Q`: the key beside `Tab`, so the gesture is
+the one `Alt`+`Tab` already taught. It is matched by `event.code` too, so Option+Q (`œ`) on a Mac and
+`Й` on a Russian layout both count. Caps Lock is deliberately not used: its toggle happens below the
+page, so every switch would flip the user's case.
 
 **Chords act on the active window** — the top non-minimized one, the one carrying `data-vw-active`
 — no matter where focus is. The keymap is a single `keydown` listener on the document, created in
@@ -774,7 +781,8 @@ win.focusPrev()
 ```
 
 Both skip minimized windows and any window that currently owns a child, since an owner's frame is
-`inert` while its question is on screen.
+`inert` while its question is on screen. While a modal is open they stay inside it: the ring is the
+modal and its own children, and nothing under the scrim is raised or focused.
 
 The ghost is a `.vw-ghost` element styled through `--vtd-ghost-bg`, `--vtd-ghost-outline` and
 `--vtd-ghost-radius`.

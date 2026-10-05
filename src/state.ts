@@ -325,9 +325,16 @@ export function createStore(options: ResolvedOptions) {
    * owns a child: its own frame is inert, and the child sitting directly above it is the reachable
    * half of that pair. Focusing raises the window, so repeated `focusNext()` walks the whole stack
    * rather than bouncing between the top two.
+   *
+   * An open modal shrinks the ring to itself and its own children. Everything else is inert under
+   * the scrim, and landing there would raise a frame nobody can reach above the modal's `z`: the
+   * highlight would leave the question being asked, and the header focus would fail on an inert
+   * node and drop the keyboard out of the modal. With no modal open the filter passes everything.
    */
   function cycleFocus(step: 1 | -1): string | null {
-    const order = s.stack.filter((w) => !w.minimized && !hasChild(w.id)).sort((a, b) => a.z - b.z)
+    const order = s.stack
+      .filter((w) => !w.minimized && !hasChild(w.id) && !isBlockedByModal(w.id))
+      .sort((a, b) => a.z - b.z)
     if (order.length === 0) return null
     const from = order.findIndex((w) => w.id === activeId.value)
     // No active window in the ring — an inert owner is on top — so start from the end.
