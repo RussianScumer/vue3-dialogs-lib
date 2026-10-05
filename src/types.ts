@@ -53,6 +53,10 @@ export interface ControlLabels {
 export interface WindowDefaults {
   title?: string
   w?: number
+  /**
+   * Leave `h`, `minH` and `maxH` all unset and the window grows to fit its content, up to the
+   * viewport, until the user or `setGeometry` decides its height. Naming any of them opts out.
+   */
   h?: number
   closable?: boolean
   minimizable?: boolean

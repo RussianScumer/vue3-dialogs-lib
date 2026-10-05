@@ -142,7 +142,10 @@ const resize = useWindowResize(d, {
   view,
   bounds: options.bounds,
   enabled: () => canResize.value,
-  onStart: () => win.focus(d.id),
+  onStart: () => {
+    win.stopAutoHeight(d.id)
+    win.focus(d.id)
+  },
   onEnd: () => {
     win.undock(d.id)
     report({ w: d.w, h: d.h })
@@ -315,6 +318,69 @@ const style = computed(() => ({
 }))
 
 /**
+ * A window opened with no height of its own grows to fit its content, as far as the viewport
+ * allows. The body is the only part that scrolls, so its overflow is exactly how much taller the
+ * frame has to be. Live rather than once: an async component or late data grows the content after
+ * mount. The body's children are observed as well as the body, because a child that grows inside
+ * a scrolling body never resizes the body itself; the mutation observer keeps that list current
+ * when the slot re-renders. Stops for good once the store drops the flag — a resize or a snap.
+ */
+let fitObservers: { resize: ResizeObserver; mutation: MutationObserver } | null = null
+let fitFrame = 0
+
+/**
+ * Deferred to the next frame and coalesced: growing the frame inside the observer's own callback
+ * resizes what it observes in the same loop, which Chromium reports as an undelivered-notifications
+ * error.
+ */
+function scheduleFit() {
+  if (fitFrame) return
+  fitFrame = requestAnimationFrame(() => {
+    fitFrame = 0
+    fitToContent()
+  })
+}
+
+function fitToContent() {
+  const node = body.value
+  if (!node || mobile.value || leaving.value || d.minimized || !win.isAutoHeight(d.id)) return
+  win.growToFit(d.id, node.scrollHeight - node.clientHeight, view)
+}
+
+function observeChildren(node: HTMLElement, resize: ResizeObserver) {
+  resize.disconnect()
+  resize.observe(node)
+  for (const child of Array.from(node.children)) resize.observe(child)
+}
+
+function stopFitting() {
+  fitObservers?.resize.disconnect()
+  fitObservers?.mutation.disconnect()
+  fitObservers = null
+  if (fitFrame) cancelAnimationFrame(fitFrame)
+  fitFrame = 0
+}
+
+onMounted(() => {
+  const node = body.value
+  if (!node || !win.isAutoHeight(d.id) || typeof ResizeObserver === 'undefined') return
+  const resize = new ResizeObserver(scheduleFit)
+  const mutation = new MutationObserver(() => observeChildren(node, resize))
+  mutation.observe(node, { childList: true })
+  observeChildren(node, resize)
+  fitObservers = { resize, mutation }
+  fitToContent()
+})
+
+watch(
+  () => win.isAutoHeight(d.id),
+  (on) => !on && stopFitting(),
+)
+// Coming back from the taskbar or from below the mobile breakpoint, the content may have changed.
+watch([() => d.minimized, mobile], () => fitObservers && void nextTick(fitToContent))
+onBeforeUnmount(stopFitting)
+
+/**
  * A non-modal <dialog> gets no close request from the UA — its `cancel` event and ESC-to-close are
  * `showModal()` behaviour — so ESC is a plain keydown listener on the window element. It stands
  * down for content that took the key first, for a window that is not the active one (Tab can reach
@@ -365,7 +431,11 @@ function onKeydown(e: KeyboardEvent) {
     view,
     bounds: options.bounds,
     enabled: interactive,
-    onChange: () => report({ x: d.x, y: d.y, w: d.w, h: d.h }),
+    onChange: () => {
+      // Shift+arrows is a resize, and a resize hands the height to the user.
+      if (e.shiftKey) win.stopAutoHeight(d.id)
+      report({ x: d.x, y: d.y, w: d.w, h: d.h })
+    },
   })
 }
 

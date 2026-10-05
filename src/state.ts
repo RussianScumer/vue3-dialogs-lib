@@ -144,6 +144,13 @@ export function createStore(options: ResolvedOptions) {
    */
   const maximizables = reactive(new Map<string, boolean>())
   /**
+   * The windows that grow to fit their content: opened with no `h`, `minH` or `maxH` from the call,
+   * the preset or the spec. Runtime-only beside `docks`, so the schema does not move: a restored
+   * window comes back at the height it was saved with and stays there. An entry is dropped the
+   * moment anyone else decides the height — a resize, a snap, a `setGeometry` with a new `h`.
+   */
+  const autoHeights = reactive(new Set<string>())
+  /**
    * The windows opened with `modal: true`. Runtime-only beside `pins`, and for a reason closer to
    * `owners`: a modal is a question, and a question must not survive a reload — so it is filtered
    * out of the persisted blob entirely rather than merely losing a flag. Reactive, because the
@@ -375,7 +382,7 @@ export function createStore(options: ResolvedOptions) {
    * forgotten by one of them. Results are not here: each path settles them its own way.
    */
   function forgetRuntime(id?: string): void {
-    const all = [restoredIds, owners, docks, pins, modals, escapes, controlLabels, maximizables, taskbarRects, closeGuards, closing, pending]
+    const all = [restoredIds, owners, docks, pins, modals, escapes, controlLabels, maximizables, autoHeights, taskbarRects, closeGuards, closing, pending]
     for (const m of all) {
       if (id === undefined) m.clear()
       else m.delete(id)
@@ -730,6 +737,9 @@ export function createStore(options: ResolvedOptions) {
     if (Object.keys(labels).length > 0) controlLabels.set(d.id, labels)
     const maximizable = opts.maximizable ?? defs.maximizable
     if (maximizable !== undefined) maximizables.set(d.id, maximizable)
+    // Not `??`: an explicit `maxH: null` is a choice too, and a window that made one keeps its height.
+    const sized = (['h', 'minH', 'maxH'] as const).some((k) => opts[k] !== undefined || defs[k] !== undefined)
+    if (!sized) autoHeights.add(d.id)
     if (owner !== null) {
       owners.set(d.id, owner)
       // Not `focus()`: the fresh window is already at topZ, so the early return would leave its
@@ -752,8 +762,36 @@ export function createStore(options: ResolvedOptions) {
 
   function setGeometry(id: string, geom: Partial<Pick<WindowDescriptor, 'x' | 'y' | 'w' | 'h'>>): void {
     const w = require(id)
+    // A height somebody chose outranks the content's: from here on the window keeps it.
+    if (geom.h !== undefined && geom.h !== w.h) autoHeights.delete(id)
     Object.assign(w, geom)
     Object.assign(w, clampSize(w.w, w.h, w))
+    emit({ type: 'geometry', id, rect: rectOf(w) })
+  }
+
+  function isAutoHeight(id: string): boolean {
+    return autoHeights.has(id)
+  }
+
+  /** The frame calls this when the user starts resizing: the height is theirs from now on. */
+  function stopAutoHeight(id: string): void {
+    autoHeights.delete(id)
+  }
+
+  /**
+   * Grows an auto-height window by `extra` px, the amount its body overflows. Only down to the
+   * viewport's bottom edge: past it the window moves up instead, and a window taller than the
+   * viewport stops at the viewport, where the body scrolls as it always did. Never shrinks.
+   */
+  function growToFit(id: string, extra: number, view: Viewport): void {
+    const w = byId(id)
+    if (!w || !autoHeights.has(id) || docks.has(id) || extra <= 0) return
+    const h = Math.min(w.h + Math.ceil(extra), Math.max(w.h, view.h))
+    const y = Math.max(0, Math.min(w.y, view.h - h))
+    const size = clampSize(w.w, h, w)
+    if (size.h === w.h && y === w.y) return
+    w.h = size.h
+    w.y = y
     emit({ type: 'geometry', id, rect: rectOf(w) })
   }
 
@@ -879,6 +917,7 @@ export function createStore(options: ResolvedOptions) {
     }
 
     docks.set(id, { zone, prev: current?.prev ?? rectOf(w) })
+    autoHeights.delete(id)
     const rect = snapRect(zone, view, options.snap.insets)
     Object.assign(w, rect, clampSize(rect.w, rect.h, w))
     emit({ type: 'geometry', id, rect: rectOf(w) })
@@ -1038,6 +1077,9 @@ export function createStore(options: ResolvedOptions) {
     focusPrev,
     setTitle,
     setGeometry,
+    isAutoHeight,
+    stopAutoHeight,
+    growToFit,
     updateProps,
     setMeta,
     snap,

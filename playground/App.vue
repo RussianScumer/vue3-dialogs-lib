@@ -149,6 +149,11 @@ function openLongDoc() {
   win.open('longDoc', {}, { w: 460, h: 320 })
 }
 
+/** No `h`, `minH` or `maxH` anywhere, so the frame grows to fit its content. */
+function openGrowDoc() {
+  win.open('growDoc', {}, { w: 460, title: 'Auto height', dedupe: false })
+}
+
 /** Three ways a window's component can fail to be there: slow, never, and throwing. */
 function openSlowPanel() {
   win.open('slowPanel', {}, { title: 'Slow chunk' })
@@ -947,6 +952,21 @@ function clearStorage() {
               elsewhere and after an action. Snap items are disabled on a window that cannot move. Right-clicking a header
               button still gets the browser's menu.
             </p>
+          </section>
+
+          <section>
+            <h2>29 · Growing to fit</h2>
+            <p>
+              A window that names none of <code>h</code>, <code>minH</code> and <code>maxH</code> grows to fit its
+              content, as far as the screen allows. Add paragraphs and the frame follows; resize it from a grip and it
+              stops following. Case 16's window names <code>h</code>, so it keeps its height.
+            </p>
+            <button
+              type="button"
+              @click="openGrowDoc"
+            >
+              Open growing window
+            </button>
           </section>
         </div>
 
