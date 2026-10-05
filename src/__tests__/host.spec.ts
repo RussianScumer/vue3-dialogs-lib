@@ -837,3 +837,95 @@ describe('non-modal', () => {
     else delete proto.showModal
   })
 })
+
+describe('maximize button', () => {
+  function desktop(over: Record<string, unknown> = {}) {
+    const plugin = createWindows({ components: { editor: Content }, ...over } as Parameters<typeof createWindows>[0])
+    const wrapper = mount(defineComponent({ components: { WindowHost }, template: '<WindowHost />' }), {
+      global: { plugins: [plugin] },
+      attachTo: document.body,
+    })
+    return { wrapper, win: useWindows() }
+  }
+
+  const labels = { minimize: 'Minimize', close: 'Close', maximize: 'Maximize', restore: 'Restore' }
+
+  it('renders only when opted in, resizable and snapping, after the other controls', async () => {
+    const { wrapper, win } = desktop({ labels })
+    win.open('editor', { id: 1 })
+    await nextTick()
+    expect(wrapper.find('[data-vw-maximize]').exists()).toBe(false)
+
+    win.closeAll()
+    win.open('editor', { id: 2 }, { maximizable: true })
+    await nextTick()
+    const buttons = wrapper.findAll('.vw__btn')
+    expect(buttons).toHaveLength(3)
+    expect(buttons[2]!.attributes('data-vw-maximize')).toBeDefined()
+
+    win.closeAll()
+    win.open('editor', { id: 3 }, { maximizable: true, resizable: false })
+    await nextTick()
+    expect(wrapper.find('[data-vw-maximize]').exists()).toBe(false)
+    wrapper.unmount()
+
+    const still = desktop({ labels, snap: { enabled: false } })
+    still.win.open('editor', { id: 4 }, { maximizable: true })
+    await nextTick()
+    expect(still.wrapper.find('[data-vw-maximize]').exists()).toBe(false)
+    still.wrapper.unmount()
+  })
+
+  it('toggles maximize, flips its name and pressed state, and agrees with the double-click', async () => {
+    const { wrapper, win } = desktop({ labels })
+    const id = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 400, h: 300, maximizable: true }).id
+    await nextTick()
+    const button = () => wrapper.find('[data-vw-maximize]')
+    const dialog = () => wrapper.find('dialog.vw')
+
+    expect(button().attributes('aria-label')).toBe('Maximize')
+    expect(button().attributes('aria-pressed')).toBe('false')
+    expect(dialog().attributes('data-vw-maximized')).toBeUndefined()
+
+    await button().trigger('click')
+    expect(win.isMaximized(id)).toBe(true)
+    expect(win.byId(id)).toMatchObject({ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight })
+    expect(button().attributes('aria-label')).toBe('Restore')
+    expect(button().attributes('aria-pressed')).toBe('true')
+    expect(dialog().attributes('data-vw-maximized')).toBe('true')
+
+    // The double-click goes through the same method, so the button follows it.
+    await wrapper.find('.vw__head').trigger('dblclick')
+    expect(win.isMaximized(id)).toBe(false)
+    expect(win.byId(id)).toMatchObject({ x: 120, y: 90, w: 400, h: 300 })
+    expect(button().attributes('aria-label')).toBe('Maximize')
+
+    // And so does the store method, whoever calls it.
+    win.maximize(id)
+    await nextTick()
+    expect(button().attributes('aria-pressed')).toBe('true')
+    await button().trigger('click')
+    expect(win.byId(id)).toMatchObject({ x: 120, y: 90, w: 400, h: 300 })
+    wrapper.unmount()
+  })
+
+  it('warns when the rendered button has no name, and not when it does', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const unnamed = desktop({ labels: { minimize: 'Minimize', close: 'Close' } })
+      unnamed.win.open('editor', { id: 1 }, { maximizable: true })
+      await nextTick()
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(warn.mock.calls[0]![0]).toMatch(/maximize, restore/)
+      unnamed.wrapper.unmount()
+
+      const named = desktop({ labels })
+      named.win.open('editor', { id: 1 }, { maximizable: true })
+      await nextTick()
+      expect(warn).toHaveBeenCalledTimes(1)
+      named.wrapper.unmount()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+})

@@ -492,6 +492,23 @@ win.snap(id, 'none', { w: innerWidth, h: innerHeight })  // back to the pre-snap
 win.dockZone(id)                                          // the current zone, or null
 ```
 
+Maximize has methods of its own, sized to the viewport the plugin already tracks, so there is no
+viewport to pass:
+
+```js
+win.maximize(id)        // the 'max' snap
+win.unmaximize(id)      // back to the pre-snap geometry; a window snapped elsewhere is left alone
+win.toggleMaximize(id)  // what the header double-click and the maximize button call
+win.isMaximized(id)     // dockZone(id) === 'max', whichever path put it there
+```
+
+A maximized window carries `data-vw-maximized` on its `<dialog>`. A window opened with
+`maximizable: true` — on `open()`, a preset or the component's spec — also gets a maximize/restore
+button, appended after its other default controls, as long as it is resizable and `snap.enabled`
+is on. It is opt-in so a window that never asks keeps exactly the controls it had; like the snap
+itself, `maximizable` is not on the descriptor and an `open()` call's value is gone after a reload,
+while a spec's is read again.
+
 Snap state is **runtime-only**: it is not part of the descriptor and is not persisted. After a
 reload a snapped window comes back as a plain floating window with the geometry the snap gave it.
 
@@ -601,13 +618,13 @@ explicit `x` or `y` still wins, one axis at a time. The default is `'cascade'`.
 
 ## Control labels
 
-The default header controls are glyphs — `–`, `✕` and the pin's `▲` — and the library ships no
-strings, so they have no accessible name until you give them one:
+The default header controls are glyphs — `–`, `✕`, the pin's `▲` and the maximize button's `□` —
+and the library ships no strings, so they have no accessible name until you give them one:
 
 ```js
 app.use(createWindows({
   components,
-  labels: { minimize: 'Minimize', close: 'Close', pin: 'Keep on top' },
+  labels: { minimize: 'Minimize', close: 'Close', pin: 'Keep on top', maximize: 'Maximize', restore: 'Restore' },
 }))
 ```
 
@@ -624,7 +641,9 @@ win.labelsFor(id)                                                 // the effecti
 ```
 
 The pin button is a toggle: it carries `aria-pressed` with the pin state, so one `pin` name covers
-both directions. Like `fixed`, labels are **runtime-only** — they belong to the locale of the app
+both directions. The maximize button is not one toggle but two states, so it takes two names:
+`maximize` while the window is floating and `restore` while it is maximized, with `aria-pressed`
+alongside; the development warning asks for both once the button renders. Like `fixed`, labels are **runtime-only** — they belong to the locale of the app
 that is running rather than to the window, so they never reach the descriptor or storage, and the
 app-wide option is simply read again on the next load.
 

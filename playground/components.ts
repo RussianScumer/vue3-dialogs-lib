@@ -7,12 +7,14 @@ import type { SavedItem } from './types'
  * `open()` too — and so `typed-open.type-test.ts` checks the real map rather than a copy of it.
  */
 export const components = {
-  // A spec rather than a bare loader for one reason: the `result` marker, which is what makes
+  // A spec rather than a bare loader for the `result` marker, which is what makes
   // `open('itemEditor').result` settle with a SavedItem instead of `unknown`. Nothing reads the
-  // value — the key is stripped before it can reach the descriptor.
+  // value — the key is stripped before it can reach the descriptor. `maximizable` opts every editor
+  // into the maximize button; it is chrome, so it never reaches the descriptor either.
   itemEditor: {
     component: () => import('./windows/ItemEditor.vue'),
     result: null as unknown as SavedItem,
+    maximizable: true,
   },
   // A spec instead of a bare loader: every log viewer opens with these, no options needed
   // at the call site, and they persist on the descriptor.

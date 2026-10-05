@@ -140,6 +140,13 @@ export function createStore(options: ResolvedOptions) {
    */
   const controlLabels = reactive(new Map<string, ControlLabels>())
   /**
+   * Whether a window shows the maximize button, when its `open()` call or preset said so.
+   * Runtime-only beside `controlLabels` and for the same kind of reason: it is chrome, not the
+   * window. A window with no entry falls back to its component spec, which is what a restored
+   * window — whose entry a hydration cleared — still has.
+   */
+  const maximizables = reactive(new Map<string, boolean>())
+  /**
    * The windows opened with `modal: true`. Runtime-only beside `pins`, and for a reason closer to
    * `owners`: a modal is a question, and a question must not survive a reload — so it is filtered
    * out of the persisted blob entirely rather than merely losing a flag. Reactive, because the
@@ -381,6 +388,7 @@ export function createStore(options: ResolvedOptions) {
     pins.delete(id)
     modals.delete(id)
     controlLabels.delete(id)
+    maximizables.delete(id)
     taskbarRects.delete(id)
     closeGuards.delete(id)
     closing.delete(id)
@@ -400,6 +408,7 @@ export function createStore(options: ResolvedOptions) {
     pins.clear()
     modals.clear()
     controlLabels.clear()
+    maximizables.clear()
     taskbarRects.clear()
     closeGuards.clear()
     closing.clear()
@@ -710,6 +719,8 @@ export function createStore(options: ResolvedOptions) {
     // names one control keeps the app-wide names for the rest.
     const labels = { ...defs.labels, ...opts.labels }
     if (Object.keys(labels).length > 0) controlLabels.set(d.id, labels)
+    const maximizable = opts.maximizable ?? defs.maximizable
+    if (maximizable !== undefined) maximizables.set(d.id, maximizable)
     if (owner !== null) {
       owners.set(d.id, owner)
       // Not `focus()`: the fresh window is already at topZ, so the early return would leave its
@@ -854,6 +865,37 @@ export function createStore(options: ResolvedOptions) {
     return focus(id)
   }
 
+  /**
+   * Maximize is the `max` snap, sized to the viewport the plugin attached — the caller no longer
+   * has to have one to hand. `unmaximize` gives back the geometry from before the first snap and
+   * leaves a window snapped to any other zone alone. All four refuse nothing `snap()` would not:
+   * a pinned window stays where it is.
+   */
+  function maximize(id: string): string {
+    return snap(id, 'max', viewport)
+  }
+
+  function unmaximize(id: string): string {
+    if (isMaximized(id)) snap(id, 'none', viewport)
+    return id
+  }
+
+  function toggleMaximize(id: string): string {
+    return isMaximized(id) ? unmaximize(id) : maximize(id)
+  }
+
+  function isMaximized(id: string): boolean {
+    return dockZone(id) === 'max'
+  }
+
+  /** True when the window shows the maximize button: its own `maximizable`, then its spec's. */
+  function isMaximizable(id: string): boolean {
+    const own = maximizables.get(id)
+    if (own !== undefined) return own
+    const w = byId(id)
+    return w ? options.defaultsFor(w.name).maximizable === true : false
+  }
+
   /** Forgets the snap and keeps the current geometry — what a manual resize means. */
   function undock(id: string): void {
     if (docks.delete(id)) emit({ type: 'snap', id, zone: null })
@@ -933,6 +975,7 @@ export function createStore(options: ResolvedOptions) {
     pins.clear()
     modals.clear()
     controlLabels.clear()
+    maximizables.clear()
     taskbarRects.clear()
     closeGuards.clear()
     closing.clear()
@@ -986,6 +1029,11 @@ export function createStore(options: ResolvedOptions) {
     updateProps,
     setMeta,
     snap,
+    maximize,
+    unmaximize,
+    toggleMaximize,
+    isMaximized,
+    isMaximizable,
     undock,
     undockForDrag,
     dockZone,

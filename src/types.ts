@@ -43,6 +43,10 @@ export interface ControlLabels {
   minimize?: string
   close?: string
   pin?: string
+  /** The maximize button while the window is not maximized. */
+  maximize?: string
+  /** The same button while it is: it gives the window its previous geometry back. */
+  restore?: string
 }
 
 /** Everything a window can be configured with, whether per open() call or per component. */
@@ -69,6 +73,17 @@ export interface WindowDefaults {
    * gives it the button; a window that never mentions it renders exactly as it does today.
    */
   fixed?: boolean
+  /**
+   * Give the window a maximize/restore button after its other default controls. Opt-in, so a window
+   * that never mentions it renders exactly the controls it always did; the button also needs
+   * `resizable` and `snap.enabled`, since maximizing is the `max` snap. The title-bar double-click
+   * and the keymap maximize regardless of this flag, as they always have.
+   *
+   * Not on the descriptor and **not persisted**: it is a choice about chrome, not about the window.
+   * A restored window reads it from its component spec again; an `open()` call's own value is gone
+   * after a reload, exactly as its `labels` are.
+   */
+  maximizable?: boolean
   /**
    * Accessible names for this window's default controls, merged key by key over the app-wide
    * `labels` option: a window that names only `close` keeps the app-wide `minimize`.
