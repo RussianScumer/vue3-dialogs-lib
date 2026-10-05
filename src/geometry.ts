@@ -101,6 +101,47 @@ export function snapRect(zone: SnapZone, view: Viewport, insets: SnapInsets): Re
   }
 }
 
+/** Splits `size` into `parts` integer spans that sum back to it exactly. */
+function spans(start: number, size: number, parts: number): { at: number; len: number }[] {
+  const out: { at: number; len: number }[] = []
+  for (let i = 0; i < parts; i++) {
+    const from = Math.round((i * size) / parts)
+    const to = Math.round(((i + 1) * size) / parts)
+    out.push({ at: start + from, len: to - from })
+  }
+  return out
+}
+
+/**
+ * `n` cells covering the snap area: a near-square grid, rows filled first, with a short last row
+ * stretched across the full width so the area has no hole. Two windows give the left and right
+ * halves; three give two on top and one below.
+ */
+export function tileRects(n: number, view: Viewport, insets: SnapInsets): Rect[] {
+  if (n <= 0) return []
+  const a = snapArea(view, insets)
+  const cols = Math.ceil(Math.sqrt(n))
+  const rows = Math.ceil(n / cols)
+  const out: Rect[] = []
+  for (const [r, row] of spans(a.y, a.h, rows).entries()) {
+    const inRow = r < rows - 1 ? cols : n - cols * (rows - 1)
+    for (const col of spans(a.x, a.w, inRow)) out.push({ x: col.at, y: row.at, w: col.len, h: row.len })
+  }
+  return out
+}
+
+/**
+ * A staircase from the snap area's top-left corner, one step per window, wrapping like placement
+ * does. Each window keeps its own size: only the position is the cascade's to decide.
+ */
+export function cascadeRects(sizes: { w: number; h: number }[], view: Viewport, insets: SnapInsets): Rect[] {
+  const a = snapArea(view, insets)
+  return sizes.map(({ w, h }, i) => {
+    const offset = (i % CASCADE_WRAP) * CASCADE_STEP
+    return { x: a.x + offset, y: a.y + offset, w, h }
+  })
+}
+
 /**
  * The zone a drop at (px, py) would snap to, or null. A corner wins over an edge, which is what
  * makes quarters reachable at all: the corner band is wide, the edge band is a few px.

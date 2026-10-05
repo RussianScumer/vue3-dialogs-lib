@@ -61,6 +61,16 @@ function askForAttention(minimizeFirst: boolean) {
   }, 2000)
 }
 
+/** A few windows to arrange, then the command itself; the log shows how many moved. */
+function openFour() {
+  for (const n of [1, 2, 3, 4]) win.open('logViewer', { source: `arrange ${n}` }, { dedupe: false, w: 320, h: 220 })
+}
+
+function arrange(how: 'tile' | 'cascade') {
+  const moved = how === 'tile' ? win.tileAll() : win.cascadeAll()
+  log(`${how}All() moved ${moved.length} window${moved.length === 1 ? '' : 's'}`)
+}
+
 /** No options at all: the size and limits come from the component's spec in main.ts. */
 function openLogWithSpecDefaults() {
   const id = win.open('logViewer', { source: 'defaults' }).id
@@ -983,6 +993,33 @@ function clearStorage() {
               @click="askForAttention(true)"
             >
               Ask from the taskbar
+            </button>
+          </section>
+
+          <section>
+            <h2>27 · Arrange all</h2>
+            <p>
+              <code>tileAll()</code> lays the open windows out in a grid over the snap area — the taskbar inset stays
+              clear — and <code>cascadeAll()</code> stairs them from its corner at their own sizes. Both are one-shot:
+              the next drag is free, and a snapped window comes out undocked. Minimized and pinned windows stay put.
+            </p>
+            <button
+              type="button"
+              @click="openFour"
+            >
+              Open four
+            </button>
+            <button
+              type="button"
+              @click="arrange('tile')"
+            >
+              Tile all
+            </button>
+            <button
+              type="button"
+              @click="arrange('cascade')"
+            >
+              Cascade all
             </button>
           </section>
         </div>
