@@ -14,7 +14,7 @@ pnpm bench      # vitest bench --run
 | File | Covers |
 |---|---|
 | `src/__bench__/store.bench.ts` | `open` (dedupe scan, eviction), `focus`, `minimize`/`restore`, `byId`, `setGeometry` (one drag frame), `clampAll`, `close`, computed recomputation. Pure JS, no DOM. |
-| `src/__bench__/host.bench.ts` | Mounting `WindowHost` with N open vs N minimized windows, minimize/restore round trips, 60 drag frames, 60 focus bumps. jsdom. |
+| `src/__bench__/host.bench.ts` | Mounting `WindowHost` with N open vs N minimized windows, minimize/restore round trips, 60 drag frames, 100 pointermoves through the real drag handler, 60 focus bumps. jsdom. |
 | `src/__bench__/persist.bench.ts` | Hydration on install (valid, oversized, rejected snapshots) and one debounced serialize. |
 
 Two rules the benchmarks follow, because breaking them is the usual way a benchmark lies:
@@ -103,8 +103,24 @@ compare them with each other, not with zero):
 | 60 drag frames on one window | 50.0 ms → **~0.31 ms/frame** beyond app setup |
 | 60 focus bumps | 49.0 ms → **~0.29 ms/bump** |
 
-Only the dragged window re-renders: `x`/`y` live on one descriptor, and the other windows' vnodes
-are untouched.
+No window re-renders during a drag or a resize, the dragged one included. `x`/`y`/`w`/`h` are not
+read by any render: one post-flush effect per window writes `transform`, `width` and `height` straight
+onto its `<dialog>`, once per flush however many of the four changed. The first render still inlines
+the same values, so server-rendered HTML and the first paint are right. Header and grip styles are
+module constants, so a frame that does re-render for a structural reason (focus, pin, mobile)
+allocates no style objects for them.
+
+Measured on one machine before and after the frame stopped re-rendering, desktop of 8 open windows
+mounted once and kept:
+
+| Scenario | before | after |
+|---|---:|---:|
+| 100 pointermoves on one window, a tick each | 63.1 ms | **5.8 ms** |
+| 60 drag frames on one window (includes app setup) | 70.0 ms | 36.0 ms |
+
+`clampAll` on a viewport resize runs at most once per animation frame, against the viewport as it is
+by then: a window dragged across a monitor edge or a browser resized by hand fires `resize` far more
+often than the screen repaints.
 
 ### Persistence
 

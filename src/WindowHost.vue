@@ -19,8 +19,27 @@ const visible = win.visible
 /** Armed snap target of the drag in progress; drawn as a ghost above every window. */
 const preview = win.preview
 
-// A shrinking viewport must not strand a window off-screen; snapped windows follow it instead.
-watch(() => [view.w, view.h], () => win.clampAll(view), { immediate: true })
+/**
+ * A shrinking viewport must not strand a window off-screen; snapped windows follow it instead.
+ *
+ * A window being dragged across a monitor edge or a browser being resized by hand fires `resize`
+ * far more often than the screen repaints, and `clampAll` walks every window. It runs at most once
+ * per animation frame, against the viewport as it is by then. The first run is immediate, so the
+ * first render is already clamped, and without `requestAnimationFrame` every run is.
+ */
+let clampFrame: number | null = null
+
+function clampSoon(): void {
+  if (clampFrame !== null) return
+  if (typeof requestAnimationFrame !== 'function') return win.clampAll(view)
+  clampFrame = requestAnimationFrame(() => {
+    clampFrame = null
+    win.clampAll(view)
+  })
+}
+
+watch(() => [view.w, view.h], clampSoon)
+win.clampAll(view)
 
 /**
  * The leaving lifecycle. The store stays the truth — `close()` and `minimize()` are synchronous
@@ -183,6 +202,7 @@ const offClose = win.on('close', (e) => {
 
 onBeforeUnmount(() => {
   offClose()
+  if (clampFrame !== null) cancelAnimationFrame(clampFrame)
   applyRootInert(false)
   for (const id of [...frames.keys()]) retire(id)
 })

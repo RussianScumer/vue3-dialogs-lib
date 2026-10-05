@@ -19,8 +19,16 @@ const Root = defineComponent({
   template: '<WindowHost />',
 })
 
+// jsdom has no PointerEvent; a MouseEvent carrying a pointerId is all the drag handler reads.
+function pointer(el: Element, type: string, clientX: number, clientY: number) {
+  const e = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX, clientY })
+  Object.assign(e, { pointerId: 1 })
+  el.dispatchEvent(e)
+}
+
 function app(windows: number, minimized: boolean) {
-  const plugin = createWindows({ components: { editor: Content }, maxWindows: 100000 })
+  const plugin = createWindows({ components: { editor: Content }, maxWindows: 100000,
+    labels: { minimize: 'Minimize', close: 'Close', pin: 'Pin' } })
   const wrapper = mount(Root, { global: { plugins: [plugin] }, attachTo: document.body })
   const win = useWindows()
   for (let i = 0; i < windows; i++) {
@@ -86,6 +94,30 @@ describe('interaction with 8 windows open', () => {
     }
     wrapper.unmount()
   })
+
+  // The desktop is mounted once and kept: the gesture is what is measured, not the mount around it.
+  let dragged: ReturnType<typeof app> | null = null
+  bench('100 pointermoves on one window', async () => {
+    if (!dragged) {
+      dragged = app(8, false)
+      await nextTick()
+    }
+    // Back to the same spot every iteration, or the window soon sits clamped at the edge and the
+    // moves stop changing anything.
+    Object.assign(dragged.win.s.stack[0]!, { x: 100, y: 100 })
+    await nextTick()
+    const head = dragged.wrapper.find('.vw__head').element
+    pointer(head, 'pointerdown', 200, 200)
+    for (let i = 0; i < 100; i++) {
+      pointer(head, 'pointermove', 200 + i, 200 + i)
+      await nextTick()
+    }
+    pointer(head, 'pointerup', 299, 299)
+    await nextTick()
+  }, { teardown: () => {
+    dragged?.wrapper.unmount()
+    dragged = null
+  } })
 
   bench('focus (z bump) 60 times', async () => {
     const { wrapper, win } = app(8, false)
