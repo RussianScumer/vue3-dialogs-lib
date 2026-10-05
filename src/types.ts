@@ -398,6 +398,31 @@ export type WindowVisualState = 'entering' | 'open' | 'leaving'
  */
 export type WindowCloseReason = 'closed' | 'resolved' | 'dismissed' | 'restored' | 'evicted'
 
+/**
+ * What the `contextmenu` slot receives when the header is right-clicked, or Shift+F10 / the menu
+ * key is pressed on it. The library draws nothing: the slot is the menu. Every action closes the
+ * menu before it runs, and the gated ones do nothing where the frame's own controls would not
+ * either, so a menu can list them all and use the flags only to disable items.
+ */
+export interface WindowMenuProps {
+  descriptor: WindowDescriptor
+  /** Viewport coordinates the menu opened at: the pointer, or the header's corner from the keyboard. */
+  x: number
+  y: number
+  /** True where a snap or a maximize would move the window: the same gates as the double-click. */
+  canSnap: boolean
+  maximized: boolean
+  pinned: boolean
+  snap: (zone: SnapZone | 'none') => void
+  toggleMaximize: () => void
+  /** Pins, or with `false` unpins. Defaults to the opposite of the current state. */
+  pin: (on?: boolean) => void
+  minimize: () => void
+  requestClose: () => void
+  /** Dismisses the menu without doing anything, and puts focus back on the header. */
+  close: () => void
+}
+
 /** What every event carries. Listeners written against `{ type, id }` keep working unchanged. */
 export interface WindowEventBase<T extends string> {
   type: T

@@ -43,7 +43,7 @@ for (const dir of RESIZE_DIRS) {
 </script>
 
 <script setup lang="ts">
-import { computed, onErrorCaptured, onMounted, ref, toRaw, useSlots, watch, watchEffect } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onErrorCaptured, onMounted, ref, toRaw, useSlots, watch, watchEffect } from 'vue'
 import { useWindows, useWindowOptions } from './createWindows'
 import { onWindowKeydown, useWindowDrag } from './useWindowDrag'
 import { useWindowResize } from './useWindowResize'
@@ -51,7 +51,7 @@ import { useWindowFocus } from './useWindowFocus'
 import { provideWindowContext } from './useWindowContext'
 import { useCoarsePointer, useViewport } from './useViewport'
 import { ownsEscape } from './useKeymap'
-import type { WindowDescriptor, WindowVisualState } from './types'
+import type { SnapZone, WindowDescriptor, WindowMenuProps, WindowVisualState } from './types'
 import { warn } from './warn'
 
 const props = defineProps<{
@@ -393,6 +393,98 @@ function onHeadDblclick(e: MouseEvent) {
   if ((e.target as Element | null)?.closest('[data-vw-nodrag]')) return
   win.toggleMaximize(d.id)
 }
+
+/**
+ * The header's context menu, when the consumer provided a `contextmenu` slot. Without one the
+ * browser's own menu is left alone: `preventDefault` is only called when there is a replacement.
+ *
+ * The slot is teleported to `body` in a fixed wrapper at the pointer, because inside the frame it
+ * would be clipped by `overflow: hidden` and positioned against the frame's transform. The wrapper
+ * sits one step above the modal band, so it clears every window whatever its band.
+ */
+const menu = ref<{ x: number; y: number } | null>(null)
+const menuEl = ref<HTMLElement | null>(null)
+const canSnap = computed(() => options.snap.enabled && canDrag() && canResize.value)
+
+const menuStyle = computed(() => ({
+  position: 'fixed' as const,
+  left: `${menu.value?.x ?? 0}px`,
+  top: `${menu.value?.y ?? 0}px`,
+  zIndex: String(options.zIndexBase + 4 * win.s.topZ + 1),
+}))
+
+function onHeadContextmenu(e: MouseEvent) {
+  if (!slots.contextmenu || leaving.value) return
+  if ((e.target as Element | null)?.closest('[data-vw-nodrag]')) return
+  e.preventDefault()
+  // From the keyboard (Shift+F10, the menu key) there is no pointer: Chrome reports `button: -1` at
+  // the element's centre, others the origin. Either way the header's bottom-left corner is where it
+  // belongs. A macOS Ctrl+click reports `button: 0` at the pointer, and stays at the pointer.
+  const keyboard = e.button === -1 || (e.clientX === 0 && e.clientY === 0)
+  const r = keyboard ? handle.value?.getBoundingClientRect() : null
+  menu.value = r ? { x: Math.round(r.left), y: Math.round(r.bottom) } : { x: e.clientX, y: e.clientY }
+  document.addEventListener('pointerdown', onOutsidePointerdown, true)
+  void nextTick(placeMenu)
+}
+
+/** Keeps the opened menu inside the viewport, and moves focus into it for the keyboard. */
+function placeMenu() {
+  const node = menuEl.value
+  if (!node || !menu.value) return
+  const r = node.getBoundingClientRect()
+  const x = Math.max(0, Math.min(menu.value.x, view.w - r.width))
+  const y = Math.max(0, Math.min(menu.value.y, view.h - r.height))
+  if (x !== menu.value.x || y !== menu.value.y) menu.value = { x, y }
+  node
+    .querySelector<HTMLElement>(
+      'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), ' +
+        '[tabindex]:not([tabindex="-1"])',
+    )
+    ?.focus()
+}
+
+/** Closes the menu. Focus goes back to the header when it was inside the menu, so it is not lost. */
+function closeMenu() {
+  if (!menu.value) return
+  const hadFocus = !!menuEl.value?.contains(document.activeElement)
+  menu.value = null
+  document.removeEventListener('pointerdown', onOutsidePointerdown, true)
+  if (hadFocus && !leaving.value) handle.value?.focus()
+}
+
+function onOutsidePointerdown(e: PointerEvent) {
+  if (!menuEl.value?.contains(e.target as Node)) closeMenu()
+}
+
+/** Prevented, so the keymap's outside-ESC does not also close the window behind the menu. */
+function onMenuEscape(e: KeyboardEvent) {
+  e.preventDefault()
+  closeMenu()
+}
+
+/** Closes the menu first, then runs the action: the menu is gone by the time focus moves on. */
+function act(run: () => void) {
+  closeMenu()
+  run()
+}
+
+const menuProps = computed<WindowMenuProps>(() => ({
+  descriptor: d,
+  x: menu.value?.x ?? 0,
+  y: menu.value?.y ?? 0,
+  canSnap: canSnap.value,
+  maximized: maximized.value,
+  pinned: pinned.value,
+  snap: (zone: SnapZone | 'none') => act(() => canSnap.value && win.snap(d.id, zone, view)),
+  toggleMaximize: () => act(() => canSnap.value && win.toggleMaximize(d.id)),
+  pin: (on?: boolean) => act(() => win.setPinned(d.id, on ?? !pinned.value)),
+  minimize: () => act(() => d.minimizable && !closing.value && win.minimize(d.id)),
+  requestClose: () => act(() => d.closable && void win.requestClose(d.id)),
+  close: closeMenu,
+}))
+
+watch(leaving, (on) => on && closeMenu())
+onBeforeUnmount(() => document.removeEventListener('pointerdown', onOutsidePointerdown, true))
 </script>
 
 <template>
@@ -415,6 +507,7 @@ function onHeadDblclick(e: MouseEvent) {
       tabindex="0"
       @keydown="onKeydown"
       @dblclick="onHeadDblclick"
+      @contextmenu="onHeadContextmenu"
     >
       <slot
         name="header"
@@ -516,5 +609,21 @@ function onHeadDblclick(e: MouseEvent) {
       @pointerup="resize.onUp"
       @pointercancel="resize.onUp"
     />
+    <Teleport
+      v-if="menu"
+      to="body"
+    >
+      <div
+        ref="menuEl"
+        :style="menuStyle"
+        data-vw-menu
+        @keydown.escape="onMenuEscape"
+      >
+        <slot
+          name="contextmenu"
+          v-bind="menuProps"
+        />
+      </div>
+    </Teleport>
   </dialog>
 </template>
