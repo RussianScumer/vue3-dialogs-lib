@@ -253,7 +253,10 @@ native picker are skipped too.
   CSS `resize: both`, which offered one corner only, could not honour `minW`/`maxW`, and could not
   express a west or north resize at all — those have to move `x`/`y` as the width changes, because
   the *opposite* edge is what must stay put. Every path that sets a size, pointer or keyboard or
-  snap, goes through `clampSize`, so they cannot disagree.
+  snap, goes through `clampSize`, so they cannot disagree. The grip sizes are inline like the
+  rest of the geometry, so the plugin keeps one `(pointer: coarse)` tracker next to the viewport
+  tracker and each frame picks the 4px or the 20px set from it; a stylesheet media query could not
+  do that, because the library has to work with no stylesheet imported.
 - `z` is a bare counter in the descriptor; the rendered `z-index` is `zIndexBase + z`. Keeping the
   base out of the stored value means a persisted descriptor stays valid when the base changes.
   `focus()` skips the write when the window is already on top, so an ordinary click inside a window

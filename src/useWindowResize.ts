@@ -5,20 +5,29 @@ import type { Bounds, Viewport, WindowDescriptor } from './types'
 export const RESIZE_DIRS = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'] as const
 export type ResizeDir = (typeof RESIZE_DIRS)[number]
 
-const EDGE = '4px'
-const CORNER = '12px'
+function gripStyles(edge: string, corner: string): Record<ResizeDir, Record<string, string>> {
+  return {
+    n: { top: '0', left: '0', right: '0', height: edge, cursor: 'ns-resize' },
+    s: { bottom: '0', left: '0', right: '0', height: edge, cursor: 'ns-resize' },
+    e: { top: '0', right: '0', bottom: '0', width: edge, cursor: 'ew-resize' },
+    w: { top: '0', left: '0', bottom: '0', width: edge, cursor: 'ew-resize' },
+    nw: { top: '0', left: '0', width: corner, height: corner, cursor: 'nwse-resize' },
+    ne: { top: '0', right: '0', width: corner, height: corner, cursor: 'nesw-resize' },
+    sw: { bottom: '0', left: '0', width: corner, height: corner, cursor: 'nesw-resize' },
+    se: { bottom: '0', right: '0', width: corner, height: corner, cursor: 'nwse-resize' },
+  }
+}
 
 /** Inline so a window resizes with no stylesheet imported, like the rest of the geometry. */
-export const RESIZE_STYLES: Record<ResizeDir, Record<string, string>> = {
-  n: { top: '0', left: '0', right: '0', height: EDGE, cursor: 'ns-resize' },
-  s: { bottom: '0', left: '0', right: '0', height: EDGE, cursor: 'ns-resize' },
-  e: { top: '0', right: '0', bottom: '0', width: EDGE, cursor: 'ew-resize' },
-  w: { top: '0', left: '0', bottom: '0', width: EDGE, cursor: 'ew-resize' },
-  nw: { top: '0', left: '0', width: CORNER, height: CORNER, cursor: 'nwse-resize' },
-  ne: { top: '0', right: '0', width: CORNER, height: CORNER, cursor: 'nesw-resize' },
-  sw: { bottom: '0', left: '0', width: CORNER, height: CORNER, cursor: 'nesw-resize' },
-  se: { bottom: '0', right: '0', width: CORNER, height: CORNER, cursor: 'nwse-resize' },
-}
+export const RESIZE_STYLES = gripStyles('4px', '12px')
+
+/**
+ * The same grips at finger size, for a primary pointer that is `(pointer: coarse)`: a 4px edge is
+ * unhittable with a fingertip. Still inside the frame — the `<dialog>` clips — so a wide grip
+ * overlaps the content's outer edge on touch; that is the trade for a window a finger can resize.
+ * Internal: not part of the package's exports.
+ */
+export const RESIZE_STYLES_COARSE = gripStyles('20px', '28px')
 
 interface ResizeOptions {
   /** A west or north grip moves the window, so this path answers to `bounds` exactly as drag does. */

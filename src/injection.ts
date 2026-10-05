@@ -1,4 +1,4 @@
-import type { ComputedRef, InjectionKey } from 'vue'
+import type { ComputedRef, InjectionKey, Ref } from 'vue'
 import type { WindowsApi } from './state'
 import type { ResolvedOptions, Viewport, WindowDescriptor } from './types'
 
@@ -6,6 +6,8 @@ export const WINDOWS_KEY: InjectionKey<WindowsApi> = Symbol('vue3-dialogs-lib')
 export const OPTIONS_KEY: InjectionKey<ResolvedOptions> = Symbol('vue3-dialogs-lib:options')
 /** One viewport tracker per app, created by the plugin — see useViewport. */
 export const VIEWPORT_KEY: InjectionKey<Viewport> = Symbol('vue3-dialogs-lib:viewport')
+/** One `(pointer: coarse)` tracker per app, created by the plugin — see useCoarsePointer. */
+export const COARSE_POINTER_KEY: InjectionKey<Readonly<Ref<boolean>>> = Symbol('vue3-dialogs-lib:coarse-pointer')
 
 export interface WindowContext<T = unknown> {
   descriptor: WindowDescriptor
