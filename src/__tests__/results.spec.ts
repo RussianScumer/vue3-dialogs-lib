@@ -215,7 +215,10 @@ describe('window results', () => {
     const win = store()
     const handle = win.open('editor', { id: 1 })
 
+    // The handle in a string context is exactly what this case exercises.
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string
     expect(String(handle)).toBe(handle.id)
+    // eslint-disable-next-line @typescript-eslint/no-base-to-string, @typescript-eslint/restrict-template-expressions
     expect(`${win.open('editor', { id: 2 })}`).toBeTypeOf('string')
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn.mock.calls[0]?.[0]).toMatch(/returns \{ id, result \}/)

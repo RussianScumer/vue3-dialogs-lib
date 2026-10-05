@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { defineComponent, h, nextTick } from 'vue'
+import { defineComponent, h, nextTick, type VNodeRef } from 'vue'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { createWindows, useWindows } from '../createWindows'
 import WindowHost from '../WindowHost.vue'
@@ -32,7 +32,7 @@ function app() {
         h(WindowHost),
         h(WindowTaskbar, null, {
           default: ({ registerFocusTarget }: { registerFocusTarget: (el: Element | null) => void }) =>
-            h('div', { class: 'bar', tabindex: '-1', ref: registerFocusTarget }, 'taskbar'),
+            h('div', { class: 'bar', tabindex: '-1', ref: registerFocusTarget as VNodeRef }, 'taskbar'),
         }),
       ],
     }),

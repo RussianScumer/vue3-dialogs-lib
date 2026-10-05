@@ -251,7 +251,7 @@ describe('maxWindows eviction honours guards', () => {
   })
 
   it('the app-wide guard counts as a guard for eviction', async () => {
-    const beforeClose = vi.fn(() => false)
+    const beforeClose = vi.fn<BeforeCloseGuard>(() => false)
     const win = limited(2, beforeClose)
     const a = win.open('editor', { id: 1 }).id
     win.open('editor', { id: 2 })

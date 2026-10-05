@@ -5,11 +5,11 @@ export interface LogEntry {
   text: string
 }
 
-const state = reactive({
-  entries: [] as LogEntry[],
+const state = reactive<{
+  entries: LogEntry[]
   /** Live mount count per window type — the proof that minimized content is unmounted. */
-  mounts: {} as Record<string, number>,
-})
+  mounts: Record<string, number>
+}>({ entries: [], mounts: {} })
 
 export function log(text: string): void {
   state.entries.unshift({ at: new Date().toLocaleTimeString(), text })

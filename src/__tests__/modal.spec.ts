@@ -19,9 +19,7 @@ const view = { w: 1000, h: 800 }
 
 function store(over: Record<string, unknown> = {}) {
   return createStore(
-    resolveOptions({ components: { editor: Stub, confirm: Stub }, ...over } as Parameters<
-      typeof resolveOptions
-    >[0]),
+    resolveOptions({ components: { editor: Stub, confirm: Stub }, ...over }),
   )
 }
 
@@ -29,7 +27,7 @@ function app(over: Record<string, unknown> = {}) {
   const plugin = createWindows({
     components: { editor: Stub, confirm: Stub },
     ...over,
-  } as Parameters<typeof createWindows>[0])
+  })
   const wrapper = mount(defineComponent({ components: { WindowHost }, template: '<WindowHost />' }), {
     global: { plugins: [plugin] },
     attachTo: document.body,

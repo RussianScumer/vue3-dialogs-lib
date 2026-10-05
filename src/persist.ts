@@ -40,7 +40,7 @@ function isDescriptor(v: unknown, options: ResolvedOptions): v is WindowDescript
     typeof d.minimized === 'boolean' &&
     ['x', 'y', 'w', 'h', 'z'].every((k) => typeof d[k] === 'number' && Number.isFinite(d[k])) &&
     // A descriptor whose window type no longer exists can never be rendered.
-    Boolean(options.components[d.name as string])
+    Boolean(options.components[d.name])
   )
 }
 

@@ -23,9 +23,9 @@ const Content = defineComponent({
   },
 })
 
-const footerSlots: Slots = {
+const footerSlots = {
   footer: () => h('div', { class: 'foot-content', style: 'height:30px' }, 'actions'),
-}
+} as unknown as Slots
 
 let wrapper: VueWrapper | null = null
 

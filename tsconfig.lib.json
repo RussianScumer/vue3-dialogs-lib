@@ -7,6 +7,8 @@
     // The library uses `import.meta.env.DEV` for its dev-only warnings, and this config does not
     // include the root `env.d.ts` (it is outside `rootDir`), so Vite's client types are named here.
     "types": ["vite/client"],
+    // Same strictness as `tsconfig.app.json`, so the shipped declarations are checked the same way.
+    "noUncheckedIndexedAccess": true,
     "noEmit": false,
     "declaration": true,
     "emitDeclarationOnly": true,
