@@ -381,6 +381,9 @@ edits is the sharpest edge this design creates.
 - The header is focusable: arrow keys move the window, shift+arrow resizes it.
 - Windows resize from any of eight grips, honouring `minW`/`minH`/`maxW`/`maxH`. A west or north
   grip moves `x`/`y` too, so the opposite edge stays put.
+- Grips are 4px edges and 12px corners. When the primary pointer is a finger (`(pointer: coarse)`,
+  followed live), they widen to 20px edges and 28px corners, still inside the frame, so on touch
+  they cover the outer 20px of your content.
 - `[data-vw-nodrag]` on any element inside the header stops it from starting a drag.
 - Windows are re-clamped on viewport resize so a shrinking window can never strand one off-screen.
 - Below `mobileBreakpoint` geometry is forced fullscreen and drag/resize are inert; the stored
@@ -730,7 +733,9 @@ taskbar does this with `background: var(--vtd-head-bg, #26262b)`.
 The top window carries `data-vw-active`, so `.vw[data-vw-active]` is yours to style;
 `--vtd-border-active` and `--vtd-shadow-active` are shortcuts that default to the inactive values,
 leaving the baseline look unchanged. Resize grips are `.vw__grip` elements carrying
-`data-vw-grip="n" | "se" | …`; they are transparent by default.
+`data-vw-grip="n" | "se" | …`; they are transparent by default. Under `(pointer: coarse)` a grip
+is 20px (edges) or 28px (corners) wide, so a visible grip you paint should be scoped to a narrower
+strip in your own `@media (pointer: coarse)` rule, or it paints the whole hit area.
 
 The library ships no strings: header button labels and their `aria-label`s come from the
 `controls` slot on `WindowHost`/`BaseWindow`.
@@ -750,7 +755,8 @@ reachable while the user resizes the window down.
   merged, and a tab that ignores `onExternalChange` is stale until it reloads.
 - **A modal does not trap Tab.** The scrim blocks the pointer; the keyboard still reaches your page
   unless you point `modal: { inertRoot }` at it — see [Modal windows](#modal-windows).
-- Resize grips sit in the outermost 4px of the window, which is where a body scrollbar also lands.
+- Resize grips sit inside the window's edges, in the outermost 4px with a mouse and 20px with a
+  finger, which is where a body scrollbar also lands. They never extend outside the frame.
 
 ## Non-goals
 

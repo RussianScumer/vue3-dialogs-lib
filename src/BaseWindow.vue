@@ -1,5 +1,5 @@
 <script lang="ts">
-import { RESIZE_DIRS, RESIZE_STYLES, type ResizeDir } from './useWindowResize'
+import { RESIZE_DIRS, RESIZE_STYLES, RESIZE_STYLES_COARSE, type ResizeDir } from './useWindowResize'
 import type { ResolvedOptions } from './types'
 
 /**
@@ -35,8 +35,10 @@ const BODY_STYLE = { flex: '1 1 auto', minHeight: '0', overflow: 'auto' } as con
 const FOOT_STYLE = { flex: '0 0 auto' } as const
 
 const GRIP_STYLES = {} as Record<ResizeDir, Record<string, string>>
+const GRIP_STYLES_COARSE = {} as Record<ResizeDir, Record<string, string>>
 for (const dir of RESIZE_DIRS) {
   GRIP_STYLES[dir] = { position: 'absolute', touchAction: 'none', ...RESIZE_STYLES[dir] }
+  GRIP_STYLES_COARSE[dir] = { position: 'absolute', touchAction: 'none', ...RESIZE_STYLES_COARSE[dir] }
 }
 </script>
 
@@ -47,7 +49,7 @@ import { onWindowKeydown, useWindowDrag } from './useWindowDrag'
 import { useWindowResize } from './useWindowResize'
 import { useWindowFocus } from './useWindowFocus'
 import { provideWindowContext } from './useWindowContext'
-import { useViewport } from './useViewport'
+import { useCoarsePointer, useViewport } from './useViewport'
 import { ownsEscape } from './useKeymap'
 import type { WindowDescriptor, WindowVisualState } from './types'
 
@@ -60,6 +62,7 @@ const props = defineProps<{
 const win = useWindows()
 const options = useWindowOptions()
 const view = useViewport()
+const coarse = useCoarsePointer()
 const el = ref<HTMLDialogElement | null>(null)
 const handle = ref<HTMLElement | null>(null)
 const body = ref<HTMLElement | null>(null)
@@ -479,7 +482,7 @@ function onHeadDblclick(e: MouseEvent) {
       v-for="dir in canResize ? RESIZE_DIRS : []"
       :key="dir"
       class="vw__grip"
-      :style="GRIP_STYLES[dir]"
+      :style="(coarse ? GRIP_STYLES_COARSE : GRIP_STYLES)[dir]"
       :data-vw-grip="dir"
       aria-hidden="true"
       @pointerdown="resize.onDown($event, dir)"

@@ -1,10 +1,10 @@
 import { effectScope, getCurrentInstance, inject, type App, type Plugin } from 'vue'
-import { OPTIONS_KEY, VIEWPORT_KEY, WINDOWS_KEY } from './injection'
+import { COARSE_POINTER_KEY, OPTIONS_KEY, VIEWPORT_KEY, WINDOWS_KEY } from './injection'
 import { resolveOptions } from './options'
 import { setupPersist } from './persist'
 import { setupKeymap } from './useKeymap'
 import { createStore, type TypedWindowsApi, type WindowsApi } from './state'
-import { createViewport } from './useViewport'
+import { createCoarsePointer, createViewport } from './useViewport'
 import type { ComponentsMap, ResolvedOptions, WindowsOptions } from './types'
 
 // Fallback for calls made outside setup(); inject() is still preferred and wins,
@@ -21,6 +21,7 @@ export function createWindows(userOptions: WindowsOptions): Plugin {
       // Detached: the viewport listener, the keymap listener and the persistence watcher belong to
       // the app, not to whichever component happened to be rendering when install() ran.
       const scope = effectScope(true)
+      const coarse = scope.run(createCoarsePointer)!
       const view = scope.run(() => {
         const v = createViewport()
         // Before persistence, so a hydration that lands here already has a real viewport to
@@ -34,6 +35,7 @@ export function createWindows(userOptions: WindowsOptions): Plugin {
       app.provide(WINDOWS_KEY, store)
       app.provide(OPTIONS_KEY, options)
       app.provide(VIEWPORT_KEY, view)
+      app.provide(COARSE_POINTER_KEY, coarse)
       activeStore = store
       activeOptions = options
 
