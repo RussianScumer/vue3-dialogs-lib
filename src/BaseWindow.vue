@@ -41,8 +41,6 @@ const d = props.descriptor
 const mobile = computed(() => view.w < options.mobileBreakpoint)
 /** Pinned above every other window, and inert to geometry for as long as it is. */
 const pinned = computed(() => win.isPinned(d.id))
-/** Opened as a modal: the top band, the scrim under it, and every other window inert. */
-const modal = computed(() => win.isModal(d.id))
 /**
  * The one notion of "this frame answers to input that moves it". Drag, resize, the header's arrow
  * keys and the maximize double-click all read it, so a window can never be half inert.
@@ -63,8 +61,6 @@ const closing = computed(() => win.isClosing(d.id))
  * than an empty one — the DOM of a consumer who names none is exactly what it was.
  */
 const labels = computed(() => win.labelsFor(d.id))
-/** True for a sheet: a window opened with `{ owner }`, which ESC dismisses instead of minimizing. */
-const owned = computed(() => win.ownerOf(d.id) !== null)
 /**
  * True while this frame must not answer to input for a reason outside itself: it owns a child, or a
  * modal somewhere else on the desktop is the only question being asked. One condition, so the
@@ -272,17 +268,23 @@ function handleStyle(dir: (typeof RESIZE_DIRS)[number]) {
  */
 function onEscape(e: KeyboardEvent) {
   if (e.defaultPrevented || !active.value || ownsEscape(e.target)) return
-  // A sheet or a modal is dismissed by ESC rather than minimized — neither is minimizable, and
-  // dismissing is what the key means over a question. It goes through `requestClose`, so a guard of
-  // its own is still asked. An inert window never gets here: the UA does not deliver the event.
-  if (owned.value || modal.value) {
-    e.preventDefault()
-    void win.requestClose(d.id)
-    return
+  // A sheet or a modal always answers `close` — neither is minimizable, and dismissing is what the
+  // key means over a question. `close` goes through `requestClose`, so a guard is still asked. An
+  // inert window never gets here: the UA does not deliver the event.
+  switch (win.escapeOf(d.id)) {
+    case 'close':
+      e.preventDefault()
+      void win.requestClose(d.id)
+      return
+    case 'minimize':
+      if (!d.minimizable) return
+      e.preventDefault()
+      win.minimize(d.id)
+      return
+    case 'none':
+      // Not even `preventDefault`: the keystroke stays the page's to answer.
+      return
   }
-  if (!d.minimizable) return
-  e.preventDefault()
-  win.minimize(d.id)
 }
 
 /**

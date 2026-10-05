@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watchEffect } from 'vue'
-import { WindowHost, WindowTaskbar, useWindows, useWindowOptions } from '../src'
+import { WindowHost, WindowTaskbar, useWindows, useWindowOptions, type EscapePolicy } from '../src'
 import { components } from './components'
 import { log, useEventLog } from './eventLog'
 import ThemeControls from './ThemeControls.vue'
@@ -69,6 +69,21 @@ function openLockedPanel() {
     { source: 'locked' },
     { x: 120, y: 120, w: 380, h: 300, closable: false, minimizable: false, draggable: false, resizable: false },
   ).id
+}
+
+/**
+ * `escape` is not a capability on the descriptor: it lives in a runtime-only map, so a reload hands
+ * the window back to whatever its spec says. `close` still asks the guards, `none` leaves the key to
+ * the content and to the page.
+ */
+const escapePolicy = ref<EscapePolicy>('close')
+
+function openWithEscape() {
+  win.open(
+    'logViewer',
+    { source: `esc-${escapePolicy.value}` },
+    { escape: escapePolicy.value, title: `ESC: ${escapePolicy.value}` },
+  )
 }
 
 function closeLockedPanel() {
@@ -505,6 +520,25 @@ function clearStorage() {
               @click="openConstrained"
             >
               Open with size limits
+            </button>
+            <p>
+              <code>escape</code> decides what ESC does to the active window: <code>minimize</code> by default,
+              <code>close</code> through <code>requestClose</code>, or <code>none</code> to leave the key alone. It is
+              runtime-only, not a descriptor flag, and a sheet or a modal always closes whatever it says.
+            </p>
+            <label>
+              ESC
+              <select v-model="escapePolicy">
+                <option value="minimize">minimize</option>
+                <option value="close">close</option>
+                <option value="none">none</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              @click="openWithEscape"
+            >
+              Open with this ESC
             </button>
           </section>
 

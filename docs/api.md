@@ -366,6 +366,17 @@ edits is the sharpest edge this design creates.
   first, the window is not the active one (Tab can reach a background window without raising it),
   the key was aimed at a native picker (`<select>`, `<input type="date">` and friends, which take
   ESC for themselves without marking the event handled), or the window is `minimizable: false`.
+- **`escape` changes what ESC does, per window.** `'minimize'` is the default; `'close'` dismisses
+  the window through `requestClose(id)`, so guards still run; `'none'` leaves the window *and* the
+  keystroke alone — no `preventDefault()`, and the outside-every-window ESC below skips it too. It
+  goes on a component spec, a preset or an `open()` call, with the usual precedence. A sheet or a
+  modal always closes on ESC; asking either for anything else warns in dev and is ignored. Not
+  persisted: a restored window reads the policy from its spec again.
+
+  ```js
+  win.open('editor', { id }, { escape: 'close' })  // ESC asks to close, guard and all
+  win.open('player', {}, { escape: 'none' })        // ESC belongs to the content
+  ```
 - **ESC with focus outside every window closes the active one** — the top window still on screen,
   the same one the keymap acts on (an open modal outranks whatever it blocks). This is the state
   after clicking the page background or a window's plain text, where no frame sees the key. It goes

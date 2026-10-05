@@ -96,10 +96,23 @@ export interface WindowDefaults {
    * before it, or centred in the viewport. An explicit `x`/`y` outranks both.
    */
   placement?: WindowPlacement
+  /**
+   * What ESC does while this window is the active one: `minimize` (the default), `close` through
+   * `requestClose` so guards still run, or `none` to leave both the window and the keystroke alone.
+   * A sheet or a modal is always dismissed — `close`, whatever this says.
+   *
+   * Not on the descriptor and **not persisted**: a hydrated window reads it from its spec again, so
+   * changing a component's policy takes effect on the next reload rather than being shadowed by
+   * last session's value.
+   */
+  escape?: EscapePolicy
 }
 
 /** Where a fresh window is placed when the call gave no `x`/`y`. */
 export type WindowPlacement = 'cascade' | 'center'
+
+/** What ESC does to the active window. */
+export type EscapePolicy = 'minimize' | 'close' | 'none'
 
 export interface OpenOptions extends WindowDefaults {
   x?: number

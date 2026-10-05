@@ -163,3 +163,76 @@ describe('ESC in a real browser', () => {
     expect(win.byId(id)!.minimized).toBe(false)
   })
 })
+
+/** Only the ESC-policy warnings: an unlabelled default control warns too, once per app. */
+function escWarnings(warn: { mock: { calls: unknown[][] } }): number {
+  return warn.mock.calls.filter(([m]) => String(m).includes('escape:')).length
+}
+
+describe('ESC policy in a real browser', () => {
+  function policyApp() {
+    const plugin = createWindows({ components: { editor: Content } })
+    wrapper = mount(defineComponent({ render: () => h(WindowHost) }), {
+      global: { plugins: [plugin] },
+      attachTo: document.body,
+    })
+    return { win: useWindows() }
+  }
+
+  it("escape: 'close' closes the window through its guard", async () => {
+    const { win } = policyApp()
+    const id = win.open('editor', {}, { escape: 'close' }).id
+    await nextTick()
+
+    let allow = false
+    win.onBeforeClose(id, () => allow)
+    await userEvent.keyboard('{Escape}')
+    await nextTick()
+    expect(win.byId(id)).toBeDefined()
+    expect(win.byId(id)!.minimized).toBe(false)
+
+    allow = true
+    await userEvent.keyboard('{Escape}')
+    await vi.waitFor(() => expect(win.byId(id)).toBeUndefined())
+  })
+
+  it("escape: 'none' leaves the window and the keystroke alone", async () => {
+    const { win } = policyApp()
+    const id = win.open('editor', {}, { escape: 'none' }).id
+    await nextTick()
+
+    const seen: boolean[] = []
+    const record = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') seen.push(e.defaultPrevented)
+    }
+    document.addEventListener('keydown', record)
+    await userEvent.keyboard('{Escape}')
+    document.removeEventListener('keydown', record)
+
+    expect(seen).toEqual([false])
+    expect(win.byId(id)!.minimized).toBe(false)
+  })
+
+  it("escape: 'none' opts out of the outside-every-window ESC as well", async () => {
+    const { win } = policyApp()
+    const id = win.open('editor', {}, { escape: 'none' }).id
+    await nextTick()
+    ;(document.activeElement as HTMLElement | null)?.blur()
+
+    await userEvent.keyboard('{Escape}')
+    await nextTick()
+    expect(win.byId(id)).toBeDefined()
+  })
+
+  it("a modal opened with escape: 'minimize' still closes on ESC", async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { win } = policyApp()
+    const id = win.open('editor', {}, { modal: true, escape: 'minimize' }).id
+    await nextTick()
+    expect(escWarnings(warn)).toBe(1)
+
+    await userEvent.keyboard('{Escape}')
+    await vi.waitFor(() => expect(win.byId(id)).toBeUndefined())
+    warn.mockRestore()
+  })
+})

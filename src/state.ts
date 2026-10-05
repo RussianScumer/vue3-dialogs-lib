@@ -13,6 +13,7 @@ import type {
   CloseGuard,
   ComponentsMap,
   ControlLabels,
+  EscapePolicy,
   OpenOptions,
   Rect,
   ResolvedOptions,
@@ -147,6 +148,14 @@ export function createStore(options: ResolvedOptions) {
    * "capable but off" state for a value to carry.
    */
   const modals = reactive(new Set<string>())
+  /**
+   * Per-window ESC policy, resolved at `open()` from the call, the preset and the spec. Runtime-only
+   * beside `pins`: a new descriptor field would move the schema, and a policy belongs to the code
+   * that is running rather than to the session that saved the window. A hydrated window has no
+   * entry and `escapeOf` reads its spec instead. Only stored when something named it, so a desktop
+   * that never mentions `escape` keeps this map empty.
+   */
+  const escapes = reactive(new Map<string, EscapePolicy>())
   /**
    * Functions, so they can never be persisted — same placement rationale as `docks`. Guards come
    * from mounted content and die with it.
@@ -350,6 +359,7 @@ export function createStore(options: ResolvedOptions) {
     docks.delete(id)
     pins.delete(id)
     modals.delete(id)
+    escapes.delete(id)
     controlLabels.delete(id)
     taskbarRects.delete(id)
     closeGuards.delete(id)
@@ -369,6 +379,7 @@ export function createStore(options: ResolvedOptions) {
     docks.clear()
     pins.clear()
     modals.clear()
+    escapes.clear()
     controlLabels.clear()
     taskbarRects.clear()
     closeGuards.clear()
@@ -659,6 +670,17 @@ export function createStore(options: ResolvedOptions) {
     // Not on the descriptor either, and for a stronger reason than the pin: `persist.ts` drops a
     // modal from the blob on the way out, so this map is the only record that it is one.
     if (modal) modals.add(d.id)
+    // A sheet or a modal is a question, and ESC over a question dismisses it: neither can be
+    // minimized, and one that ignored ESC would leave the keyboard user nothing but the ✕. So the
+    // option is ignored there rather than stored, and `escapeOf` answers `close` for both.
+    const escape = opts.escape ?? preset?.escape ?? spec.escape
+    if (owner !== null || modal) {
+      if (escape !== undefined && escape !== 'close') {
+        warn(`escape: '${escape}' is ignored on ${modal ? 'a modal' : 'an owned window'}; ESC closes it`)
+      }
+    } else if (escape !== undefined) {
+      escapes.set(d.id, escape)
+    }
     // Merged rather than replaced, and only stored when there is something to store: a window that
     // names one control keeps the app-wide names for the rest.
     const labels = { ...defs.labels, ...opts.labels }
@@ -731,6 +753,19 @@ export function createStore(options: ResolvedOptions) {
   /** True when this window was opened as a modal — decided at `open()` and never toggled. */
   function isModal(id: string): boolean {
     return modals.has(id)
+  }
+
+  /**
+   * What ESC does to this window while it is active. A sheet or a modal always closes; anything
+   * else reads the policy `open()` stored, and a window with none — every hydrated one, and every
+   * one opened without the option — falls back to its spec and then to `minimize`.
+   */
+  function escapeOf(id: string): EscapePolicy {
+    if (owners.has(id) || modals.has(id)) return 'close'
+    const stored = escapes.get(id)
+    if (stored) return stored
+    const d = byId(id)
+    return (d && options.defaultsFor(d.name).escape) || 'minimize'
   }
 
   /**
@@ -875,6 +910,7 @@ export function createStore(options: ResolvedOptions) {
     docks.clear()
     pins.clear()
     modals.clear()
+    escapes.clear()
     controlLabels.clear()
     taskbarRects.clear()
     closeGuards.clear()
@@ -934,6 +970,7 @@ export function createStore(options: ResolvedOptions) {
     isPinnable,
     setPinned,
     isModal,
+    escapeOf,
     topModalId,
     isBlockedByModal,
     labelsFor,

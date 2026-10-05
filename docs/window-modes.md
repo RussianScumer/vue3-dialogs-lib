@@ -220,6 +220,8 @@ Two things to know:
 - **ESC minimizes** the active window by default. It does not close it — closing is a decision, and
   ESC is an escape. A window with `minimizable: false` ignores ESC entirely; a
   [sheet](#6--owned-child-window-sheet) and a [modal](#7--modal) are dismissed by it instead.
+  `escape: 'close'` makes an ordinary window close on ESC (through `requestClose`, guards and all),
+  and `escape: 'none'` leaves the key to its content; sheets and modals ignore the option.
 - **A minimized window has no close guard of its own**, because its content is unmounted along with
   the `onBeforeClose` it registered. The app-wide `beforeClose` option is the only one left, and it
   is consulted for every window.
@@ -509,6 +511,7 @@ their size limits.
 | Owner link | the child is **never written at all** |
 | Modality | the modal is **never written at all** |
 | Control labels | re-read from the app-wide option on the next install |
+| ESC policy (`escape`) | re-read from the component spec; a per-call value is lost |
 | Close guards, pending closes, results | gone — a result belongs to the page load that opened it |
 
 The rule behind that split: anything toggled at runtime, or anything that is a *question*, stays out
