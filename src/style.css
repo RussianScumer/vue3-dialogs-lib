@@ -168,8 +168,22 @@
 }
 
 /* The active window: the attribute is the point — a consumer can target it however they like.
-   These two properties default to the inactive values, so the baseline look is unchanged. */
+   These four properties default to the inactive values, so the baseline look is unchanged; set
+   --vtd-head-bg-active / --vtd-head-fg-active to recolour the header of the window that has focus.
+   The child combinator keeps an active outer frame from repainting a nested window's header. */
 .vw[data-vw-active] {
   border: var(--vtd-border-active, var(--_vtd-border));
   box-shadow: var(--vtd-shadow-active, var(--_vtd-shadow));
+}
+
+.vw[data-vw-active] > .vw__head {
+  background: var(--vtd-head-bg-active, var(--_vtd-head-bg));
+  color: var(--vtd-head-fg-active, var(--_vtd-head-fg));
+}
+
+/* The header swap fades with the rest of the motion, and is instant under reduced motion. */
+.vw__head {
+  transition:
+    background-color var(--vtd-motion-duration, 0ms) ease,
+    color var(--vtd-motion-duration, 0ms) ease;
 }

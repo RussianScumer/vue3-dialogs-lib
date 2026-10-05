@@ -13,6 +13,8 @@ type Tokens = {
   fg: string
   headBg: string
   headFg: string
+  headBgActive: string
+  headFgActive: string
   accent: string
   borderColor: string
   borderWidth: number
@@ -30,6 +32,7 @@ const presets = {
     label: 'Brand',
     tokens: {
       bg: '#ffffff', fg: '#111827', headBg: '#4338ca', headFg: '#ffffff', accent: '#4338ca',
+      headBgActive: '#6d28d9', headFgActive: '#ffffff',
       borderColor: '#4338ca', borderWidth: 2, radius: 2, bodyPad: 12,
       font: 'system-ui, sans-serif', shadow: 'glow',
       scrim: '#1e1b4b', scrimAlpha: 45, scrollbar: 'accent',
@@ -39,6 +42,7 @@ const presets = {
     label: 'Terminal',
     tokens: {
       bg: '#0b1120', fg: '#22d3ee', headBg: '#020617', headFg: '#22d3ee', accent: '#22d3ee',
+      headBgActive: '#164e63', headFgActive: '#cffafe',
       borderColor: '#155e75', borderWidth: 1, radius: 0, bodyPad: 10,
       font: 'ui-monospace, SFMono-Regular, monospace', shadow: 'hard',
       scrim: '#020617', scrimAlpha: 70, scrollbar: 'accent',
@@ -48,6 +52,7 @@ const presets = {
     label: 'Paper',
     tokens: {
       bg: '#fffdf7', fg: '#1c1917', headBg: '#f5e9d0', headFg: '#57534e', accent: '#b45309',
+      headBgActive: '#b45309', headFgActive: '#fffdf7',
       borderColor: '#d6c8ab', borderWidth: 1, radius: 14, bodyPad: 18,
       font: 'Georgia, serif', shadow: 'soft',
       scrim: '#57534e', scrimAlpha: 35, scrollbar: 'palette',
@@ -112,6 +117,9 @@ const vars = computed<Record<string, string>>(() => ({
   '--vtd-fg': t.fg,
   '--vtd-head-bg': t.headBg,
   '--vtd-head-fg': t.headFg,
+  // The header of the window that has focus; unset, it keeps the two values above.
+  '--vtd-head-bg-active': t.headBgActive,
+  '--vtd-head-fg-active': t.headFgActive,
   '--vtd-accent': t.accent,
   '--vtd-border': `${t.borderWidth}px solid ${t.borderColor}`,
   '--vtd-radius': `${t.radius}px`,
@@ -206,6 +214,14 @@ function apply(key: string) {
       ></label>
       <label>Header text<input
         v-model="t.headFg"
+        type="color"
+      ></label>
+      <label>Active header bg<input
+        v-model="t.headBgActive"
+        type="color"
+      ></label>
+      <label>Active header text<input
+        v-model="t.headFgActive"
         type="color"
       ></label>
       <label>Accent (focus ring)<input

@@ -282,6 +282,8 @@ level above the windows — nothing in the library declares them on `.vw`, so no
   --vtd-accent: #4338ca; /* header focus ring */
   --vtd-head-bg: #4338ca;
   --vtd-head-fg: #fff;
+  --vtd-head-bg-active: #6d28d9; /* the focused window's header; unset = same as above */
+  --vtd-head-fg-active: #fff;
   --vtd-head-pad: 6px 8px;
   --vtd-body-pad: 12px;
   --vtd-foot-pad: 8px 12px;
