@@ -346,6 +346,7 @@ function onHeadDblclick(e: MouseEvent) {
     :style="style"
     :aria-label="d.title || undefined"
     :data-vw-active="active || undefined"
+    :data-vw-attention="win.hasAttention(d.id) || undefined"
     :data-vw-error="failure ? '' : undefined"
     :data-vw-state="visual"
     @keydown.escape="onEscape"

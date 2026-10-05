@@ -1,4 +1,4 @@
-import { computed, reactive, shallowRef } from 'vue'
+import { computed, reactive, shallowRef, watch } from 'vue'
 import {
   DEFAULT_MIN_H,
   DEFAULT_MIN_W,
@@ -159,6 +159,13 @@ export function createStore(options: ResolvedOptions) {
    */
   const closing = reactive(new Set<string>())
   /**
+   * The windows asking for the user — `requestAttention()`. Runtime-only beside `closing`: a
+   * request is about this moment, and one that came back after a reload would be asking about
+   * something the user can no longer see. Reactive, because the frame's `data-vw-attention` and a
+   * taskbar's blink both follow it.
+   */
+  const attention = reactive(new Set<string>())
+  /**
    * The in-flight `requestClose` per id, so a second call joins the first instead of asking the
    * user twice. Promises, so — like `closeGuards` — this can never be persisted.
    */
@@ -189,6 +196,11 @@ export function createStore(options: ResolvedOptions) {
     for (const w of s.stack) if (!w.minimized && (!top || w.z > top.z)) top = w
     return top?.id ?? null
   })
+
+  // The moment a window becomes the active one, the user is looking at it and its request is
+  // answered — however it got there: `focus()`, `restore()`, or the windows above it closing or
+  // minimizing. Sync, so the flag is gone in the same tick the frame becomes active.
+  watch(activeId, (id) => void (id && attention.delete(id)), { flush: 'sync' })
 
   function emit(type: WindowEventType, id: string): void {
     const e: WindowEvent = { type, id }
@@ -354,6 +366,7 @@ export function createStore(options: ResolvedOptions) {
     taskbarRects.delete(id)
     closeGuards.delete(id)
     closing.delete(id)
+    attention.delete(id)
     pending.delete(id)
     // Before the event, so a listener that awaits the result is not waiting on a microtask that
     // has not been queued yet.
@@ -373,6 +386,7 @@ export function createStore(options: ResolvedOptions) {
     taskbarRects.clear()
     closeGuards.clear()
     closing.clear()
+    attention.clear()
     pending.clear()
     // Every outstanding result settles here: logging out must not leave a caller awaiting a window
     // that no longer exists. `settleResult` empties the map as it goes.
@@ -728,6 +742,34 @@ export function createStore(options: ResolvedOptions) {
     if (pinned) undock(id)
   }
 
+  /**
+   * Ask for the user without taking focus: the frame gets `data-vw-attention`, a taskbar can blink
+   * its button through the `attention` slot prop, and `on('attention')` fires. Answered — cleared —
+   * the moment the window becomes the active one, by any path. A minimized window can ask too; that
+   * is what a blinking taskbar button is for.
+   *
+   * False, and nothing happens, when the window is already the active one: the user is looking at
+   * it. A second request while the first is unanswered is the same request, so it fires no event.
+   */
+  function requestAttention(id: string): boolean {
+    require(id)
+    if (activeId.value === id) return false
+    if (attention.has(id)) return true
+    attention.add(id)
+    emit('attention', id)
+    return true
+  }
+
+  /** True while this window's `requestAttention()` is unanswered. */
+  function hasAttention(id: string): boolean {
+    return attention.has(id)
+  }
+
+  /** Withdraw a request without focusing the window — the thing it wanted has resolved itself. */
+  function clearAttention(id: string): void {
+    attention.delete(id)
+  }
+
   /** True when this window was opened as a modal — decided at `open()` and never toggled. */
   function isModal(id: string): boolean {
     return modals.has(id)
@@ -879,6 +921,7 @@ export function createStore(options: ResolvedOptions) {
     taskbarRects.clear()
     closeGuards.clear()
     closing.clear()
+    attention.clear()
     pending.clear()
     for (const id of [...results.keys()]) settleResult(id, CLOSED)
     for (const w of stack) {
@@ -934,6 +977,9 @@ export function createStore(options: ResolvedOptions) {
     isPinnable,
     setPinned,
     isModal,
+    requestAttention,
+    hasAttention,
+    clearAttention,
     topModalId,
     isBlockedByModal,
     labelsFor,

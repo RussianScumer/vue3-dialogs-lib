@@ -16,6 +16,7 @@ that.
 - [Persistence](#persistence)
 - [Snapping](#snapping)
 - [Pinned windows](#pinned-windows)
+- [Asking for attention](#asking-for-attention)
 - [Modal windows](#modal-windows)
 - [Control labels](#control-labels)
 - [Keyboard](#keyboard)
@@ -96,7 +97,7 @@ Mount the host once, above the router outlet:
 
 `WindowTaskbar` renders no markup of its own — the consumer owns the visual completely. The slot
 gets `all` (every window), `windows` (only the minimized ones), `active` (the top window's id or
-`null`), `closing(id)`, and `restore` / `focus` / `minimize` / `close` / `requestClose`.
+`null`), `closing(id)`, `attention(id)`, and `restore` / `focus` / `minimize` / `close` / `requestClose`.
 `registerFocusTarget` is
 optional: bind it as a template ref and the taskbar becomes where focus goes when the last window
 is minimized, instead of the element that opened it.
@@ -125,7 +126,8 @@ win.resultOf(id)         // the same promise, for a window you did not open your
 
 win.activeId.value       // id of the top non-minimized window, or null
 const off = win.on('close', (e) => console.log(e.id)) // 'open' | 'close' | 'focus' | 'minimize' |
-                                                     // 'restore' | 'geometry' | 'title' | '*'
+                                                     // 'restore' | 'geometry' | 'title' |
+                                                     // 'attention' | '*'
 ```
 
 `geometry` fires once per drag, resize or arrow-key nudge — at the end of the gesture, not per
@@ -296,8 +298,8 @@ const props = defineProps({ id: Number, windowId: String })
 // draft state that survives minimize (unmount) and page reload
 const form = useWindowState(props.windowId, () => ({ name: '', note: '' }))
 
-const { setTitle, close, requestClose, onBeforeClose, minimize, isRestored, closing, resolve, dismiss } =
-  useWindowContext()
+const { setTitle, close, requestClose, onBeforeClose, minimize, isRestored, closing, resolve, dismiss,
+  requestAttention } = useWindowContext()
 setTitle(`Item ${props.id}`)
 onBeforeClose(() => !form.name || confirm('Discard the draft?'))
 </script>
@@ -497,6 +499,30 @@ toggled by the user at runtime, and persisting it would mean moving the storage 
 and the keymap all still follow `z`, so a pinned window drawn over the desktop is not the window
 the keyboard is talking to unless it was also the last one focused. Click it and it becomes active
 like any other window.
+
+## Asking for attention
+
+A window that wants the user — a finished export, a chat message, a background job that needs a
+decision — can ask without stealing focus:
+
+```js
+win.requestAttention(id)  // true; false if `id` is already the active window
+win.hasAttention(id)      // unanswered right now
+win.clearAttention(id)    // withdraw it without focusing the window
+```
+
+From inside the window, `useWindowContext().requestAttention()` does the same for its own window.
+
+While a request is unanswered the frame carries `data-vw-attention`, the taskbar slot's
+`attention(id)` is true, and `on('attention')` has fired once. The request is answered the moment
+the window becomes the active one, by any path: `focus()`, `restore()` from a taskbar button, or the
+windows above it closing or minimizing. A minimized window can ask too; that is what a blinking
+taskbar button is for. A second request while the first is unanswered fires no second event.
+
+The library draws nothing for it. Blink the taskbar button from `attention(id)` however you like,
+and the frame picks up `--vtd-border-attention` / `--vtd-shadow-attention` from `style.css`, which
+default to the inactive values. Like pin state it is **runtime-only**: not on the descriptor, not
+persisted, gone after a reload.
 
 ## Modal windows
 
@@ -729,7 +755,9 @@ taskbar does this with `background: var(--vtd-head-bg, #26262b)`.
 
 The top window carries `data-vw-active`, so `.vw[data-vw-active]` is yours to style;
 `--vtd-border-active` and `--vtd-shadow-active` are shortcuts that default to the inactive values,
-leaving the baseline look unchanged. Resize grips are `.vw__grip` elements carrying
+leaving the baseline look unchanged. A window that has asked for attention carries
+`data-vw-attention`, with `--vtd-border-attention` and `--vtd-shadow-attention` arranged the same
+way. Resize grips are `.vw__grip` elements carrying
 `data-vw-grip="n" | "se" | …`; they are transparent by default.
 
 The library ships no strings: header button labels and their `aria-label`s come from the

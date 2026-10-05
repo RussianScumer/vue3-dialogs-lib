@@ -363,7 +363,16 @@ export interface WindowHandle<T = unknown> {
 export type WindowVisualState = 'entering' | 'open' | 'leaving'
 
 /** Store transitions a consumer can subscribe to with `on()`. */
-export type WindowEventType = 'open' | 'close' | 'focus' | 'minimize' | 'restore' | 'geometry' | 'title'
+export type WindowEventType =
+  | 'open'
+  | 'close'
+  | 'focus'
+  | 'minimize'
+  | 'restore'
+  | 'geometry'
+  | 'title'
+  /** `requestAttention()` flagged a window that was not already asking. */
+  | 'attention'
 
 export interface WindowEvent {
   type: WindowEventType

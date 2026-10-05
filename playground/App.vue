@@ -48,6 +48,21 @@ function openLog(source: string) {
   win.open('logViewer', { source }, { w: 380, h: 300 })
 }
 
+/**
+ * Two windows, the first one buried under the second, then — after the user has had time to look
+ * elsewhere — the buried one asks for attention. `minimizeFirst` sends it to the taskbar instead,
+ * which is the case a blinking button exists for.
+ */
+function askForAttention(minimizeFirst: boolean) {
+  const asker = win.open('logViewer', { source: 'asks for attention' }, { dedupe: false, w: 380, h: 240 })
+  win.open('logViewer', { source: 'sits on top' }, { dedupe: false, w: 380, h: 240 })
+  if (minimizeFirst) win.minimize(asker.id)
+  setTimeout(() => {
+    if (!win.byId(asker.id)) return
+    log(win.requestAttention(asker.id) ? `${asker.id} asked for attention` : `${asker.id} was already active`)
+  }, 2000)
+}
+
 /** No options at all: the size and limits come from the component's spec in main.ts. */
 function openLogWithSpecDefaults() {
   const id = win.open('logViewer', { source: 'defaults' }).id
@@ -886,6 +901,28 @@ function clearStorage() {
               is untouched. Narrow the browser to see it.
             </p>
           </section>
+
+          <section>
+            <h2>26 · Asking for attention</h2>
+            <p>
+              <code>requestAttention(id)</code> flags a window without raising it: the frame gets
+              <code>data-vw-attention</code>, the taskbar slot's <code>attention(id)</code> turns true, and
+              <code>on('attention')</code> fires. The flag clears the moment the window becomes active, however it gets
+              there. Each button opens two windows and, two seconds later, the buried one asks.
+            </p>
+            <button
+              type="button"
+              @click="askForAttention(false)"
+            >
+              Ask from underneath
+            </button>
+            <button
+              type="button"
+              @click="askForAttention(true)"
+            >
+              Ask from the taskbar
+            </button>
+          </section>
         </div>
 
         <aside class="side">
@@ -920,7 +957,7 @@ function clearStorage() {
 
 
     <WindowTaskbar
-      v-slot="{ all, active, restore, focus, requestClose, closing, registerFocusTarget, setTaskbarRect }"
+      v-slot="{ all, active, restore, focus, requestClose, closing, attention, registerFocusTarget, setTaskbarRect }"
     >
       <div
         :ref="registerFocusTarget"
@@ -938,7 +975,12 @@ function clearStorage() {
           :ref="(el) => setTaskbarRect(w.id, el)"
           type="button"
           class="taskbar__item"
-          :class="{ 'is-active': w.id === active, 'is-min': w.minimized, 'is-closing': closing(w.id) }"
+          :class="{
+            'is-active': w.id === active,
+            'is-min': w.minimized,
+            'is-closing': closing(w.id),
+            'is-attention': attention(w.id),
+          }"
           @click="w.minimized ? restore(w.id) : focus(w.id)"
         >
           {{ w.title || w.name }}
@@ -1015,6 +1057,13 @@ button { margin-right: 8px; margin-bottom: 4px; }
 .taskbar__item { padding: 4px 10px; opacity: 0.65; }
 .taskbar__item.is-min { font-style: italic; }
 .taskbar__item.is-active { opacity: 1; outline: 2px solid var(--vtd-accent, #60a5fa); }
+.taskbar__item.is-attention { opacity: 1; animation: attention-blink 0.8s steps(1) infinite; }
+@keyframes attention-blink { 50% { background: #f59e0b; color: #111; } }
+@media (prefers-reduced-motion: reduce) {
+  .taskbar__item.is-attention { animation: none; background: #f59e0b; color: #111; }
+}
+/* The block is scoped; :global lets this token reach :root, where the frames inherit it. */
+:global(:root) { --vtd-border-attention: 2px solid #f59e0b; }
 .side tr.is-active td { font-weight: 600; }
 .taskbar__close { margin-left: 6px; opacity: 0.7; }
 /* Not scoped to the window's own DOM — the slot content belongs to this component. */

@@ -40,6 +40,11 @@ export interface WindowContext<T = unknown> {
    * the name that says the answer was deliberate.
    */
   dismiss(): void
+  /**
+   * Ask for the user without taking focus — see `requestAttention` on the store. False when this
+   * window is already the active one.
+   */
+  requestAttention(): boolean
   /** True when this mount came from a persisted descriptor, not a fresh open(). */
   isRestored: boolean
 }
