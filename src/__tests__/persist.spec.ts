@@ -22,7 +22,7 @@ function descriptor(over: Partial<WindowDescriptor> = {}): WindowDescriptor {
   return {
     id: 'a', name: 'editor', props: { id: 1 }, state: null, title: 'A', minimized: true,
     x: 10, y: 20, w: 640, h: 480, z: 11, meta: {}, ...over,
-  }
+  } as WindowDescriptor
 }
 
 function setup(seed?: unknown, components: Record<string, unknown> = { editor: Stub }) {

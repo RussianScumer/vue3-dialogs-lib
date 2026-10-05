@@ -687,7 +687,7 @@ describe('focus', () => {
     const Late = defineAsyncComponent(
       () =>
         new Promise((r) => {
-          resolve = r
+          resolve = r as (c: unknown) => void
         }),
     )
     const plugin = createWindows({ components: { late: Late } })
@@ -715,7 +715,7 @@ describe('focus', () => {
     const Late = defineAsyncComponent(
       () =>
         new Promise((r) => {
-          resolve = r
+          resolve = r as (c: unknown) => void
         }),
     )
     const plugin = createWindows({ components: { late: Late } })
@@ -763,7 +763,7 @@ describe('focus', () => {
 describe('non-modal', () => {
   it('never calls showModal, and a teleported popper escapes the window', async () => {
     const showModal = vi.fn()
-    const proto = HTMLDialogElement.prototype as HTMLDialogElement & { showModal?: () => void }
+    const proto = HTMLDialogElement.prototype as Omit<HTMLDialogElement, 'showModal'> & { showModal?: () => void }
     const original = proto.showModal
     proto.showModal = showModal
 

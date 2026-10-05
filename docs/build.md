@@ -96,6 +96,12 @@ pnpm lint:fix
 pnpm type-check               # vue-tsc --build
 ```
 
+`type-check` builds the three projects `tsconfig.json` references: `tsconfig.app.json` (library and
+playground), `tsconfig.node.json` (tool configs) and `tsconfig.vitest.json` (specs and benchmarks in
+`src/__tests__/` and `src/__bench__/`). A type error in a spec fails it the same as one in `src/`.
+`pnpm lint` is type-aware: it resolves files through the same projects, so it runs the promise rules
+(`no-floating-promises`, `no-misused-promises`) and is slower than a syntax-only pass.
+
 The browser test project needs Chromium once:
 
 ```sh

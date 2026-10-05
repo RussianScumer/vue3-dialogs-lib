@@ -31,7 +31,7 @@ let wrapper: VueWrapper | null = null
 function withDuration(value: string) {
   const real = window.getComputedStyle.bind(window)
   vi.spyOn(window, 'getComputedStyle').mockImplementation((el, pseudo) => {
-    const computed = real(el as Element, pseudo as string | undefined)
+    const computed = real(el, pseudo)
     return {
       getPropertyValue: (prop: string) =>
         prop === '--vtd-motion-duration' ? value : computed.getPropertyValue(prop),
@@ -51,7 +51,7 @@ function app() {
     }),
     { global: { plugins: [plugin] }, attachTo: document.body },
   )
-  return { wrapper: wrapper!, win: useWindows() }
+  return { wrapper, win: useWindows() }
 }
 
 /** One animation frame, then the render it caused. */

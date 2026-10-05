@@ -41,7 +41,7 @@ function app(over: Record<string, unknown> = {}) {
     components: { editor: Content, confirm: Content },
     mobileBreakpoint: 0,
     ...over,
-  } as Parameters<typeof createWindows>[0])
+  })
   wrapper = mount(defineComponent({ render: () => h(WindowHost) }), {
     global: { plugins: [plugin] },
     attachTo: document.body,

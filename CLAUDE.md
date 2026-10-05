@@ -7,7 +7,7 @@ Vue 3.5 window/dialog library (`@korneevecin/vue3-dialogs-lib`), pnpm, ES-only V
 ## Commands
 
 - `pnpm build` — `type-check` + `build-only` in parallel, then `build-types` (`vue-tsc -p tsconfig.lib.json` → `dist/types/`), then `build-css`. `dist/style.css` is a plain file copy of `src/style.css`, not bundled; if `build-types` fails, `build-css` never runs and `dist/` ships without CSS.
-- `pnpm lint` / `pnpm lint:fix` (`eslint .`), `pnpm type-check` (`vue-tsc --build`).
+- `pnpm lint` / `pnpm lint:fix` (`eslint .`, type-aware via `recommendedTypeChecked`), `pnpm type-check` (`vue-tsc --build` over `tsconfig.app.json`, `tsconfig.node.json`, and `tsconfig.vitest.json`, which covers `src/__tests__/` and `src/__bench__/`). Spec type errors fail the gate; fix them with `!` or a cast, never by changing what an assertion means.
 - Tests are two Vitest projects: `unit` (jsdom, `src/**/*.spec.ts`) and `browser` (Playwright Chromium headless, `src/**/*.browser.spec.ts`).
   - All: `pnpm exec vitest run`. One project: `pnpm exec vitest run --project unit` / `--project browser`.
   - One file: `pnpm exec vitest run src/__tests__/focus.spec.ts`. One test: `pnpm exec vitest run -t "name"`.

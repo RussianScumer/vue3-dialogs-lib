@@ -1,0 +1,12 @@
+// Type-checks the specs and benchmarks. jsdom and browser specs share this config; both import
+// their APIs from `vitest` / `vitest/browser` explicitly, so no global test types are named here.
+{
+  "extends": "./tsconfig.app.json",
+  "include": ["env.d.ts", "src/**/*", "src/**/*.vue", "src/**/__tests__/*", "src/**/__bench__/*"],
+  "exclude": [],
+  "compilerOptions": {
+    // `themes.spec.ts` reads the shipped CSS from disk.
+    "types": ["node"],
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.vitest.tsbuildinfo"
+  }
+}

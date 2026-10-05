@@ -97,6 +97,12 @@ pnpm lint:fix
 pnpm type-check               # vue-tsc --build
 ```
 
+`type-check` собирает три проекта из `references` в `tsconfig.json`: `tsconfig.app.json` (библиотека и
+playground), `tsconfig.node.json` (конфиги инструментов) и `tsconfig.vitest.json` (спеки и бенчмарки в
+`src/__tests__/` и `src/__bench__/`). Ошибка типов в спеке валит проверку так же, как ошибка в `src/`.
+`pnpm lint` учитывает типы: он разрешает файлы через те же проекты, поэтому запускает правила для
+promise (`no-floating-promises`, `no-misused-promises`) и работает медленнее чисто синтаксического прохода.
+
 Браузерному тестовому проекту один раз нужен Chromium:
 
 ```sh

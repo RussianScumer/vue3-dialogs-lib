@@ -124,7 +124,7 @@ describe('async loading and error states', () => {
     expect(wrapper.find('.ok').exists()).toBe(true) // the other window kept rendering
     expect(wrapper.find('.failed').text()).toBe('boom')
 
-    const failed = dialogs[1]
+    const failed = dialogs[1]!
     expect(failed.attributes('data-vw-error')).toBe('')
     expect(failed.find('.vw__head').exists()).toBe(true) // still movable, minimizable, closable
   })
