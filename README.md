@@ -30,6 +30,8 @@ content is unmounted, not hidden), and with persistence on it survives a page re
 - **Owned child windows**, **modal windows** with a scrim and an `inert` sweep, **pinned**
   (always-on-top) windows, and named **presets**.
 - **Typed `open()`** — window names and props checked against your components map.
+- **Events with payloads** — `on()` hands over the rect, the close reason and result, the last
+  descriptor, pin, snap, active-window and props/meta changes.
 - **Async loading and error states** per window type, with failure contained to one window.
 - **Works without a stylesheet.** Layout is inline; `style.css` is cosmetics, restyled through
   `--vtd-*` tokens, plus 22 ready-made colour themes.

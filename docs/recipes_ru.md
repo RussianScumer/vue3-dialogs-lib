@@ -546,7 +546,9 @@ Guard'ы запускаются при `requestClose(id)`, по кнопке ✕
 черновик важно, дайте ему guard, поднимите `maxWindows` или следите за этим:
 
 ```js
-win.on('close', (e) => saveDraftSomewhere(e.id))
+win.on('close', (e) => {
+  if (e.reason === 'evicted') saveDraftSomewhere(e.descriptor)
+})
 ```
 
 ## 16 · Дать типу окна собственные умолчания
@@ -615,7 +617,7 @@ saved.ok && saved.data.name // SavedItem
 
 ```js
 const off = win.on('*', (e) => analytics.track(`window:${e.type}`, { id: e.id }))
-// 'open' | 'close' | 'focus' | 'minimize' | 'restore' | 'geometry' | 'title' | '*'
+// все типы и их данные: справочник API, «События»
 ```
 
 События покрывают только переходы стора. `geometry` сообщает об одном событии на жест —

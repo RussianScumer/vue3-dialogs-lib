@@ -1,4 +1,4 @@
-import { computed, reactive, shallowRef } from 'vue'
+import { computed, reactive, shallowRef, watch } from 'vue'
 import {
   DEFAULT_MIN_H,
   DEFAULT_MIN_W,
@@ -19,8 +19,10 @@ import type {
   SnapZone,
   Viewport,
   WindowDefaults,
+  WindowCloseReason,
   WindowDescriptor,
   WindowEvent,
+  WindowEventMap,
   WindowEventType,
   WindowHandle,
   WindowProps,
@@ -168,7 +170,10 @@ export function createStore(options: ResolvedOptions) {
    * `pending` — this can never be written to storage, which is also the rule: a result belongs to
    * the call that opened the window, and that call belongs to one page load.
    */
-  const results = new Map<string, { promise: Promise<WindowResult>; settle: (r: WindowResult) => void }>()
+  const results = new Map<
+    string,
+    { promise: Promise<WindowResult>; settle: (r: WindowResult) => void; settled?: WindowResult }
+  >()
   /**
    * Header elements of the mounted frames, and the consumer's opt-in taskbar destination. Elements,
    * so like `closeGuards` they can never reach storage, and outside `s` so registering one cannot
@@ -190,19 +195,33 @@ export function createStore(options: ResolvedOptions) {
     return top?.id ?? null
   })
 
-  function emit(type: WindowEventType, id: string): void {
-    const e: WindowEvent = { type, id }
-    for (const cb of listeners.get(type) ?? []) cb(e)
+  function emit(e: WindowEvent): void {
+    for (const cb of listeners.get(e.type) ?? []) cb(e)
     for (const cb of listeners.get('*') ?? []) cb(e)
   }
 
-  /** Subscribe to a transition, or to `'*'` for all of them. Returns the unsubscribe. */
-  function on(type: WindowEventType | '*', cb: (e: WindowEvent) => void): () => void {
+  /**
+   * Subscribe to a transition, or to `'*'` for all of them. Returns the unsubscribe. A named type
+   * hands the listener that type's payload; `'*'` hands the union, narrowed by `type`.
+   */
+  function on<T extends WindowEventType>(type: T, cb: (e: WindowEventMap[T]) => void): () => void
+  function on(type: WindowEventType | '*', cb: (e: WindowEvent) => void): () => void
+  function on(type: WindowEventType | '*', cb: (e: never) => void): () => void {
     const set = listeners.get(type) ?? new Set()
     listeners.set(type, set)
-    set.add(cb)
-    return () => set.delete(cb)
+    const listener = cb as (e: WindowEvent) => void
+    set.add(listener)
+    return () => set.delete(listener)
   }
+
+  // Derived state has no setter to emit from, so the active window is watched instead. Default
+  // flush on purpose: re-stacking a group moves several `z`s one at a time, and a sync watcher would
+  // report every window that was briefly on top along the way. One event per settled change, after
+  // the events of the transition that caused it; nothing when the last window goes, since `id` is
+  // always a window.
+  watch(activeId, (next, previous) => {
+    if (next !== null) emit({ type: 'active', id: next, previous })
+  })
 
   function byId(id: string): WindowDescriptor | undefined {
     return s.stack.find((w) => w.id === id)
@@ -282,7 +301,7 @@ export function createStore(options: ResolvedOptions) {
     const group = groupOf(id)
     if (group[group.length - 1]!.z === s.topZ && !w.minimized) return id
     raiseGroup(group)
-    emit('focus', id)
+    emit({ type: 'focus', id })
     return id
   }
 
@@ -325,7 +344,7 @@ export function createStore(options: ResolvedOptions) {
       return id
     }
     w.minimized = true
-    emit('minimize', id)
+    emit({ type: 'minimize', id })
     return id
   }
 
@@ -333,17 +352,28 @@ export function createStore(options: ResolvedOptions) {
     const w = require(id)
     if (w.minimized) {
       w.minimized = false
-      emit('restore', id)
+      emit({ type: 'restore', id })
     }
     return focus(id)
   }
 
   /** Unconditional: guards belong to `requestClose`, so `closeAll()` on logout can never block. */
   function close(id: string): void {
-    if (!byId(id)) return
+    remove(id, 'closed')
+  }
+
+  /**
+   * Every single-window exit, told apart only by what the `close` event reports. `result` is passed
+   * by `resolve()`, which has already settled; everything else settles `closed` here.
+   */
+  function remove(id: string, reason: WindowCloseReason, settled?: WindowResult): void {
+    // Captured before the stack lets go of it: a `close` listener can no longer ask the store.
+    const descriptor = byId(id)
+    if (!descriptor) return
     // Children first, and unconditionally: an owned window is the owner's question and must never
-    // outlive it — the alternative is a sheet floating over nothing.
-    for (const child of childrenOf(id)) close(child)
+    // outlive it — the alternative is a sheet floating over nothing. A child was not resolved,
+    // evicted or dismissed itself; it went with its owner.
+    for (const child of childrenOf(id)) remove(child, 'closed')
     s.stack = s.stack.filter((w) => w.id !== id)
     owners.delete(id)
     restoredIds.delete(id)
@@ -357,12 +387,12 @@ export function createStore(options: ResolvedOptions) {
     pending.delete(id)
     // Before the event, so a listener that awaits the result is not waiting on a microtask that
     // has not been queued yet.
-    settleResult(id, CLOSED)
-    emit('close', id)
+    const result = settled ?? settleResult(id, CLOSED)
+    emit({ type: 'close', id, reason, result, descriptor })
   }
 
   function closeAll(): void {
-    const ids = s.stack.map((w) => w.id)
+    const gone = s.stack
     s.stack = []
     restoredIds.clear()
     owners.clear()
@@ -375,9 +405,11 @@ export function createStore(options: ResolvedOptions) {
     closing.clear()
     pending.clear()
     // Every outstanding result settles here: logging out must not leave a caller awaiting a window
-    // that no longer exists. `settleResult` empties the map as it goes.
-    for (const id of [...results.keys()]) settleResult(id, CLOSED)
-    for (const id of ids) emit('close', id)
+    // that no longer exists. `settleAll` empties the map as it goes.
+    const settled = settleAll()
+    for (const d of gone) {
+      emit({ type: 'close', id: d.id, reason: 'closed', result: settled.get(d.id) ?? CLOSED, descriptor: d })
+    }
   }
 
   /** Registered by a mounted `BaseWindow`, so a leaving window can hand focus to this one. */
@@ -438,16 +470,26 @@ export function createStore(options: ResolvedOptions) {
   }
 
   /**
-   * Settles a window's result, once. Every path that takes a window away goes through here, which
-   * is what makes "a result promise never hangs" true rather than aspirational; settling an id
-   * that has already been answered — `resolve()` and then the `close()` it performs — is a no-op,
-   * since a settled promise ignores a second answer.
+   * Settles a window's result, once, and returns what it actually settled with — which is what the
+   * `close` event reports. Every path that takes a window away goes through here, which is what
+   * makes "a result promise never hangs" true rather than aspirational; settling an id that has
+   * already been answered — `resolve()` and then the close it performs — is a no-op, since the
+   * entry is gone. A restored window's entry was settled at hydration and keeps that answer.
    */
-  function settleResult(id: string, r: WindowResult): void {
+  function settleResult(id: string, r: WindowResult): WindowResult {
     const entry = results.get(id)
-    if (!entry) return
+    if (!entry) return r
     results.delete(id)
+    if (entry.settled) return entry.settled
     entry.settle(r)
+    return r
+  }
+
+  /** Settles every outstanding result `closed`, for the paths that clear the whole stack. */
+  function settleAll(): Map<string, WindowResult> {
+    const out = new Map<string, WindowResult>()
+    for (const id of [...results.keys()]) out.set(id, settleResult(id, CLOSED))
+    return out
   }
 
   /**
@@ -465,8 +507,8 @@ export function createStore(options: ResolvedOptions) {
    * about a draft that no longer exists.
    */
   function resolveResult(id: string, data: unknown): void {
-    settleResult(id, { ok: true, data })
-    close(id)
+    if (!byId(id)) return
+    remove(id, 'resolved', settleResult(id, { ok: true, data }))
   }
 
   /** Registered by mounted content; only consulted while that content is alive. */
@@ -487,7 +529,7 @@ export function createStore(options: ResolvedOptions) {
    * has, its content being unmounted. A guard that throws is a veto: an unanswered question is not
    * permission, and closing the window would be the destructive reading of a bug.
    */
-  async function runGuards(id: string, w: WindowDescriptor): Promise<boolean> {
+  async function runGuards(id: string, w: WindowDescriptor, reason: WindowCloseReason): Promise<boolean> {
     let ok = true
     try {
       const own = closeGuards.get(id)
@@ -500,7 +542,7 @@ export function createStore(options: ResolvedOptions) {
       closing.delete(id)
       pending.delete(id)
     }
-    if (ok) close(id)
+    if (ok) remove(id, reason)
     return ok
   }
 
@@ -514,6 +556,11 @@ export function createStore(options: ResolvedOptions) {
    * behind the one still on screen.
    */
   function requestClose(id: string): Promise<boolean> {
+    return ask(id, 'dismissed')
+  }
+
+  /** `requestClose`, carrying the reason the `close` event will report if the guards agree. */
+  function ask(id: string, reason: WindowCloseReason): Promise<boolean> {
     const inFlight = pending.get(id)
     if (inFlight) return inFlight
 
@@ -528,7 +575,7 @@ export function createStore(options: ResolvedOptions) {
     }
 
     closing.add(id)
-    const p = runGuards(id, w)
+    const p = runGuards(id, w, reason)
     // A window with no guards at all never suspends: `runGuards` ran to its end, and its `finally`
     // has already cleared the flag by the time this line is reached. Recording the promise then
     // would leave an entry nothing will ever remove, so the flag is what says whether there is
@@ -600,8 +647,8 @@ export function createStore(options: ResolvedOptions) {
       const asked: Promise<boolean>[] = []
       for (const root of roots) {
         if (need <= 0) break
-        if (closeGuards.has(root.id) || options.beforeClose) asked.push(requestClose(root.id))
-        else close(root.id)
+        if (closeGuards.has(root.id) || options.beforeClose) asked.push(ask(root.id, 'evicted'))
+        else remove(root.id, 'evicted')
         need--
       }
       if (asked.length) {
@@ -672,7 +719,7 @@ export function createStore(options: ResolvedOptions) {
     }
     // Before the event: an `on('open')` listener may ask for the result, and by then it exists.
     const result = deferResult(d.id)
-    emit('open', d.id)
+    emit({ type: 'open', id: d.id })
     return makeHandle(d.id, result)
   }
 
@@ -680,23 +727,25 @@ export function createStore(options: ResolvedOptions) {
     const w = require(id)
     if (w.title === title) return
     w.title = title
-    emit('title', id)
+    emit({ type: 'title', id })
   }
 
   function setGeometry(id: string, geom: Partial<Pick<WindowDescriptor, 'x' | 'y' | 'w' | 'h'>>): void {
     const w = require(id)
     Object.assign(w, geom)
     Object.assign(w, clampSize(w.w, w.h, w))
-    emit('geometry', id)
+    emit({ type: 'geometry', id, rect: rectOf(w) })
   }
 
   /** Props are ids and primitives; replacing them re-renders the content in place. */
   function updateProps(id: string, props: Record<string, unknown>): void {
     require(id).props = props
+    emit({ type: 'props', id, props })
   }
 
   function setMeta(id: string, meta: Record<string, unknown>): void {
     require(id).meta = meta
+    emit({ type: 'meta', id, meta })
   }
 
   function dockZone(id: string): SnapZone | null {
@@ -724,7 +773,10 @@ export function createStore(options: ResolvedOptions) {
    */
   function setPinned(id: string, pinned: boolean): void {
     require(id)
+    const was = isPinned(id)
     pins.set(id, pinned)
+    // Only a change is news: making a window pin-capable while leaving it unpinned is not a pin.
+    if (was !== pinned) emit({ type: 'pin', id, pinned })
     if (pinned) undock(id)
   }
 
@@ -787,7 +839,8 @@ export function createStore(options: ResolvedOptions) {
       if (current) {
         Object.assign(w, current.prev)
         docks.delete(id)
-        emit('geometry', id)
+        emit({ type: 'geometry', id, rect: rectOf(w) })
+        emit({ type: 'snap', id, zone: null })
       }
       return id
     }
@@ -795,13 +848,15 @@ export function createStore(options: ResolvedOptions) {
     docks.set(id, { zone, prev: current?.prev ?? rectOf(w) })
     const rect = snapRect(zone, view, options.snap.insets)
     Object.assign(w, rect, clampSize(rect.w, rect.h, w))
-    emit('geometry', id)
+    emit({ type: 'geometry', id, rect: rectOf(w) })
+    // Re-snapping into the zone the window is already in moves nothing worth a `snap`.
+    if (current?.zone !== zone) emit({ type: 'snap', id, zone })
     return focus(id)
   }
 
   /** Forgets the snap and keeps the current geometry — what a manual resize means. */
   function undock(id: string): void {
-    docks.delete(id)
+    if (docks.delete(id)) emit({ type: 'snap', id, zone: null })
   }
 
   /**
@@ -817,6 +872,8 @@ export function createStore(options: ResolvedOptions) {
     w.h = dock.prev.h
     w.x = Math.round(pointerX - dock.prev.w * ratio)
     docks.delete(id)
+    // No `geometry` here: the drag this starts reports it once, when it ends.
+    emit({ type: 'snap', id, zone: null })
   }
 
   /** Arms (or clears) the drop preview. Cheap to call on every pointermove. */
@@ -863,7 +920,7 @@ export function createStore(options: ResolvedOptions) {
     // so it leaves through the same event a `close()` would have fired. Arrivals stay silent:
     // `open` means a call asked for a window, and a hydration is nobody asking.
     const arrived = new Set(stack.map((w) => w.id))
-    const departed = s.stack.filter((w) => !arrived.has(w.id)).map((w) => w.id)
+    const departed = s.stack.filter((w) => !arrived.has(w.id))
     s.stack = stack
     // A loop, not a spread: `Math.max(...stack)` is an argument list, and a crafted blob long
     // enough overflows it. A non-finite `topZ` would poison every later `++s.topZ`.
@@ -880,15 +937,17 @@ export function createStore(options: ResolvedOptions) {
     closeGuards.clear()
     closing.clear()
     pending.clear()
-    for (const id of [...results.keys()]) settleResult(id, CLOSED)
+    const settled = settleAll()
     for (const w of stack) {
       restoredIds.add(w.id)
       // A restored descriptor has no live opener — the call that opened it belongs to a previous
       // page load, possibly a previous day. Its result is settled before anyone can ask, so
       // `resultOf()` is synchronous truth rather than a promise nobody will ever settle.
-      results.set(w.id, { promise: Promise.resolve(RESTORED), settle: () => {} })
+      results.set(w.id, { promise: Promise.resolve(RESTORED), settle: () => {}, settled: RESTORED })
     }
-    for (const id of departed) emit('close', id)
+    for (const d of departed) {
+      emit({ type: 'close', id: d.id, reason: 'restored', result: settled.get(d.id) ?? CLOSED, descriptor: d })
+    }
   }
 
   return {

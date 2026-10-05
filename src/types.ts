@@ -362,13 +362,53 @@ export interface WindowHandle<T = unknown> {
  */
 export type WindowVisualState = 'entering' | 'open' | 'leaving'
 
-/** Store transitions a consumer can subscribe to with `on()`. */
-export type WindowEventType = 'open' | 'close' | 'focus' | 'minimize' | 'restore' | 'geometry' | 'title'
+/**
+ * Why a window left the stack, as the `close` event reports it. `closed` is `close()`, `closeAll()`
+ * and an owner taking its children with it; `resolved` is `resolve()`; `dismissed` is a
+ * `requestClose()` whose guards agreed — the ✕, ESC on a modal, the keymap; `evicted` is
+ * `maxWindows` making room; `restored` is a hydration that no longer carries the window.
+ */
+export type WindowCloseReason = 'closed' | 'resolved' | 'dismissed' | 'restored' | 'evicted'
 
-export interface WindowEvent {
-  type: WindowEventType
+/** What every event carries. Listeners written against `{ type, id }` keep working unchanged. */
+export interface WindowEventBase<T extends string> {
+  type: T
   id: string
 }
+
+/**
+ * Every event `on()` can deliver, by type. The payload rides beside `type` and `id`, so a listener
+ * reads what it needs off the event instead of asking the store — which, for `close`, no longer
+ * has the window at all.
+ */
+export interface WindowEventMap {
+  open: WindowEventBase<'open'>
+  close: WindowEventBase<'close'> & {
+    reason: WindowCloseReason
+    /** What the result promise settled with. */
+    result: WindowResult
+    /** The descriptor as it was when the window left the stack. */
+    descriptor: WindowDescriptor
+  }
+  focus: WindowEventBase<'focus'>
+  minimize: WindowEventBase<'minimize'>
+  restore: WindowEventBase<'restore'>
+  geometry: WindowEventBase<'geometry'> & { rect: Rect }
+  title: WindowEventBase<'title'>
+  pin: WindowEventBase<'pin'> & { pinned: boolean }
+  /** `zone` is null when the window stops being snapped. */
+  snap: WindowEventBase<'snap'> & { zone: SnapZone | null }
+  /** `id` is the window that is now active; nothing fires when the last one goes. */
+  active: WindowEventBase<'active'> & { previous: string | null }
+  props: WindowEventBase<'props'> & { props: Record<string, unknown> }
+  meta: WindowEventBase<'meta'> & { meta: Record<string, unknown> }
+}
+
+/** Store transitions a consumer can subscribe to with `on()`. */
+export type WindowEventType = keyof WindowEventMap
+
+/** Any event; narrow on `type` to reach its payload. */
+export type WindowEvent = WindowEventMap[WindowEventType]
 
 /**
  * A guard registered by a mounted window's content. It may be async — `requestClose()` awaits it,
