@@ -97,6 +97,10 @@ await win.requestClose(id)   // runs the close guards; false if one refused
 const saved = await result   // { ok: true, data } | { ok: false, reason: 'closed' | 'restored' }
 ```
 
+Outside `setup()` there is nothing to inject from, so `useWindows()` falls back to the store of the
+most recently installed app. That fallback is shared across concurrent SSR requests, so on a server
+take the store inside a component instead.
+
 Inside a window's content:
 
 ```vue

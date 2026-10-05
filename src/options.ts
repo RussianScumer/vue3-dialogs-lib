@@ -13,6 +13,7 @@ import type {
   WindowSpec,
   WindowsOptions,
 } from './types'
+import { warn } from './warn'
 
 const NO_DEFAULTS: WindowDefaults = Object.freeze({})
 
@@ -132,7 +133,7 @@ function chordsFor(value: string | string[] | null | undefined, fallback: string
   for (const chord of list) {
     const parsed = parseChord(chord)
     if (parsed) out.push(parsed)
-    else if (import.meta.env?.DEV) console.warn(`[vue3-dialogs-lib] unreadable key binding "${chord}"`)
+    else warn(`unreadable key binding "${chord}"`)
   }
   return out
 }

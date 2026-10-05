@@ -77,7 +77,8 @@
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
-      "import": "./dist/vue3-dialogs-lib.js"
+      "import": "./dist/vue3-dialogs-lib.js",
+      "default": "./dist/vue3-dialogs-lib.js"
     },
     "./style.css": "./dist/style.css",
     "./themes/*.css": "./dist/themes/*.css",
