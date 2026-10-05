@@ -121,6 +121,24 @@ const answer = await win.open('confirm', { message }, { modal: true, placement: 
 if (answer.ok) proceed()
 ```
 
+## Styling
+
+Everything a window needs to work is inline, so the library runs with no stylesheet imported. Two
+pieces are pure tint, though, and without `style.css` they are **invisible**: the snap ghost a drag
+arms, and the scrim behind a modal — which still blocks clicks, you just cannot see it. Four lines
+bring both back:
+
+```css
+.vw-ghost { outline: 2px dashed currentColor; outline-offset: -2px; }
+.vw-scrim { background: rgb(0 0 0 / 0.4); }
+```
+
+**Reduced motion.** `style.css` drops `--vtd-motion-duration` to `0ms` under
+`prefers-reduced-motion: reduce`, at zero specificity — so if you set your own duration, set it
+inside a `(prefers-reduced-motion: no-preference)` query or check `matchMedia` before writing it,
+or your value wins over the user's setting. [Motion](https://github.com/RussianScumer/vue3-dialogs-lib/blob/master/docs/motion.md#reduced-motion)
+has the snippet.
+
 ## Documentation
 
 | English | Русский | |

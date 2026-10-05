@@ -24,7 +24,8 @@ because `WindowHost` has to read a value back. It does two jobs at once:
   a leaving frame in the render tree.
 
 Set it to `0ms` and windows appear and vanish in one frame, exactly as they do with no stylesheet
-imported at all. `prefers-reduced-motion: reduce` already does that for you.
+imported at all. `prefers-reduced-motion: reduce` already does that for you — unless you override
+the property, see [Reduced motion](#reduced-motion).
 
 The declaration is wrapped in `:where(:root)` so it carries zero specificity: your own `:root`, a
 theme class or an inline style on `<html>` all win without having to out-specify anything.
@@ -35,6 +36,45 @@ Two limits worth knowing:
   still retired at 1000ms, cutting the animation off.
 - **A bare number counts as milliseconds.** `300` is not a valid CSS `<time>`, but the parser
   treats it as `300ms` rather than retaining the frame for 300 seconds. `0.4s` is read as 400ms.
+
+## Reduced motion
+
+The baseline sheet's reduced-motion rule is as weak as its default:
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  :where(:root) {
+    --vtd-motion-duration: 0ms;
+  }
+}
+```
+
+Zero specificity, so **any declaration of yours wins over it** — a `:root` rule, a theme class or
+an inline style on `<html>`. Override the duration and a user who asked for no motion gets your
+animation. Keep the media query with your value:
+
+```css
+:root {
+  --vtd-motion-duration: 240ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --vtd-motion-duration: 0ms;
+  }
+}
+```
+
+Setting it from script, ask first and set nothing when the answer is yes:
+
+```js
+const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+if (!reduce) document.documentElement.style.setProperty('--vtd-motion-duration', '240ms')
+```
+
+The library itself never calls `matchMedia` here. `WindowHost` reads the computed property off the
+element, so the frame is retained for exactly as long as the CSS that is really running animates —
+a duration you set on purpose is honoured, reduced motion or not. The media query is the contract.
 
 ## The lifecycle
 

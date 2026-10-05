@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { cdp } from 'vitest/browser'
 import { defineComponent, h, nextTick } from 'vue'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { createWindows, useWindows } from '../createWindows'
@@ -104,5 +105,47 @@ describe('motion, measured', () => {
     expect(dialog.getAttribute('data-vw-state')).toBe('open')
     await wait(240)
     expect(Number(getComputedStyle(dialog).opacity)).toBe(1)
+  })
+})
+
+describe('reduced motion, measured', () => {
+  /** Chromium's own media emulation, the same switch DevTools' rendering panel flips. */
+  async function emulateReducedMotion(value: 'reduce' | 'no-preference') {
+    await cdp().send('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-reduced-motion', value }],
+    })
+  }
+
+  afterEach(async () => {
+    await emulateReducedMotion('no-preference')
+    document.documentElement.style.removeProperty('--vtd-motion-duration')
+  })
+
+  it('drops the duration to 0ms, so a closing frame leaves in one frame', async () => {
+    await emulateReducedMotion('reduce')
+    expect(matchMedia('(prefers-reduced-motion: reduce)').matches).toBe(true)
+    const { win } = app()
+    const id = win.open('editor', {}, { x: 40, y: 40, w: 320, h: 240 }).id
+    await nextTick()
+
+    const dialog = dialogs()[0] as HTMLElement
+    expect(getComputedStyle(dialog).getPropertyValue('--vtd-motion-duration').trim()).toBe('0ms')
+
+    win.close(id)
+    await nextTick()
+    await wait(20)
+    expect(dialogs()).toHaveLength(0)
+  })
+
+  it('loses to a consumer override, which is why the docs say to keep the media query', async () => {
+    await emulateReducedMotion('reduce')
+    document.documentElement.style.setProperty('--vtd-motion-duration', '200ms')
+    const { win } = app()
+    win.open('editor', {}, { x: 40, y: 40, w: 320, h: 240 })
+    await nextTick()
+
+    // Zero specificity by design: the library never second-guesses a duration it was handed.
+    const dialog = dialogs()[0] as HTMLElement
+    expect(getComputedStyle(dialog).getPropertyValue('--vtd-motion-duration').trim()).toBe('200ms')
   })
 })
