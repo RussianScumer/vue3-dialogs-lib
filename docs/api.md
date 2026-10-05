@@ -845,8 +845,10 @@ taskbar does this with `background: var(--vtd-head-bg, #26262b)`.
 ### Active window and grips
 
 The top window carries `data-vw-active`, so `.vw[data-vw-active]` is yours to style;
-`--vtd-border-active` and `--vtd-shadow-active` are shortcuts that default to the inactive values,
-leaving the baseline look unchanged. Resize grips are `.vw__grip` elements carrying
+`--vtd-border-active`, `--vtd-shadow-active`, `--vtd-head-bg-active` and `--vtd-head-fg-active` are
+shortcuts that default to the inactive values, leaving the baseline look unchanged. The last two
+recolour the header of the focused window; none of the shipped palettes sets them, so they are
+yours to opt into. Resize grips are `.vw__grip` elements carrying
 `data-vw-grip="n" | "se" | …`; they are transparent by default. Under `(pointer: coarse)` a grip
 is 20px (edges) or 28px (corners) wide, so a visible grip you paint should be scoped to a narrower
 strip in your own `@media (pointer: coarse)` rule, or it paints the whole hit area.
