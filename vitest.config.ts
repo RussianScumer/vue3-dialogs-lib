@@ -33,6 +33,9 @@ export default defineConfig({
           include: ['src/**/*.spec.ts'],
           exclude: [...configDefaults.exclude, 'src/**/*.browser.spec.ts'],
           setupFiles: ['src/__tests__/setup.ts'],
+          // Run beside the browser project, a cold import of the whole library (ssr.spec.ts) can take
+          // several seconds of a CPU that Chromium is also using. A hang still fails, just later.
+          testTimeout: 15_000,
           benchmark: {
             include: ['src/**/*.bench.ts'],
           },
