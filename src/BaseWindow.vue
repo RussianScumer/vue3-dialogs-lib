@@ -50,6 +50,7 @@ import { provideWindowContext } from './useWindowContext'
 import { useViewport } from './useViewport'
 import { ownsEscape } from './useKeymap'
 import type { WindowDescriptor, WindowVisualState } from './types'
+import { warn } from './warn'
 
 const props = defineProps<{
   descriptor: WindowDescriptor
@@ -166,8 +167,8 @@ onMounted(() => {
   // glyphs, so without a name they reach a screen reader as "–", "✕", "▲"/"▼" and "□"/"❐".
   if (!import.meta.env.DEV || warnedApps.has(options) || !unnamedControls()) return
   warnedApps.add(options)
-  console.warn(
-    '[vue3-dialogs-lib] the default window controls have no accessible name. Pass labels: ' +
+  warn(
+    'the default window controls have no accessible name. Pass labels: ' +
       '{ minimize, close, pin, maximize, restore } to createWindows(), per window via open(), or ' +
       'replace the controls slot.',
   )

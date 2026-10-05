@@ -11,6 +11,7 @@ import BaseWindow from './BaseWindow.vue'
 import { useWindows, useWindowOptions } from './createWindows'
 import { useViewport } from './useViewport'
 import type { WindowDescriptor, WindowVisualState } from './types'
+import { warn } from './warn'
 
 const win = useWindows()
 const options = useWindowOptions()
@@ -264,8 +265,8 @@ function applyRootInert(on: boolean): void {
     if (containsDesktop(node)) {
       if (import.meta.env.DEV && !rootWarned) {
         rootWarned = true
-        console.warn(
-          '[vue3-dialogs-lib] modal.inertRoot contains WindowHost; it would make the modal inert ' +
+        warn(
+          'modal.inertRoot contains WindowHost; it would make the modal inert ' +
             'too, so it is ignored. Point it at the page content beside the host instead.',
         )
       }

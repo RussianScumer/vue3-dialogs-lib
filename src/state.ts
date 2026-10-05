@@ -30,6 +30,7 @@ import type {
   WindowResult,
   WindowResultOf,
 } from './types'
+import { warn } from './warn'
 
 export type { CloseGuard } from './types'
 
@@ -41,11 +42,6 @@ function shallowEqual(a: Record<string, unknown>, b: Record<string, unknown>): b
 
 function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `w-${Math.random().toString(36).slice(2)}-${Date.now()}`
-}
-
-/** Dev-only: the library ships no user-facing strings, and a bug in a guard is for the developer. */
-function warn(message: string, err?: unknown): void {
-  if (import.meta.env?.DEV) console.warn(`[vue3-dialogs-lib] ${message}`, err)
 }
 
 function rectOf(d: WindowDescriptor): Rect {
@@ -373,6 +369,19 @@ export function createStore(options: ResolvedOptions) {
     return focus(id)
   }
 
+  /**
+   * Drops one window's runtime-only state, or everyone's with no id. One list for the three
+   * teardown paths — `close`, `closeAll`, `hydrate` — so a map added beside `pins` cannot be
+   * forgotten by one of them. Results are not here: each path settles them its own way.
+   */
+  function forgetRuntime(id?: string): void {
+    const all = [restoredIds, owners, docks, pins, modals, escapes, controlLabels, maximizables, taskbarRects, closeGuards, closing, pending]
+    for (const m of all) {
+      if (id === undefined) m.clear()
+      else m.delete(id)
+    }
+  }
+
   /** Unconditional: guards belong to `requestClose`, so `closeAll()` on logout can never block. */
   function close(id: string): void {
     remove(id, 'closed')
@@ -391,18 +400,7 @@ export function createStore(options: ResolvedOptions) {
     // evicted or dismissed itself; it went with its owner.
     for (const child of childrenOf(id)) remove(child, 'closed')
     s.stack = s.stack.filter((w) => w.id !== id)
-    owners.delete(id)
-    restoredIds.delete(id)
-    docks.delete(id)
-    pins.delete(id)
-    modals.delete(id)
-    escapes.delete(id)
-    controlLabels.delete(id)
-    maximizables.delete(id)
-    taskbarRects.delete(id)
-    closeGuards.delete(id)
-    closing.delete(id)
-    pending.delete(id)
+    forgetRuntime(id)
     // Before the event, so a listener that awaits the result is not waiting on a microtask that
     // has not been queued yet.
     const result = settled ?? settleResult(id, CLOSED)
@@ -412,18 +410,7 @@ export function createStore(options: ResolvedOptions) {
   function closeAll(): void {
     const gone = s.stack
     s.stack = []
-    restoredIds.clear()
-    owners.clear()
-    docks.clear()
-    pins.clear()
-    modals.clear()
-    escapes.clear()
-    controlLabels.clear()
-    maximizables.clear()
-    taskbarRects.clear()
-    closeGuards.clear()
-    closing.clear()
-    pending.clear()
+    forgetRuntime()
     // Every outstanding result settles here: logging out must not leave a caller awaiting a window
     // that no longer exists. `settleAll` empties the map as it goes.
     const settled = settleAll()
@@ -1004,18 +991,7 @@ export function createStore(options: ResolvedOptions) {
     let top = Number.isFinite(topZ) ? topZ : 10
     for (const w of stack) if (w.z > top) top = w.z
     s.topZ = Math.max(top, 10)
-    restoredIds.clear()
-    owners.clear()
-    docks.clear()
-    pins.clear()
-    modals.clear()
-    escapes.clear()
-    controlLabels.clear()
-    maximizables.clear()
-    taskbarRects.clear()
-    closeGuards.clear()
-    closing.clear()
-    pending.clear()
+    forgetRuntime()
     const settled = settleAll()
     for (const w of stack) {
       restoredIds.add(w.id)

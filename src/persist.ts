@@ -2,6 +2,7 @@ import { getCurrentScope, onScopeDispose, watch } from 'vue'
 import { DEFAULT_MIN_H, DEFAULT_MIN_W, clampDescriptor, clampSize } from './geometry'
 import type { WindowsApi } from './state'
 import type { ResolvedOptions, WindowDescriptor } from './types'
+import { warn } from './warn'
 
 /** Bump whenever the descriptor shape changes: a stale blob in new code is the sharpest bug here. */
 export const SCHEMA = 2
@@ -102,8 +103,10 @@ function read(options: ResolvedOptions): Snapshot | null {
   let raw: string | null = null
   try {
     raw = p.storage.getItem(p.key)
-  } catch {
-    return null // private mode, quota, blocked storage — persistence is never load-bearing
+  } catch (err) {
+    // Private mode, quota, blocked storage — persistence is never load-bearing.
+    warn(`could not read "${p.key}" from storage; starting with an empty desktop`, err)
+    return null
   }
   if (!raw) return null
 
@@ -123,7 +126,8 @@ function read(options: ResolvedOptions): Snapshot | null {
     // `Infinity` parses fine (`1e999`) and would make every later `++topZ` a no-op, so no window
     // could ever be raised again. `size()` asks the same finite question the descriptors get.
     return { schema: SCHEMA, topZ: size(parsed.topZ, 10), stack: trim(stack, options.maxWindows) }
-  } catch {
+  } catch (err) {
+    warn(`the blob under "${p.key}" is not valid JSON; it is ignored`, err)
     return null
   }
 }
@@ -181,8 +185,9 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
       hydrated = undefined
       if (quiet) return
       p.storage.setItem(p.key, raw)
-    } catch {
-      /* storage full or unavailable — drop the write, keep the app alive */
+    } catch (err) {
+      // Storage full or unavailable: drop the write, keep the app alive.
+      warn(`could not write "${p.key}" to storage; this change is not persisted`, err)
     }
   }
 
@@ -252,8 +257,9 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
           stopped = false
         },
       })
-    } catch {
-      /* a throwing consumer must not take the listener down with it */
+    } catch (err) {
+      // A throwing consumer must not take the listener down with it.
+      warn('onExternalChange threw', err)
     }
   }
 

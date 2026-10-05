@@ -14,6 +14,7 @@ export type {
   BeforeCloseGuard,
   Bounds,
   ComponentsMap,
+  ControlLabels,
   EscapePolicy,
   ExternalChangeInfo,
   KeyChord,

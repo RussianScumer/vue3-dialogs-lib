@@ -187,3 +187,88 @@ describe('persist', () => {
     expect(store.byId('b')!.state).toEqual({ ok: 1 })
   })
 })
+
+describe('persist warnings', () => {
+  function failingWrites() {
+    const storage = memoryStorage()
+    storage.setItem = () => {
+      throw new Error('QuotaExceededError')
+    }
+    const options = resolveOptions({ components: { editor: Stub }, persist: { key: 'k', storage } })
+    const store = createStore(options)
+    setupPersist(store, options)
+    return store
+  }
+
+  async function writeOnce(store: ReturnType<typeof createStore>) {
+    store.open('editor', { id: 1 })
+    await nextTick()
+    vi.advanceTimersByTime(300)
+  }
+
+  it('warns once in dev when a write throws, and keeps the app alive', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = failingWrites()
+
+    await writeOnce(store)
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]?.[0]).toMatch(/could not write "k"/)
+    expect(store.s.stack).toHaveLength(1)
+
+    warn.mockRestore()
+    vi.useRealTimers()
+  })
+
+  it('stays silent in production when a write throws', async () => {
+    vi.useFakeTimers()
+    vi.stubEnv('DEV', false)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = failingWrites()
+
+    await writeOnce(store)
+    expect(warn).not.toHaveBeenCalled()
+
+    warn.mockRestore()
+    vi.unstubAllEnvs()
+    vi.useRealTimers()
+  })
+
+  it('warns in dev when the blob cannot be read or parsed', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const blocked = memoryStorage()
+    blocked.getItem = () => {
+      throw new Error('SecurityError')
+    }
+    for (const storage of [blocked, memoryStorage('{not json')]) {
+      const options = resolveOptions({ components: { editor: Stub }, persist: { key: 'k', storage } })
+      setupPersist(createStore(options), options)
+    }
+    expect(warn.mock.calls.map((c) => c[0])).toEqual([
+      expect.stringMatching(/could not read "k"/),
+      expect.stringMatching(/not valid JSON/),
+    ])
+    warn.mockRestore()
+  })
+
+  it('warns in dev when onExternalChange throws', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const storage = memoryStorage()
+    const options = resolveOptions({
+      components: { editor: Stub },
+      persist: {
+        key: 'k',
+        storage,
+        onExternalChange: () => {
+          throw new Error('consumer bug')
+        },
+      },
+    })
+    setupPersist(createStore(options), options)
+
+    window.dispatchEvent(new StorageEvent('storage', { key: 'k', newValue: '{}' }))
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]?.[0]).toMatch(/onExternalChange threw/)
+    warn.mockRestore()
+  })
+})
