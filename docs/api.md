@@ -214,6 +214,18 @@ components: {
 
 Precedence is `open()` options, then the component's defaults, then the library's.
 
+### Growing to fit the content
+
+A window that names none of `h`, `minH` and `maxH` — not in the `open()` call, not in its preset,
+not in its component's defaults — opens at the default 480px and grows to fit its content, so the
+body only scrolls when the content would not fit on screen anyway. It grows downward while the
+viewport allows, then moves up, and stops at the viewport height; it never shrinks below the height
+it opened with. The fit is live: an async component or data that arrives after the window opened
+grows it too. It stops for good once the height is somebody's decision — the user resizes the
+window by a grip or shift+arrows, the window is snapped or maximized, or `setGeometry()` is called
+with a different `h`. Naming any of the three, `maxH: null` included, opts out. The flag is
+runtime-only: a window restored from storage keeps the height it was saved with.
+
 ## Closing, and guards
 
 `close(id)` is unconditional and synchronous — `closeAll()` on logout must never be blockable.

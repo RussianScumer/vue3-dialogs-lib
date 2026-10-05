@@ -28,6 +28,7 @@ export const components = {
   },
   popperDemo: () => import('./windows/PopperDemo.vue'),
   longDoc: () => import('./windows/LongDoc.vue'),
+  growDoc: () => import('./windows/GrowDoc.vue'),
   // A slow chunk with its own spinner: the frame is usable before the content exists.
   slowPanel: {
     component: () =>

@@ -174,6 +174,11 @@ function openLongDoc() {
   win.open('longDoc', {}, { w: 460, h: 320 })
 }
 
+/** No `h`, `minH` or `maxH` anywhere, so the frame grows to fit its content. */
+function openGrowDoc() {
+  win.open('growDoc', {}, { w: 460, title: 'Auto height', dedupe: false })
+}
+
 /** Three ways a window's component can fail to be there: slow, never, and throwing. */
 function openSlowPanel() {
   win.open('slowPanel', {}, { title: 'Slow chunk' })
@@ -965,16 +970,6 @@ function clearStorage() {
           </section>
 
           <section>
-            <h2>28 · Title-bar menu</h2>
-            <p>
-              Right-click any window's header, or focus it and press <kbd>Shift</kbd>+<kbd>F10</kbd>. The menu is this
-              page's <code>#contextmenu</code> slot: the library positions it, focuses it and closes it on ESC, on a click
-              elsewhere and after an action. Snap items are disabled on a window that cannot move. Right-clicking a header
-              button still gets the browser's menu.
-            </p>
-          </section>
-
-          <section>
             <h2>26 · Asking for attention</h2>
             <p>
               <code>requestAttention(id)</code> flags a window without raising it: the frame gets
@@ -1020,6 +1015,31 @@ function clearStorage() {
               @click="arrange('cascade')"
             >
               Cascade all
+            </button>
+          </section>
+
+          <section>
+            <h2>28 · Title-bar menu</h2>
+            <p>
+              Right-click any window's header, or focus it and press <kbd>Shift</kbd>+<kbd>F10</kbd>. The menu is this
+              page's <code>#contextmenu</code> slot: the library positions it, focuses it and closes it on ESC, on a click
+              elsewhere and after an action. Snap items are disabled on a window that cannot move. Right-clicking a header
+              button still gets the browser's menu.
+            </p>
+          </section>
+
+          <section>
+            <h2>29 · Growing to fit</h2>
+            <p>
+              A window that names none of <code>h</code>, <code>minH</code> and <code>maxH</code> grows to fit its
+              content, as far as the screen allows. Add paragraphs and the frame follows; resize it from a grip and it
+              stops following. Case 16's window names <code>h</code>, so it keeps its height.
+            </p>
+            <button
+              type="button"
+              @click="openGrowDoc"
+            >
+              Open growing window
             </button>
           </section>
         </div>
