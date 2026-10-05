@@ -5,8 +5,9 @@
   "include": ["env.d.ts", "src/**/*", "src/**/*.vue", "src/**/__tests__/*", "src/**/__bench__/*"],
   "exclude": [],
   "compilerOptions": {
-    // `themes.spec.ts` reads the shipped CSS from disk.
-    "types": ["node"],
+    // `themes.spec.ts` reads the shipped CSS from disk; the Playwright provider augments
+    // `vitest/browser` (`cdp()`, `userEvent` options) for the browser specs.
+    "types": ["node", "@vitest/browser-playwright"],
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.vitest.tsbuildinfo"
   }
 }

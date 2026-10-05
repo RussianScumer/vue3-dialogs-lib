@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { defineComponent, h, nextTick } from 'vue'
 import { mount, type VueWrapper } from '@vue/test-utils'
+import { cdp } from 'vitest/browser'
 import { createWindows, useWindows } from '../createWindows'
 import WindowHost from '../WindowHost.vue'
 import '../style.css'
@@ -104,5 +105,35 @@ describe('motion, measured', () => {
     expect(dialog.getAttribute('data-vw-state')).toBe('open')
     await wait(240)
     expect(Number(getComputedStyle(dialog).opacity)).toBe(1)
+  })
+})
+
+describe('motion, reduced', () => {
+  // Chromium's own media emulation, the same switch the OS setting flips: the stylesheet's
+  // `@media (prefers-reduced-motion: reduce)` block is what is under test, not a stubbed value.
+  async function reduceMotion(on: boolean) {
+    await cdp().send('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-reduced-motion', value: on ? 'reduce' : '' }],
+    })
+  }
+
+  afterEach(() => reduceMotion(false))
+
+  it('resolves --vtd-motion-duration to 0ms and retires a closing frame in the same tick', async () => {
+    await reduceMotion(true)
+    expect(matchMedia('(prefers-reduced-motion: reduce)').matches).toBe(true)
+
+    const { win } = app()
+    const id = win.open('editor', {}, { x: 40, y: 40, w: 320, h: 240 }).id
+    await nextTick()
+
+    const dialog = dialogs()[0] as HTMLElement
+    expect(getComputedStyle(dialog).getPropertyValue('--vtd-motion-duration').trim()).toBe('0ms')
+
+    win.close(id)
+    await nextTick()
+    expect(win.byId(id)).toBeUndefined()
+    expect(dialogs()).toHaveLength(0)
+    expect(dialog.isConnected).toBe(false)
   })
 })

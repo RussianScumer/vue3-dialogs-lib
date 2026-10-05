@@ -1,8 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { defineComponent, h, nextTick } from 'vue'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, effectScope, h, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { createWindows, useWindows } from '../createWindows'
 import { snapRect } from '../geometry'
+import { resolveOptions } from '../options'
+import { setupKeymap } from '../useKeymap'
 import WindowHost from '../WindowHost.vue'
 import type { KeymapOptions, SnapInsets, WindowsOptions } from '../types'
 import type { WindowsApi } from '../state'
@@ -468,5 +470,109 @@ describe('keymap — configuration', () => {
 
     await wrapper.find('dialog.vw').trigger('keydown', { key: 'ArrowUp', metaKey: true, shiftKey: true })
     expect(win.dockZone(id)).toBeNull() // not 'max', which is Meta+ArrowUp
+  })
+})
+
+/**
+ * `setupKeymap` on its own, against a stand-in store: the listener's lifetime and the stand-downs,
+ * with nothing mounted. ESC outside every window is the probe — the one key that reaches the store
+ * with no window geometry involved.
+ */
+describe('setupKeymap — the listener itself', () => {
+  function keymap() {
+    const requestClose = vi.fn(() => Promise.resolve(true))
+    const win = {
+      activeId: ref<string | null>('a'),
+      topModalId: () => null,
+      isBlockedByModal: () => false,
+      requestClose,
+    } as unknown as WindowsApi
+    const scope = effectScope()
+    scope.run(() => setupKeymap(win, resolveOptions({ components: {} }), { w: 1024, h: 768 }))
+    scopes.push(scope)
+    return { scope, requestClose }
+  }
+
+  // A listener left behind by a failed case would take the next case's keystrokes first.
+  const scopes: ReturnType<typeof effectScope>[] = []
+
+  function escFrom(el: Element, init: KeyboardEventInit = {}): KeyboardEvent {
+    const e = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true, ...init })
+    el.dispatchEvent(e)
+    return e
+  }
+
+  afterEach(() => {
+    for (const scope of scopes.splice(0)) scope.stop()
+    vi.restoreAllMocks()
+    document.body.replaceChildren()
+  })
+
+  it('adds one document keydown listener and removes that same one on dispose', () => {
+    const add = vi.spyOn(document, 'addEventListener')
+    const remove = vi.spyOn(document, 'removeEventListener')
+    const { scope, requestClose } = keymap()
+    const added = add.mock.calls.filter(([type]) => type === 'keydown')
+    expect(added).toHaveLength(1)
+
+    scope.stop()
+    const removed = remove.mock.calls.filter(([type]) => type === 'keydown')
+    expect(removed).toHaveLength(1)
+    expect(removed[0]?.[1]).toBe(added[0]?.[1])
+
+    escFrom(document.body)
+    expect(requestClose).not.toHaveBeenCalled()
+  })
+
+  it('acts on a key nobody took', () => {
+    const { scope, requestClose } = keymap()
+    const e = escFrom(document.body)
+    expect(requestClose).toHaveBeenCalledWith('a')
+    expect(e.defaultPrevented).toBe(true)
+    scope.stop()
+  })
+
+  it('stands down when the key was already defaultPrevented', () => {
+    const { scope, requestClose } = keymap()
+    const el = document.body.appendChild(document.createElement('div'))
+    el.addEventListener('keydown', (e) => e.preventDefault())
+    escFrom(el)
+    expect(requestClose).not.toHaveBeenCalled()
+    scope.stop()
+  })
+
+  it.each([
+    ['input', () => document.createElement('input')],
+    ['textarea', () => document.createElement('textarea')],
+    ['a contenteditable root', () => {
+      // The attribute, not the property: jsdom does not implement `contentEditable`.
+      const el = document.createElement('div')
+      el.setAttribute('contenteditable', 'true')
+      return el
+    }],
+  ])('stands down in %s', (_, make) => {
+    const { scope, requestClose } = keymap()
+    escFrom(document.body.appendChild(make()))
+    expect(requestClose).not.toHaveBeenCalled()
+    scope.stop()
+  })
+
+  it('stands down inside an element nested in contenteditable, where the caret really is', () => {
+    const { scope, requestClose } = keymap()
+    const root = document.body.appendChild(document.createElement('div'))
+    root.setAttribute('contenteditable', '')
+    const inline = root.appendChild(document.createElement('b'))
+    escFrom(inline)
+    expect(requestClose).not.toHaveBeenCalled()
+    scope.stop()
+  })
+
+  it('does not stand down under contenteditable="false"', () => {
+    const { scope, requestClose } = keymap()
+    const el = document.body.appendChild(document.createElement('div'))
+    el.setAttribute('contenteditable', 'false')
+    escFrom(el)
+    expect(requestClose).toHaveBeenCalledWith('a')
+    scope.stop()
   })
 })
