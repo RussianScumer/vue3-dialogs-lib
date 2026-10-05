@@ -230,12 +230,18 @@ function openSecondTab() {
  * The motion duration is one property on <html>, and the host reads it back off the window element
  * — so this slider changes both the animation and how long the frame is retained, with no second
  * API. `null` removes it and the baseline sheet's own 180ms comes back.
+ *
+ * Under reduced motion the slider writes nothing: an inline style on <html> outranks the sheet's
+ * zero-specificity `0ms`, so setting it here would hand the user the animation they opted out of.
  */
 const motionMs = ref<number | null>(null)
+const reduceQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null
+const reducedMotion = ref(reduceQuery?.matches ?? false)
+reduceQuery?.addEventListener('change', (e) => (reducedMotion.value = e.matches))
 
 watchEffect(() => {
   const root = document.documentElement.style
-  if (motionMs.value === null) root.removeProperty('--vtd-motion-duration')
+  if (motionMs.value === null || reducedMotion.value) root.removeProperty('--vtd-motion-duration')
   else root.setProperty('--vtd-motion-duration', `${motionMs.value}ms`)
 })
 
@@ -852,7 +858,13 @@ function clearStorage() {
                 max="900"
                 step="20"
               >
-              {{ motionMs === null ? 'stylesheet default (180ms)' : `${motionMs}ms` }}
+              {{
+                reducedMotion
+                  ? 'reduced motion: 0ms, the slider writes nothing'
+                  : motionMs === null
+                    ? 'stylesheet default (180ms)'
+                    : `${motionMs}ms`
+              }}
             </label>
             <button
               type="button"

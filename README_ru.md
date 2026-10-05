@@ -128,6 +128,24 @@ const answer = await win.open('confirm', { message }, { modal: true, placement: 
 if (answer.ok) proceed()
 ```
 
+## Стили
+
+Всё, что нужно окну для работы, задано инлайн, поэтому библиотека работает без подключённых стилей.
+Но две детали — чистый цвет, и без `style.css` они **невидимы**: подсветка зоны примагничивания при
+перетаскивании и затемнение под модальным окном, которое по-прежнему блокирует клики, просто его не
+видно. Четыре строки возвращают обе:
+
+```css
+.vw-ghost { outline: 2px dashed currentColor; outline-offset: -2px; }
+.vw-scrim { background: rgb(0 0 0 / 0.4); }
+```
+
+**Уменьшение движения.** `style.css` сбрасывает `--vtd-motion-duration` в `0ms` при
+`prefers-reduced-motion: reduce` с нулевой специфичностью — поэтому, задавая свою длительность,
+кладите её в медиазапрос `(prefers-reduced-motion: no-preference)` или проверяйте `matchMedia` перед
+записью, иначе ваше значение перебьёт настройку пользователя. Пример — в
+[Анимации](https://github.com/RussianScumer/vue3-dialogs-lib/blob/master/docs/motion_ru.md#уменьшение-движения).
+
 ## Документация
 
 | Русский | English | |
