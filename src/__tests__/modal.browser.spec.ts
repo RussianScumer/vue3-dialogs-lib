@@ -201,6 +201,59 @@ describe('a modal window in a real browser', () => {
     expect(document.activeElement).toBe(btn)
   })
 
+  it('keeps `inertRoot` inert through the leave animation, Tab and all', async () => {
+    const btn = pageBehind()
+    const root = document.documentElement
+    root.style.setProperty('--vtd-motion-duration', '200ms')
+    try {
+      const { win } = app({ modal: { inertRoot: '#page-behind' } })
+      const id = win.open('editor', { tag: 'modal' }, { modal: true, x: 20, y: 20, w: 200, h: 140 }).id
+      await nextTick()
+      expect(page!.hasAttribute('inert')).toBe(true)
+
+      win.close(id)
+      await nextTick()
+      await nextTick()
+      // Gone from the store, still on screen: the page must still be out of reach.
+      expect(document.querySelector('.vw-scrim')).not.toBeNull()
+      expect(page!.hasAttribute('inert')).toBe(true)
+      for (let i = 0; i < 6; i++) {
+        await userEvent.tab()
+        expect(document.activeElement).not.toBe(btn)
+      }
+
+      await new Promise((r) => setTimeout(r, 300))
+      await nextTick()
+      expect(document.querySelector('.vw-scrim')).toBeNull()
+      expect(page!.hasAttribute('inert')).toBe(false)
+    } finally {
+      root.style.removeProperty('--vtd-motion-duration')
+    }
+  })
+
+  it('hands focus back to an opener inside `inertRoot` once the leave is over', async () => {
+    const btn = pageBehind()
+    const root = document.documentElement
+    root.style.setProperty('--vtd-motion-duration', '200ms')
+    try {
+      const { win } = app({ modal: { inertRoot: '#page-behind' } })
+      btn.focus()
+      const id = win.open('editor', { tag: 'modal' }, { modal: true, x: 20, y: 20, w: 200, h: 140 }).id
+      await nextTick()
+      expect(dialogs()[0]!.contains(document.activeElement)).toBe(true)
+
+      win.close(id)
+      await new Promise((r) => setTimeout(r, 300))
+      await nextTick()
+      // The root's `inert` is lifted ahead of the frame's unmount in the same flush; the other way
+      // round, `focus()` on an inert opener is a silent no-op and focus is left on <body>.
+      expect(page!.hasAttribute('inert')).toBe(false)
+      expect(document.activeElement).toBe(btn)
+    } finally {
+      root.style.removeProperty('--vtd-motion-duration')
+    }
+  })
+
   it('refuses an `inertRoot` that contains the desktop rather than inerting the modal', async () => {
     const { win } = app({ modal: { inertRoot: 'body' } })
     const modalId = win.open('editor', { tag: 'modal' }, { modal: true, x: 20, y: 20, w: 200, h: 140 }).id

@@ -221,6 +221,12 @@ const scrimStyle = computed(() => {
  * the founding non-goal, so this is opt-in via `modal: { inertRoot }` and unset by default: without
  * it a modal blocks clicks but not Tab, which is documented rather than papered over.
  *
+ * The root follows the scrim, not the store: `close()` forgets the modal at once, but its frame and
+ * the scrim stay on screen through the leave animation, and Tab must not reach the page while the
+ * page still looks blocked. Both are released in the flush that retires the frame. The frame's own
+ * unmount hands focus back to an opener that usually sits inside this root; that works because this
+ * post watcher runs ahead of the unmount in the same flush, which a browser spec pins down.
+ *
  * Whatever `inert` was already on the element is recorded and handed back, the same discipline
  * `BaseWindow` uses for an owner's own dialog.
  */
@@ -262,12 +268,12 @@ onMounted(() => {
   const target = options.modal.inertRoot
   if (!target) return
   inertRoot = typeof target === 'string' ? document.querySelector<HTMLElement>(target) : target
-  applyRootInert(win.topModalId() !== null)
+  applyRootInert(scrimUnder.value !== null)
 })
 
 // `post` rather than the `sync` the per-window `inert` needs: the containment check above reads the
 // frames this host has rendered, and the modal's own frame is only in the DOM after the patch.
-watch(() => win.topModalId() !== null, applyRootInert, { flush: 'post' })
+watch(() => scrimUnder.value !== null, applyRootInert, { flush: 'post' })
 
 const ghostStyle = computed(() => {
   const p = preview.value
