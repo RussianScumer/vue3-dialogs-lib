@@ -448,6 +448,8 @@ export interface WindowEventMap {
   restore: WindowEventBase<'restore'>
   geometry: WindowEventBase<'geometry'> & { rect: Rect }
   title: WindowEventBase<'title'>
+  /** `requestAttention()` flagged a window that was not already asking. */
+  attention: WindowEventBase<'attention'>
   pin: WindowEventBase<'pin'> & { pinned: boolean }
   /** `zone` is null when the window stops being snapped. */
   snap: WindowEventBase<'snap'> & { zone: SnapZone | null }

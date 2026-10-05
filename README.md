@@ -31,6 +31,8 @@ content is unmounted, not hidden), and with persistence on it survives a page re
   (always-on-top) windows, and named **presets**.
 - **A title-bar context menu slot**: right-click or `Shift`+`F10` on a header opens your menu,
   wired to snap, maximize, pin, minimize and close.
+- **`requestAttention(id)`** — a window asks for the user without stealing focus; the frame and the
+  taskbar slot both see it, and it clears when the window becomes active.
 - **Typed `open()`** — window names and props checked against your components map.
 - **Events with payloads** — `on()` hands over the rect, the close reason and result, the last
   descriptor, pin, snap, active-window and props/meta changes.

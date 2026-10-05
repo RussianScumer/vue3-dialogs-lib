@@ -187,3 +187,10 @@
     background-color var(--vtd-motion-duration, 0ms) ease,
     color var(--vtd-motion-duration, 0ms) ease;
 }
+
+/* A window asking for the user (`requestAttention`). Same arrangement as the active pair: both
+   default to the inactive values, so nothing changes until a consumer or a theme sets them. */
+.vw[data-vw-attention] {
+  border: var(--vtd-border-attention, var(--_vtd-border));
+  box-shadow: var(--vtd-shadow-attention, var(--_vtd-shadow));
+}

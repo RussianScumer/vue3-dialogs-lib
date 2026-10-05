@@ -28,6 +28,11 @@ defineSlots<{
      * click is harmless either way: it joins the first request instead of asking twice.
      */
     closing: (id: string) => boolean
+    /**
+     * True while that window's `requestAttention()` is unanswered — blink its button. Cleared by
+     * the library the moment the window becomes active, so restoring it from the button is enough.
+     */
+    attention: (id: string) => boolean
     focus: (id: string) => string
     minimize: (id: string) => string
     /**
@@ -78,6 +83,7 @@ function registerFocusTarget(el: Element | ComponentPublicInstance | null): void
     :close="win.close"
     :request-close="win.requestClose"
     :closing="win.isClosing"
+    :attention="win.hasAttention"
     :focus="win.focus"
     :minimize="win.minimize"
     :register-focus-target="registerFocusTarget"

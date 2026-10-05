@@ -21,6 +21,7 @@ export function provideWindowContext(d: WindowDescriptor): WindowContext {
       // documented limitation: a minimized window has no guard of its own.
       onScopeDispose(win.onBeforeClose(d.id, guard), true)
     },
+    requestAttention: () => win.requestAttention(d.id),
     isRestored: win.isRestored(d.id),
   }
   provide(WINDOW_CTX_KEY, ctx)
