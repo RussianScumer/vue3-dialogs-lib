@@ -18,6 +18,7 @@ that.
 - [Pinned windows](#pinned-windows)
 - [Modal windows](#modal-windows)
 - [Control labels](#control-labels)
+- [Header context menu](#header-context-menu)
 - [Keyboard](#keyboard)
 - [Styling](#styling)
 - [Known limitations](#known-limitations)
@@ -617,6 +618,57 @@ app-wide option is simply read again on the next load.
 
 Replacing the `controls` slot takes over completely: your buttons, your names, and no warning.
 
+## Header context menu
+
+Provide a `contextmenu` slot on `WindowHost` and right-clicking a window's header opens it in place
+of the browser's menu. `Shift`+`F10` or the menu key on a focused header opens it too, at the
+header's bottom-left corner. Without the slot nothing changes: the browser's own menu still opens,
+and the library calls `preventDefault()` only when it has something to show instead.
+
+```vue
+<WindowHost>
+  <template #contextmenu="{ canSnap, maximized, pinned, snap, toggleMaximize, pin, minimize, requestClose }">
+    <div role="menu" class="my-menu">
+      <button role="menuitem" :disabled="!canSnap" @click="toggleMaximize">
+        {{ maximized ? 'Restore' : 'Maximize' }}
+      </button>
+      <button role="menuitem" :disabled="!canSnap" @click="snap('left')">Snap left</button>
+      <button role="menuitem" @click="pin()">{{ pinned ? 'Unpin' : 'Pin' }}</button>
+      <button role="menuitem" @click="minimize">Minimize</button>
+      <button role="menuitem" @click="requestClose">Close</button>
+    </div>
+  </template>
+</WindowHost>
+```
+
+The slot is the menu; the library draws nothing and ships no strings. It is teleported to `<body>`
+inside a fixed-position `[data-vw-menu]` wrapper at the pointer, stacked above every window band, so
+a small frame does not clip it. The wrapper is pushed back inside the viewport once the menu has a
+size, and focus moves to the first enabled control in it.
+
+The slot props (`WindowMenuProps`):
+
+| Prop | What it is |
+| --- | --- |
+| `descriptor` | The window the menu belongs to. |
+| `x`, `y` | Where the menu opened, in viewport pixels. |
+| `canSnap` | Whether a snap or maximize would move the window. It uses the same rules as the header double-click: `snap.enabled`, `draggable`, `resizable`, not pinned, not below `mobileBreakpoint`. |
+| `maximized`, `pinned` | The current state, for toggle labels. |
+| `snap(zone)` | Snaps to a zone, or `'none'` to give back the pre-snap geometry. |
+| `toggleMaximize()` | What the maximize button calls. |
+| `pin(on?)` | Pins, or unpins with `false`; without an argument it flips the state. |
+| `minimize()` | Minimizes, if the window is minimizable and not closing. |
+| `requestClose()` | Closes through the guards, if the window is closable. |
+| `close()` | Dismisses the menu and puts focus back on the header. |
+
+Every action closes the menu before it runs. The gated ones do nothing where the window's own
+controls would not, so a menu can list everything and use the flags only to disable items.
+
+The menu closes on `Escape` (focus returns to the header, and the window behind stays open), on a
+pointerdown anywhere outside it, and when its window minimizes or closes. A right-click on a
+`[data-vw-nodrag]` element in the header, such as a default control or your own input, is left to
+the browser. The slot applies to every window; branch on `descriptor` for per-window items.
+
 ## Keyboard
 
 With the header focused, arrow keys move the window by 10px and `Shift`+arrows resize it. From
@@ -752,7 +804,8 @@ leaving the baseline look unchanged. Resize grips are `.vw__grip` elements carry
 `data-vw-grip="n" | "se" | …`; they are transparent by default.
 
 The library ships no strings: header button labels and their `aria-label`s come from the
-`controls` slot on `WindowHost`/`BaseWindow`.
+`controls` slot on `WindowHost`/`BaseWindow`, and a header context menu is entirely the
+`contextmenu` slot's markup. Its positioning wrapper is `[data-vw-menu]`, with no look of its own.
 
 A window is three rows: header, body, footer. `.vw__body` is the only one that scrolls, so content
 taller than the frame stays inside it and the action buttons in the optional `footer` slot stay

@@ -927,3 +927,35 @@ const ok = await win.open('confirm', { message }, { preset: 'dialog' }).result
 Оттенок задаётся `--vtd-scrim-bg` в необязательной таблице стилей (`rgba(0, 0, 0, 0.4)` и более
 тёмное умолчание при `prefers-color-scheme: dark`). Позиция и наложение заданы на элементе
 инлайново, поэтому модальное окно блокирует клики даже без импортированной таблицы стилей вовсе.
+
+## 24 · Меню по правому клику на заголовке
+
+Пользователи Windows ищут примагничивание, максимизацию и закрытие за правым кликом по заголовку.
+Передайте `WindowHost` слот `contextmenu`, и заголовок предложит именно это; без слота собственное
+меню браузера остаётся нетронутым:
+
+```vue
+<WindowHost>
+  <template #contextmenu="{ descriptor, canSnap, maximized, pinned, snap, toggleMaximize, pin, minimize, requestClose }">
+    <div role="menu" class="title-menu">
+      <button role="menuitem" :disabled="!canSnap" @click="toggleMaximize">
+        {{ maximized ? 'Восстановить' : 'Развернуть' }}
+      </button>
+      <button role="menuitem" :disabled="!canSnap" @click="snap('left')">Влево</button>
+      <button role="menuitem" :disabled="!canSnap" @click="snap('right')">Вправо</button>
+      <button role="menuitem" @click="pin()">{{ pinned ? 'Открепить' : 'Поверх всех' }}</button>
+      <button role="menuitem" :disabled="!descriptor.minimizable" @click="minimize">Свернуть</button>
+      <button role="menuitem" :disabled="!descriptor.closable" @click="requestClose">Закрыть</button>
+    </div>
+  </template>
+</WindowHost>
+```
+
+Библиотека ставит слот в точку указателя, держит его в пределах экрана, фокусирует первую доступную
+кнопку и закрывает меню по `Escape`, по клику в другом месте и после любого из действий. Всё
+остальное ваше: вид, подписи и клавиатурная модель внутри меню. Навигация стрелками между пунктами,
+например, — несколько строк на элементе `role="menu"`.
+
+Каждый пункт — та же операция, что уже есть на клавиатуре, так что меню ещё и место, где
+пользователи узнают о существовании этих операций. Сочетание клавиш рядом с подписью (см.
+[22](#22--убрать-клавиатурные-сокращения-с-дороги)) этому учит.

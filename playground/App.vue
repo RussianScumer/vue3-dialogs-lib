@@ -888,6 +888,16 @@ function clearStorage() {
               is untouched. Narrow the browser to see it.
             </p>
           </section>
+
+          <section>
+            <h2>28 · Title-bar menu</h2>
+            <p>
+              Right-click any window's header, or focus it and press <kbd>Shift</kbd>+<kbd>F10</kbd>. The menu is this
+              page's <code>#contextmenu</code> slot: the library positions it, focuses it and closes it on ESC, on a click
+              elsewhere and after an action. Snap items are disabled on a window that cannot move. Right-clicking a header
+              button still gets the browser's menu.
+            </p>
+          </section>
         </div>
 
         <aside class="side">
@@ -964,6 +974,61 @@ function clearStorage() {
   </div>
 
   <WindowHost>
+    <template #contextmenu="{ descriptor, canSnap, maximized, pinned, snap, toggleMaximize, pin, minimize, requestClose }">
+      <div
+        role="menu"
+        class="title-menu"
+        :aria-label="`${descriptor.title || descriptor.name} window`"
+      >
+        <button
+          type="button"
+          role="menuitem"
+          :disabled="!canSnap"
+          @click="toggleMaximize"
+        >
+          {{ maximized ? 'Restore' : 'Maximize' }}
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          :disabled="!canSnap"
+          @click="snap('left')"
+        >
+          Snap left
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          :disabled="!canSnap"
+          @click="snap('right')"
+        >
+          Snap right
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          @click="pin()"
+        >
+          {{ pinned ? 'Unpin' : 'Keep on top' }}
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          :disabled="!descriptor.minimizable"
+          @click="minimize"
+        >
+          Minimize
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          :disabled="!descriptor.closable"
+          @click="requestClose"
+        >
+          Close
+        </button>
+      </div>
+    </template>
     <template #footer="{ descriptor }">
       <div class="winfoot">
         <button
@@ -1015,6 +1080,13 @@ button { margin-right: 8px; margin-bottom: 4px; }
 }
 .taskbar__label { opacity: 0.7; }
 .taskbar__item { padding: 4px 10px; opacity: 0.65; }
+.title-menu {
+  display: flex; flex-direction: column; min-width: 150px; padding: 4px;
+  background: Canvas; color: CanvasText; border: 1px solid GrayText; border-radius: 6px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.35);
+}
+.title-menu button { margin: 0; text-align: left; border: 0; background: none; padding: 5px 10px; border-radius: 4px; }
+.title-menu button:hover:not(:disabled), .title-menu button:focus-visible { background: Highlight; color: HighlightText; }
 .taskbar__item.is-min { font-style: italic; }
 .taskbar__item.is-active { opacity: 1; outline: 2px solid var(--vtd-accent, #60a5fa); }
 .side tr.is-active td { font-weight: 600; }

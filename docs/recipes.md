@@ -927,3 +927,35 @@ Two things to decide yourself, because the library takes no position on either:
 The tint is `--vtd-scrim-bg` in the optional stylesheet (`rgba(0, 0, 0, 0.4)`, and a darker default
 under `prefers-color-scheme: dark`). Position and stacking are inline on the element, so a modal
 blocks clicks even with no stylesheet imported at all.
+
+## 24 · A right-click menu on the title bar
+
+Windows users look for snap, maximize and close behind a right-click on the title bar. Give
+`WindowHost` a `contextmenu` slot and the header offers exactly that; leave it out and the browser's
+own menu is untouched:
+
+```vue
+<WindowHost>
+  <template #contextmenu="{ descriptor, canSnap, maximized, pinned, snap, toggleMaximize, pin, minimize, requestClose }">
+    <div role="menu" class="title-menu">
+      <button role="menuitem" :disabled="!canSnap" @click="toggleMaximize">
+        {{ maximized ? 'Restore' : 'Maximize' }}
+      </button>
+      <button role="menuitem" :disabled="!canSnap" @click="snap('left')">Snap left</button>
+      <button role="menuitem" :disabled="!canSnap" @click="snap('right')">Snap right</button>
+      <button role="menuitem" @click="pin()">{{ pinned ? 'Unpin' : 'Keep on top' }}</button>
+      <button role="menuitem" :disabled="!descriptor.minimizable" @click="minimize">Minimize</button>
+      <button role="menuitem" :disabled="!descriptor.closable" @click="requestClose">Close</button>
+    </div>
+  </template>
+</WindowHost>
+```
+
+The library positions the slot at the pointer, keeps it on screen, focuses its first enabled
+button, and closes it on `Escape`, on a click elsewhere and after any of the actions. Everything
+else is yours: the look, the labels and the keyboard model inside the menu. Arrow-key navigation
+between items, for instance, is a few lines on the `role="menu"` element.
+
+Each item is the same operation the keyboard already has, so the menu is also where users find out
+those operations exist. Showing the chord beside the label (see [22](#22--move-the-keyboard-shortcuts-out-of-the-way))
+teaches it.

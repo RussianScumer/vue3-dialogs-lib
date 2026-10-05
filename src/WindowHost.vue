@@ -315,6 +315,15 @@ const ghostStyle = computed(() => {
       />
     </template>
     <template
+      v-if="$slots.contextmenu"
+      #contextmenu="slotProps"
+    >
+      <slot
+        name="contextmenu"
+        v-bind="slotProps"
+      />
+    </template>
+    <template
       v-if="$slots.footer"
       #footer="slotProps"
     >
