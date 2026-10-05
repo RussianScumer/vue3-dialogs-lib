@@ -49,6 +49,8 @@ function closeOnEscape(e: KeyboardEvent, win: WindowsApi): void {
   if (!id) return
   const top = win.topModalId()
   if (top && win.isBlockedByModal(id)) id = top
+  // A window that opted out of ESC opted out of this one too: the key is left to the page.
+  if (win.escapeOf(id) === 'none') return
   e.preventDefault()
   void win.requestClose(id)
 }

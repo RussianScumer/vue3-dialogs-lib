@@ -733,7 +733,7 @@ describe('focus', () => {
     const Late = defineAsyncComponent(
       () =>
         new Promise((r) => {
-          resolve = r
+          resolve = r as (c: unknown) => void
         }),
     )
     const plugin = createWindows({ components: { late: Late } })
@@ -761,7 +761,7 @@ describe('focus', () => {
     const Late = defineAsyncComponent(
       () =>
         new Promise((r) => {
-          resolve = r
+          resolve = r as (c: unknown) => void
         }),
     )
     const plugin = createWindows({ components: { late: Late } })
@@ -809,7 +809,7 @@ describe('focus', () => {
 describe('non-modal', () => {
   it('never calls showModal, and a teleported popper escapes the window', async () => {
     const showModal = vi.fn()
-    const proto = HTMLDialogElement.prototype as HTMLDialogElement & { showModal?: () => void }
+    const proto = HTMLDialogElement.prototype as Omit<HTMLDialogElement, 'showModal'> & { showModal?: () => void }
     const original = proto.showModal
     proto.showModal = showModal
 
@@ -927,5 +927,122 @@ describe('maximize button', () => {
     } finally {
       warn.mockRestore()
     }
+  })
+})
+
+/** Only the ESC-policy warnings: an unlabelled default control warns too, once per app. */
+function escWarnings(warn: { mock: { calls: unknown[][] } }): number {
+  return warn.mock.calls.filter(([m]) => String(m).includes('escape:')).length
+}
+
+describe('escape policy', () => {
+  function escApp(options: { spec?: Record<string, unknown>; presets?: Record<string, Record<string, unknown>> } = {}) {
+    const plugin = createWindows({
+      components: { editor: { component: Content, ...options.spec } },
+      presets: options.presets,
+    })
+    const wrapper = mount(defineComponent({ components: { WindowHost }, template: '<WindowHost />' }), {
+      global: { plugins: [plugin] },
+      attachTo: document.body,
+    })
+    return { wrapper, win: useWindows() }
+  }
+
+  /** Dispatched by hand so the test can read `defaultPrevented` back. */
+  function esc(el: Element): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    el.dispatchEvent(event)
+    return event
+  }
+
+  it("defaults to 'minimize' and stores nothing for a window that never named it", async () => {
+    const { wrapper, win } = escApp()
+    const id = win.open('editor', { id: 1 }).id
+    await nextTick()
+
+    expect(win.escapeOf(id)).toBe('minimize')
+    esc(wrapper.find('dialog.vw').element)
+    await nextTick()
+    expect(win.byId(id)!.minimized).toBe(true)
+    wrapper.unmount()
+  })
+
+  it("'close' goes through requestClose, so a refusing guard keeps the window", async () => {
+    const { wrapper, win } = escApp()
+    const id = win.open('editor', { id: 1 }, { escape: 'close' }).id
+    await nextTick()
+
+    let allow = false
+    win.onBeforeClose(id, () => allow)
+    const refused = esc(wrapper.find('dialog.vw').element)
+    await nextTick()
+    await nextTick()
+    expect(refused.defaultPrevented).toBe(true)
+    expect(win.byId(id)).toBeDefined()
+    expect(win.byId(id)!.minimized).toBe(false)
+
+    allow = true
+    esc(wrapper.find('dialog.vw').element)
+    await vi.waitFor(() => expect(win.byId(id)).toBeUndefined())
+    wrapper.unmount()
+  })
+
+  it("'none' leaves the window and the event untouched", async () => {
+    const { wrapper, win } = escApp()
+    const id = win.open('editor', { id: 1 }, { escape: 'none' }).id
+    await nextTick()
+
+    const event = esc(wrapper.find('dialog.vw').element)
+    await nextTick()
+    expect(event.defaultPrevented).toBe(false)
+    expect(win.byId(id)!.minimized).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('takes the call over the preset over the spec', () => {
+    const { wrapper, win } = escApp({ spec: { escape: 'none' }, presets: { quick: { escape: 'close' } } })
+    expect(win.escapeOf(win.open('editor', { id: 1 }).id)).toBe('none')
+    expect(win.escapeOf(win.open('editor', { id: 2 }, { preset: 'quick' }).id)).toBe('close')
+    expect(win.escapeOf(win.open('editor', { id: 3 }, { preset: 'quick', escape: 'minimize' }).id)).toBe('minimize')
+    wrapper.unmount()
+  })
+
+  it("forces 'close' on a modal and on an owned window, with one dev warning each", async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { wrapper, win } = escApp()
+    const id = win.open('editor', { id: 1 }, { modal: true, escape: 'minimize' }).id
+    await nextTick()
+    expect(win.escapeOf(id)).toBe('close')
+    expect(escWarnings(warn)).toBe(1)
+
+    esc(wrapper.find('dialog.vw').element)
+    await vi.waitFor(() => expect(win.byId(id)).toBeUndefined())
+
+    const owner = win.open('editor', { id: 2 }).id
+    const child = win.open('editor', { id: 3 }, { owner, escape: 'none' }).id
+    expect(win.escapeOf(child)).toBe('close')
+    expect(escWarnings(warn)).toBe(2)
+
+    // Naming the value it would get anyway is not a mistake worth a warning.
+    win.open('editor', { id: 4 }, { owner, escape: 'close' })
+    expect(escWarnings(warn)).toBe(2)
+    warn.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('a hydrated window reads its policy from the spec, and close forgets a stored one', () => {
+    const { wrapper, win } = escApp({ spec: { escape: 'close' } })
+    const id = win.open('editor', { id: 1 }, { escape: 'none' }).id
+    expect(win.escapeOf(id)).toBe('none')
+
+    // The map is runtime-only: what comes back from storage gets the spec's value, not the call's.
+    win.hydrate([{ ...win.byId(id)! }], win.s.topZ)
+    expect(win.escapeOf(id)).toBe('close')
+
+    const again = win.open('editor', { id: 2 }, { escape: 'none' }).id
+    win.close(again)
+    // Gone from the stack and from the map: an unknown id answers the library default.
+    expect(win.escapeOf(again)).toBe('minimize')
+    wrapper.unmount()
   })
 })
