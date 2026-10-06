@@ -66,6 +66,20 @@ describe('auto height', () => {
     expect(win.byId(id)!.y).toBe(0)
   })
 
+  it('stays inside the snap insets', () => {
+    const win = store({ snap: { insets: { top: 20, bottom: 36 } } })
+    const low = win.open('editor', { n: 1 }, { y: 300 }).id
+    const tall = win.open('editor', { n: 2 }, { y: 100 }).id
+
+    win.growToFit(low, 200, view)
+    win.growToFit(tall, 5000, view)
+
+    expect(win.byId(low)!.h).toBe(680)
+    expect(win.byId(low)!.y + win.byId(low)!.h).toBe(view.h - 36)
+    expect(win.byId(tall)!.h).toBe(view.h - 56)
+    expect(win.byId(tall)!.y).toBe(20)
+  })
+
   it('never shrinks, and ignores a window that is not auto height', () => {
     const win = store()
     const id = win.open('editor').id

@@ -7,6 +7,7 @@ import {
   centerRect,
   clampDescriptor,
   clampSize,
+  snapArea,
   snapRect,
   tileRects,
 } from './geometry'
@@ -800,15 +801,18 @@ export function createStore(options: ResolvedOptions) {
   }
 
   /**
-   * Grows an auto-height window by `extra` px, the amount its body overflows. Only down to the
-   * viewport's bottom edge: past it the window moves up instead, and a window taller than the
-   * viewport stops at the viewport, where the body scrolls as it always did. Never shrinks.
+   * Grows an auto-height window by `extra` px, the amount its body overflows. It works in the snap
+   * area — the viewport minus `snap.insets` — so it never grows under a fixed taskbar the insets
+   * keep clear. Only down to the area's bottom edge: past it the window moves up instead, and a
+   * window taller than the area stops at the area, where the body scrolls as it always did. Never
+   * shrinks.
    */
   function growToFit(id: string, extra: number, view: Viewport): void {
     const w = byId(id)
     if (!w || !autoHeights.has(id) || docks.has(id) || extra <= 0) return
-    const h = Math.min(w.h + Math.ceil(extra), Math.max(w.h, view.h))
-    const y = Math.max(0, Math.min(w.y, view.h - h))
+    const a = snapArea(view, options.snap.insets)
+    const h = Math.min(w.h + Math.ceil(extra), Math.max(w.h, a.h))
+    const y = Math.max(a.y, Math.min(w.y, a.y + a.h - h))
     const size = clampSize(w.w, h, w)
     if (size.h === w.h && y === w.y) return
     w.h = size.h

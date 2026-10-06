@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { defineComponent, h, nextTick, ref } from 'vue'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { createWindows, useWindows } from '../createWindows'
+import type { WindowsOptions } from '../types'
 import WindowHost from '../WindowHost.vue'
 
 /**
@@ -25,8 +26,8 @@ const Content = defineComponent({
 
 let wrapper: VueWrapper | null = null
 
-function app() {
-  const plugin = createWindows({ components: { doc: Content }, mobileBreakpoint: 0 })
+function app(extra: Partial<WindowsOptions> = {}) {
+  const plugin = createWindows({ components: { doc: Content }, mobileBreakpoint: 0, ...extra })
   wrapper = mount(defineComponent({ render: () => h(WindowHost) }), {
     global: { plugins: [plugin] },
     attachTo: document.body,
@@ -70,6 +71,17 @@ describe('auto height', () => {
 
     expect(win.byId(id)!.h).toBe(window.innerHeight)
     expect(win.byId(id)!.y).toBe(0)
+    expect(body().scrollHeight).toBeGreaterThan(body().clientHeight)
+  })
+
+  it('stops above a bottom inset, so a fixed taskbar stays visible', async () => {
+    lines.value = Math.ceil(window.innerHeight / 40) + 10
+    const win = app({ snap: { insets: { bottom: 36 } } })
+    const id = win.open('doc', {}, { y: 40 }).id
+    await settle()
+
+    expect(win.byId(id)!.y).toBe(0)
+    expect(win.byId(id)!.h).toBe(window.innerHeight - 36)
     expect(body().scrollHeight).toBeGreaterThan(body().clientHeight)
   })
 

@@ -218,9 +218,10 @@ Precedence is `open()` options, then the component's defaults, then the library'
 
 A window that names none of `h`, `minH` and `maxH` — not in the `open()` call, not in its preset,
 not in its component's defaults — opens at the default 480px and grows to fit its content, so the
-body only scrolls when the content would not fit on screen anyway. It grows downward while the
-viewport allows, then moves up, and stops at the viewport height; it never shrinks below the height
-it opened with. The fit is live: an async component or data that arrives after the window opened
+body only scrolls when the content would not fit on screen anyway. It works in the snap area — the
+viewport minus `snap.insets` — so a fixed taskbar or header the insets keep clear is never covered.
+It grows downward while that area allows, then moves up, and stops at the area's height; it never
+shrinks below the height it opened with. The fit is live: an async component or data that arrives after the window opened
 grows it too. It stops for good once the height is somebody's decision — the user resizes the
 window by a grip or shift+arrows, the window is snapped or maximized, or `setGeometry()` is called
 with a different `h`. Naming any of the three, `maxH: null` included, opts out. The flag is
@@ -512,7 +513,7 @@ when the browser is resized, while floating ones are only clamped back into reac
 
 Snapping is inert below `mobileBreakpoint`, where windows are fullscreen anyway, and can be turned
 off with `snap: { enabled: false }`. The snap area is the viewport minus `snap.insets`, so a fixed
-taskbar or app header is never covered.
+taskbar or app header is never covered. Growing to fit the content stops at the same area.
 
 Drive it directly when you need to:
 
