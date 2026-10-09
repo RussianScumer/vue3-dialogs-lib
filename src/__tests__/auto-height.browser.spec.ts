@@ -132,3 +132,37 @@ describe('auto height', () => {
     expect(win.byId(id)!.h).toBe(300)
   })
 })
+
+describe('a frame re-rendered after its geometry changed', () => {
+  const frame = () => body().closest<HTMLElement>('.vw')!
+
+  it('keeps the height it grew to when the title changes', async () => {
+    lines.value = Math.floor((window.innerHeight - 100) / 40)
+    const win = app()
+    const id = win.open('doc', {}, { y: 0 }).id
+    await settle()
+    const grown = win.byId(id)!.h
+    expect(grown).toBeGreaterThan(480)
+
+    win.setTitle(id, 'renamed')
+    await settle()
+
+    expect(frame().style.height).toBe(`${grown}px`)
+  })
+
+  it('keeps a geometry set through the store when the title changes', async () => {
+    lines.value = 2
+    const win = app()
+    const id = win.open('doc', {}, { x: 10, y: 10, w: 300, h: 200 }).id
+    await settle()
+
+    win.setGeometry(id, { x: 50, y: 60, w: 320, h: 400 })
+    await settle()
+    win.setTitle(id, 'renamed')
+    await settle()
+
+    expect(frame().style.width).toBe('320px')
+    expect(frame().style.height).toBe('400px')
+    expect(frame().style.transform).toBe('translate(50px, 60px)')
+  })
+})

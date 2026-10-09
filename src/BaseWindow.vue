@@ -269,8 +269,8 @@ function geometry(g: Pick<WindowDescriptor, 'x' | 'y' | 'w' | 'h'>) {
 }
 
 /**
- * A drag writes `x`/`y` on every pointermove and a resize writes `w`/`h`. Read through the frame's
- * `style` computed, each of those would re-render the whole frame — header, controls, grips — to
+ * A drag writes `x`/`y` on every pointermove and a resize writes `w`/`h`. Read in the frame's
+ * style, each of those would re-render the whole frame — header, controls, grips — to
  * change one property. They are written straight onto the element instead, once per flush, so a
  * gesture costs one style write per frame on one element and no vdom patch at all.
  *
@@ -291,31 +291,38 @@ watchEffect(
 
 // The UA stylesheet gives <dialog> position:absolute; margin:auto; inset:0 —
 // all three must be cleared or centering fights the transform.
-const style = computed(() => ({
-  position: 'fixed' as const,
-  margin: '0',
-  inset: 'auto',
-  left: '0',
-  top: '0',
-  padding: '0',
-  display: 'flex',
-  flexDirection: 'column' as const,
-  overflow: 'hidden',
-  boxSizing: 'border-box' as const,
-  // Three bands, one counter apart. `d.z` is always positive and never exceeds `topZ`, so each
-  // band clears the one below it whatever the base is: unpinned, pinned, then — above the snap
-  // ghost at `2 * topZ + 1` — modal. Nothing persisted moves: `focus()` and `activeId` still see
-  // one stack.
-  zIndex: String(options.zIndexBase + band.value * win.s.topZ + d.z),
-  // Inlined for the first render and for server-rendered HTML, which the effect above cannot reach.
-  // Read untracked: this computed must not depend on the geometry, or every move re-renders the
-  // frame. Whenever it does re-run, it writes what the effect wrote, so the two never disagree.
-  ...geometry(toRaw(d)),
-  maxWidth: '100vw',
-  maxHeight: '100dvh',
-  pointerEvents: leaving.value ? ('none' as const) : undefined,
-  ...minTo.value,
-}))
+//
+// A function the render calls, not a computed: a computed would cache the geometry it last read,
+// and a re-render for any other reason — a title, the active flag — would patch that stale rect
+// back over the one the effect above wrote, with nothing to correct it until the window moved.
+function frameStyle() {
+  return {
+    position: 'fixed' as const,
+    margin: '0',
+    inset: 'auto',
+    left: '0',
+    top: '0',
+    padding: '0',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    overflow: 'hidden',
+    boxSizing: 'border-box' as const,
+    // Three bands, one counter apart. `d.z` is always positive and never exceeds `topZ`, so each
+    // band clears the one below it whatever the base is: unpinned, pinned, then — above the snap
+    // ghost at `2 * topZ + 1` — modal. Nothing persisted moves: `focus()` and `activeId` still see
+    // one stack.
+    zIndex: String(options.zIndexBase + band.value * win.s.topZ + d.z),
+    // Inlined for the first render and for server-rendered HTML, which the effect above cannot reach.
+    // Read untracked: the render must not depend on the geometry, or every move re-renders the
+    // frame. Read fresh on every render, so a re-render writes what the effect wrote, never an
+    // older rect.
+    ...geometry(toRaw(d)),
+    maxWidth: '100vw',
+    maxHeight: '100dvh',
+    pointerEvents: leaving.value ? ('none' as const) : undefined,
+    ...minTo.value,
+  }
+}
 
 /**
  * A window opened with no height of its own grows to fit its content, as far as the viewport
@@ -561,7 +568,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onOutsidePoint
   <dialog
     ref="el"
     class="vw"
-    :style="style"
+    :style="frameStyle()"
     :aria-label="d.title || undefined"
     :data-vw-active="active || undefined"
     :data-vw-attention="win.hasAttention(d.id) || undefined"
