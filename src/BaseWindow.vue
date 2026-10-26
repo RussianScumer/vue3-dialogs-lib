@@ -69,10 +69,25 @@ const handle = ref<HTMLElement | null>(null)
 const body = ref<HTMLElement | null>(null)
 const d = props.descriptor
 
+const visual = computed<WindowVisualState>(() => props.state ?? 'open')
+/** Retained for the animation only: the store has already let go, so nothing here may be clicked. */
+const leaving = computed(() => visual.value === 'leaving')
+
+/**
+ * A value the frame renders from the store, held at what it last was once the frame is leaving.
+ * `close()` forgets the window's runtime state — pin, dock, maximizable, labels, modal — before
+ * the host has even marked the frame `leaving`, so read live, a closing frame would shed its
+ * buttons, drop its band and lose its names in the same tick, and only then animate out what is
+ * left. Held, it leaves looking exactly as it was. Restored mid-flight, it reads live again.
+ */
+function held<T>(get: () => T) {
+  return computed<T>((prev) => (leaving.value && prev !== undefined ? prev : get()))
+}
+
 /** Below the breakpoint a floating window is unusable: fullscreen, no drag or resize. */
 const mobile = computed(() => view.w < options.mobileBreakpoint)
 /** Pinned above every other window, and inert to geometry for as long as it is. */
-const pinned = computed(() => win.isPinned(d.id))
+const pinned = held(() => win.isPinned(d.id))
 /**
  * The one notion of "this frame answers to input that moves it". Drag, resize, the header's arrow
  * keys and the maximize double-click all read it, so a window can never be half inert.
@@ -81,13 +96,19 @@ const interactive = () => !mobile.value && !leaving.value && !pinned.value
 const canDrag = () => interactive() && d.draggable
 const canResize = computed(() => interactive() && d.resizable)
 /** Docked to `max`; drives the button's state and `data-vw-maximized`, whichever path maximized it. */
-const maximized = computed(() => win.isMaximized(d.id))
+const maximized = held(() => win.isMaximized(d.id))
 /**
  * The maximize button is opt-in through `maximizable`, and only offered where maximizing can work:
- * a window that can be resized, on a desktop that snaps — maximize is the `max` snap.
+ * a window that can be resized, on a desktop that snaps — maximize is the `max` snap. Not through
+ * `canResize`, which a leaving frame turns off: the button must leave with the frame, not before.
  */
-const canMaximize = computed(() => canResize.value && options.snap.enabled && win.isMaximizable(d.id))
-const active = computed(() => win.activeId.value === d.id)
+const canMaximize = held(
+  () => !mobile.value && !pinned.value && d.resizable && options.snap.enabled && win.isMaximizable(d.id),
+)
+/** Pinnable is runtime-only, so it is forgotten at `close()` like the rest. */
+const pinnable = held(() => win.isPinnable(d.id))
+const active = held(() => win.activeId.value === d.id)
+const attention = held(() => win.hasAttention(d.id))
 /**
  * A `requestClose` is out with the guards. The default controls stand down until it settles: a
  * second ✕ only joins the same request, but minimize would unmount the content — and with it the
@@ -99,7 +120,7 @@ const closing = computed(() => win.isClosing(d.id))
  * it. Nothing has a default, so an unnamed control renders no `aria-label` attribute at all rather
  * than an empty one — the DOM of a consumer who names none is exactly what it was.
  */
-const labels = computed(() => win.labelsFor(d.id))
+const labels = held(() => win.labelsFor(d.id))
 /**
  * True while this frame must not answer to input for a reason outside itself: it owns a child, or a
  * modal somewhere else on the desktop is the only question being asked. One condition, so the
@@ -107,9 +128,6 @@ const labels = computed(() => win.labelsFor(d.id))
  * a modal opened over a window that is already an inert owner leaves it inert afterwards.
  */
 const blocked = computed(() => win.hasChild(d.id) || win.isBlockedByModal(d.id))
-const visual = computed<WindowVisualState>(() => props.state ?? 'open')
-/** Retained for the animation only: the store has already let go, so nothing here may be clicked. */
-const leaving = computed(() => visual.value === 'leaving')
 
 /**
  * Hands a gesture's result back to the store so `on('geometry')` fires for it. The descriptor is
@@ -164,7 +182,7 @@ function unnamedControls(): boolean {
   if (d.closable && !labels.value.close) return true
   // Both names, whichever state the window opens in: the button flips between them.
   if (canMaximize.value && (!labels.value.maximize || !labels.value.restore)) return true
-  return win.isPinnable(d.id) && !labels.value.pin
+  return pinnable.value && !labels.value.pin
 }
 
 onMounted(() => {
@@ -253,7 +271,7 @@ const minTo = computed(() => {
  * a question drawn underneath the window asking it is not a question — and a *lower* modal, which
  * is blocked like everything else, stays under the scrim where stacked modals belong.
  */
-const band = computed(() => {
+const band = held(() => {
   if (win.topModalId() !== null && !win.isBlockedByModal(d.id)) return 3
   return pinned.value ? 1 : 0
 })
@@ -571,7 +589,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onOutsidePoint
     :style="frameStyle()"
     :aria-label="d.title || undefined"
     :data-vw-active="active || undefined"
-    :data-vw-attention="win.hasAttention(d.id) || undefined"
+    :data-vw-attention="attention || undefined"
     :data-vw-error="failure ? '' : undefined"
     :data-vw-maximized="maximized || undefined"
     :data-vw-state="visual"
@@ -627,7 +645,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onOutsidePoint
         <!-- After the close button on purpose: the control order is part of the public surface,
              and appending is what keeps a positional `.vw__btn` index meaning what it did. -->
         <button
-          v-if="win.isPinnable(d.id)"
+          v-if="pinnable"
           class="vw__btn"
           type="button"
           data-vw-nodrag
