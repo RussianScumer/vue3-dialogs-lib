@@ -126,6 +126,35 @@ describe('the leaving lifecycle', () => {
     expect(unmounted).toHaveBeenCalledTimes(1)
   })
 
+  it('animates a closing frame out as it was, not stripped of what the store forgot', async () => {
+    withDuration('300ms')
+    const { win } = app()
+    const id = win.open('editor', {}, {
+      maximizable: true,
+      modal: true,
+      labels: { close: 'close', maximize: 'max', restore: 'restore' },
+    }).id
+    await nextTick()
+    await frame()
+    win.maximize(id)
+    await nextTick()
+
+    const frameEl = dialogs()[0] as HTMLElement
+    const look = () => ({
+      buttons: [...frameEl.querySelectorAll('.vw__btn')].map((b) => b.getAttribute('aria-label')),
+      maximized: frameEl.getAttribute('data-vw-maximized'),
+      z: frameEl.style.zIndex,
+    })
+    const before = look()
+    expect(before.buttons).toEqual(['close', 'restore'])
+
+    win.close(id)
+    await nextTick()
+
+    expect(stateOf()).toBe('leaving')
+    expect(look()).toEqual(before)
+  })
+
   it('unmounts a minimized window content at once and retains only its frame', async () => {
     withDuration('300ms')
     const { win } = app()
