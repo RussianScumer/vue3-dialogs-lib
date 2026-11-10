@@ -1148,13 +1148,16 @@ export function createStore(options: ResolvedOptions) {
     return adopted(w, geometry.get(id)).intent
   }
 
-  /** The per-axis modes the next reflow would use. Pure read; `null` when docked, unknown or unrecorded. */
+  /**
+   * The per-axis modes the next reflow would use, also for a window with no record yet (after an
+   * un-snap), so the persisted string does not change when the reflow creates the record. Pure
+   * read; `null` only for a docked window or an id not in the stack.
+   */
   function axisModesOf(id: string): AxisModes | null {
     if (docks.has(id)) return null
-    const rec = geometry.get(id)
-    if (!rec) return null
     const w = byId(id)
-    return w ? adopted(w, rec).modes : { ...rec.modes }
+    if (!w) return null
+    return adopted(w, geometry.get(id)).modes
   }
 
   /**

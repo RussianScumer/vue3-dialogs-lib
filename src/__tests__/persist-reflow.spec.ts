@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, h, nextTick } from 'vue'
+import type { EffectScope } from 'vue'
 import { createStore } from '../state'
 import { resolveOptions } from '../options'
 import { SCHEMA, setupPersist } from '../persist'
@@ -35,13 +36,17 @@ function resize(v: Viewport): void {
 const big = { w: 1000, h: 800 }
 const small = { w: 600, h: 500 }
 
+const scopes: EffectScope[] = []
+
 function boot(seed: unknown, view: Viewport) {
   resize(view)
   const storage = memoryStorage(seed === undefined ? undefined : typeof seed === 'string' ? seed : JSON.stringify(seed))
   const options = resolveOptions({ components: { editor: Stub }, persist: { key: 'k', storage } })
   const store = createStore(options)
   store.attachViewport({ ...view })
-  setupPersist(store, options)
+  const scope = effectScope()
+  scope.run(() => setupPersist(store, options))
+  scopes.push(scope)
   return { store, storage, options }
 }
 
@@ -52,6 +57,7 @@ const flush = async (): Promise<void> => {
 const blob = (s: { data: Map<string, string> }) => JSON.parse(s.data.get('k')!)
 
 afterEach(() => {
+  for (const scope of scopes.splice(0)) scope.stop()
   vi.useRealTimers()
   vi.restoreAllMocks()
   resize(initial)
@@ -99,11 +105,37 @@ describe('persist intent', () => {
     expect(setItem).not.toHaveBeenCalled()
   })
 
+  it('writes nothing for the first reflow after an un-snap (I2)', async () => {
+    vi.useFakeTimers()
+    const { store, storage } = boot(undefined, big)
+    const id = store.open('editor', { id: 1 }, { x: 500, y: 100, w: 400, h: 300 }).id
+    store.snap(id, 'right', big)
+    await flush()
+    const setItem = vi.spyOn(storage, 'setItem')
+    setItem.mockClear()
+    store.snap(id, 'none', big)
+    await flush()
+    expect(setItem).toHaveBeenCalledTimes(1)
+    const data = blob(storage)
+    expect(data.docks).toEqual({})
+    expect(Object.keys(data.modes)).toEqual([id])
+    setItem.mockClear()
+    const x = store.byId(id)!.x
+    store.clampAll(small)
+    expect(store.byId(id)!.x).not.toBe(x)
+    await flush()
+    store.clampAll(big)
+    await flush()
+    expect(setItem).not.toHaveBeenCalled()
+  })
+
   it('skips an equal edit and writes a changed one', async () => {
     const { store, storage, a } = arranged()
     await flush()
     const setItem = vi.spyOn(storage, 'setItem')
     setItem.mockClear()
+    store.setGeometry(a, { x: 510 })
+    await nextTick()
     store.setGeometry(a, { x: 500 })
     await flush()
     expect(setItem).not.toHaveBeenCalled()
@@ -158,6 +190,8 @@ describe('persist intent', () => {
     await flush()
     expect(setItem).not.toHaveBeenCalled()
     store.clampAll(big)
+    await flush()
+    expect(setItem).not.toHaveBeenCalled()
     expect(store.byId(a)).toMatchObject({ x: 500, y: 100, w: 400, h: 300 })
     expect(store.byId(c)).toMatchObject({ x: 300, y: 250 })
     expect(store.axisModesOf(c)).toEqual({ x: 'centre', y: 'centre' })

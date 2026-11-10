@@ -208,6 +208,16 @@ describe('open and snap', () => {
     expect(rect(win, id).x).toBe(50)
   })
 
+  it('answers the modes a record-less window will get after an un-snap', () => {
+    const win = setup()
+    const id = win.open('editor', { id: 1 }, { x: 100, y: 100, w: 400, h: 300 }).id
+    win.snap(id, 'right', big)
+    win.snap(id, 'none', big)
+    expect(win.axisModesOf(id)).toEqual({ x: 'fit', y: 'fit' })
+    win.clampAll(small)
+    expect(win.axisModesOf(id)).toEqual({ x: 'fit', y: 'fit' })
+  })
+
   it('docks through dockRect', () => {
     const win = setup()
     const id = win.open('editor', { id: 1 }, { x: 100, y: 100, w: 600, h: 300, minW: 600 }).id
