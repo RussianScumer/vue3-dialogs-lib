@@ -1161,14 +1161,29 @@ export function createStore(options: ResolvedOptions) {
   }
 
   /**
+   * Whether a window is fullscreen at `view`. Above `mobileBreakpoint` never. Below it, `'always'`
+   * says yes and `'overflow'` says yes when the window's intent is wider or taller than `view`.
+   * Reads the intent, never the fitted rect: the fitted rect always fits, so it would flip the
+   * answer on every reflow. `fallback` is the descriptor rect a caller still holds for an id the
+   * store has dropped (a leaving frame). Pure read.
+   */
+  function isFullscreen(id: string, view: Viewport = viewport, fallback?: Pick<Rect, 'w' | 'h'>): boolean {
+    if (view.w >= options.mobileBreakpoint) return false
+    if (options.mobileMode === 'always') return true
+    const r = intentOf(id) ?? fallback
+    if (!r) return false
+    return r.w > view.w || r.h > view.h
+  }
+
+  /**
    * The windows an arrange-all command may move, bottom of the stack first so the active window
-   * lands last. The same gates a snap chord respects: nothing below `mobileBreakpoint`, where every
-   * window is fullscreen, and nothing pinned or modal. `resize` asks for `resizable` as well.
+   * lands last. The same gates a snap chord respects: nothing that is fullscreen, and nothing
+   * pinned or modal. `resize` asks for `resizable` as well.
    */
   function arrangeable(view: Viewport, resize: boolean): WindowDescriptor[] {
-    if (view.w < options.mobileBreakpoint) return []
     return s.stack
       .filter((w) => !w.minimized && w.draggable && (!resize || w.resizable))
+      .filter((w) => !isFullscreen(w.id, view))
       .filter((w) => !isPinned(w.id) && !modals.has(w.id))
       .sort((a, b) => a.z - b.z)
   }
@@ -1322,6 +1337,7 @@ export function createStore(options: ResolvedOptions) {
     clampAll,
     intentOf,
     axisModesOf,
+    isFullscreen,
     tileAll,
     cascadeAll,
     attachViewport,

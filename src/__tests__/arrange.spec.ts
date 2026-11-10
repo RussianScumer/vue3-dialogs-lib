@@ -153,7 +153,7 @@ describe('tileAll / cascadeAll', () => {
   })
 
   it('does nothing below the mobile breakpoint', () => {
-    const win = store()
+    const win = createStore(resolveOptions({ components: { editor: Stub }, mobileMode: 'always' }))
     const a = win.open('editor', {}, { x: 300, y: 300 }).id
     const before = rectOf(win, a)
     expect(win.tileAll({ w: 500, h: 800 })).toEqual([])

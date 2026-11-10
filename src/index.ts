@@ -22,6 +22,7 @@ export type {
   KeyChord,
   KeymapAction,
   KeymapOptions,
+  MobileMode,
   ModalOptions,
   OpenOptions,
   PersistOptions,

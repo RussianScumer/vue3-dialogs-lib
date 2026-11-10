@@ -99,9 +99,9 @@ export function setupKeymap(win: WindowsApi, options: ResolvedOptions, view: Vie
     const d = win.byId(id)
     if (!d) return
     // The same gates the pointer path respects, plus `resizable`: a snap moves the window and
-    // resizes it, and below the breakpoint a window is fullscreen and inert to both.
+    // resizes it, and a fullscreen window is inert to both.
     if (!options.snap.enabled || !d.draggable || !d.resizable) return
-    if (view.w < options.mobileBreakpoint) return
+    if (win.isFullscreen(id, view)) return
     e.preventDefault()
     win.snap(id, KEYMAP_ZONES[action], view)
   }

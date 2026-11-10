@@ -5,6 +5,7 @@ import { createWindows, useWindows } from '../createWindows'
 import { useWindowContext } from '../useWindowContext'
 import WindowHost from '../WindowHost.vue'
 import WindowTaskbar from '../WindowTaskbar.vue'
+import type { WindowsOptions } from '../types'
 
 const mounted = vi.fn()
 const unmounted = vi.fn()
@@ -25,10 +26,10 @@ function pointer(el: Element, type: string, pointerId: number, clientX: number, 
   el.dispatchEvent(e)
 }
 
-function app() {
+function app(extra: Partial<WindowsOptions> = {}) {
   mounted.mockClear()
   unmounted.mockClear()
-  const plugin = createWindows({ components: { editor: Content }, maxWindows: 4 })
+  const plugin = createWindows({ components: { editor: Content }, maxWindows: 4, ...extra })
   const wrapper = mount(
     defineComponent({
       components: { WindowHost, WindowTaskbar },
@@ -378,7 +379,7 @@ describe('WindowHost', () => {
   })
 
   it('goes fullscreen and inert below the mobile breakpoint', async () => {
-    const { wrapper, win } = app()
+    const { wrapper, win } = app({ mobileMode: 'always' })
     const id = win.open('editor', { id: 1 }, { x: 100, y: 100 }).id
     await nextTick()
 
