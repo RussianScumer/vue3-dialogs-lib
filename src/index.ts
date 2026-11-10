@@ -11,6 +11,8 @@ export type { WindowContext } from './injection'
 export type { ResizeDir } from './useWindowResize'
 export type {
   AsyncWindowOptions,
+  AxisMode,
+  AxisModes,
   BeforeCloseGuard,
   Bounds,
   ComponentsMap,

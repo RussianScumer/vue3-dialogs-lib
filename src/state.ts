@@ -1,17 +1,20 @@
-import { computed, reactive, shallowRef, watch } from 'vue'
+import { computed, reactive, shallowReactive, shallowRef, watch } from 'vue'
 import {
   DEFAULT_MIN_H,
   DEFAULT_MIN_W,
   cascade,
   cascadeRects,
   centerRect,
-  clampDescriptor,
   clampSize,
+  dockRect,
+  fitRect,
   snapArea,
   snapRect,
   tileRects,
 } from './geometry'
 import type {
+  AxisMode,
+  AxisModes,
   Bounds,
   CloseGuard,
   ComponentsMap,
@@ -49,6 +52,22 @@ function newId(): string {
 
 function rectOf(d: WindowDescriptor): Rect {
   return { x: d.x, y: d.y, w: d.w, h: d.h }
+}
+
+function sameRect(a: Rect, b: Rect): boolean {
+  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h
+}
+
+/** What a window chose and what the last reflow made of it. Replaced whole, never mutated. */
+interface GeometryRecord {
+  intent: Rect
+  modes: AxisModes
+  applied: Rect
+}
+
+/** One axis, measured: `free` when it already overhangs the room, else `fit`. */
+function measureAxis(pos: number, size: number, room: number): AxisMode {
+  return pos < 0 || pos + size > room ? 'free' : 'fit'
 }
 
 /**
@@ -103,6 +122,14 @@ export function createStore(options: ResolvedOptions) {
    * `prev` is the geometry to give back on undock.
    */
   const docks = reactive(new Map<string, { zone: SnapZone; prev: Rect }>())
+  /**
+   * Runtime geometry record per undocked window, outside `s` for the same reason as `docks`: a new
+   * descriptor field would wake the persistence watcher and move the schema. Shallow, and a record
+   * is replaced whole, so a reader that depends on it re-runs when it changes.
+   */
+  const geometry = shallowReactive(new Map<string, GeometryRecord>())
+  /** The viewport of the previous reflow, a copy: the caller's object may be the live reactive one. */
+  let lastView: Viewport | null = null
   /** The drop target armed by the current drag, rendered as a ghost by WindowHost. */
   const preview = shallowRef<({ zone: SnapZone } & Rect) | null>(null)
   /**
@@ -404,7 +431,7 @@ export function createStore(options: ResolvedOptions) {
    * forgotten by one of them. Results are not here: each path settles them its own way.
    */
   function forgetRuntime(id?: string): void {
-    const all = [restoredIds, owners, docks, pins, modals, escapes, controlLabels, maximizables, autoHeights, taskbarRects, closeGuards, closing, attention, pending]
+    const all = [restoredIds, owners, docks, geometry, pins, modals, escapes, controlLabels, maximizables, autoHeights, taskbarRects, closeGuards, closing, attention, pending]
     for (const m of all) {
       if (id === undefined) m.clear()
       else m.delete(id)
@@ -1043,17 +1070,68 @@ export function createStore(options: ResolvedOptions) {
   }
 
   /**
-   * Re-clamp every window; a shrinking viewport must not strand one off-screen. A snapped window
-   * is re-snapped instead: it follows the new viewport rather than being dragged back by minVisible.
+   * What the next reflow takes as intent and modes, per axis. An axis that still matches the
+   * record's `applied` keeps the record's intent and mode; a drifted axis (no record, or the
+   * descriptor moved or resized since) takes the descriptor's values, measured against the previous
+   * reflow's viewport, which drops `centre` on that axis only. Always fresh objects.
+   */
+  function adopted(w: WindowDescriptor, rec: GeometryRecord | undefined): { intent: Rect; modes: AxisModes; drifted: boolean } {
+    const last = lastView ?? viewport
+    const dx = !rec || w.x !== rec.applied.x || w.w !== rec.applied.w
+    const dy = !rec || w.y !== rec.applied.y || w.h !== rec.applied.h
+    return {
+      intent: {
+        x: dx ? w.x : rec.intent.x,
+        w: dx ? w.w : rec.intent.w,
+        y: dy ? w.y : rec.intent.y,
+        h: dy ? w.h : rec.intent.h,
+      },
+      modes: {
+        x: dx ? measureAxis(w.x, w.w, last.w) : rec.modes.x,
+        y: dy ? measureAxis(w.y, w.h, last.h) : rec.modes.y,
+      },
+      drifted: dx || dy,
+    }
+  }
+
+  /**
+   * The reflow: every window is fitted to `view` from the rect it chose, not from where the last
+   * reflow left it, so a shrink followed by a widen gives the window back. A snapped window is
+   * re-docked instead, following the new viewport. Silent (no event); may change `w` and `h`.
    */
   function clampAll(view: Viewport, bounds: Bounds = options.bounds): void {
     for (const w of s.stack) {
       const dock = docks.get(w.id)
       if (dock) {
-        const rect = snapRect(dock.zone, view, options.snap.insets)
-        Object.assign(w, rect, clampSize(rect.w, rect.h, w))
-      } else clampDescriptor(w, view, bounds)
+        geometry.delete(w.id)
+        Object.assign(w, dockRect(dock.zone, w, view, options.snap.insets))
+        continue
+      }
+      const rec = geometry.get(w.id)
+      const { intent, modes, drifted } = adopted(w, rec)
+      const applied = fitRect(intent, modes, w, view, bounds)
+      Object.assign(w, applied)
+      if (drifted || !sameRect(applied, rec!.applied)) geometry.set(w.id, { intent, modes, applied })
     }
+    lastView = { w: view.w, h: view.h }
+  }
+
+  /** The rect a window chose, which the next reflow would fit. Pure read; `null` for an unknown id. */
+  function intentOf(id: string): Rect | null {
+    const w = byId(id)
+    if (!w) return null
+    const dock = docks.get(id)
+    if (dock) return { ...dock.prev }
+    return adopted(w, geometry.get(id)).intent
+  }
+
+  /** The per-axis modes the next reflow would use. Pure read; `null` when docked, unknown or unrecorded. */
+  function axisModesOf(id: string): AxisModes | null {
+    if (docks.has(id)) return null
+    const rec = geometry.get(id)
+    if (!rec) return null
+    const w = byId(id)
+    return w ? adopted(w, rec).modes : { ...rec.modes }
   }
 
   /**
@@ -1197,6 +1275,8 @@ export function createStore(options: ResolvedOptions) {
     labelsFor,
     setPreview,
     clampAll,
+    intentOf,
+    axisModesOf,
     tileAll,
     cascadeAll,
     attachViewport,
