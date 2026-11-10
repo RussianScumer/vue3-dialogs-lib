@@ -1,4 +1,6 @@
 import type {
+  AxisMode,
+  AxisModes,
   Bounds,
   OpenOptions,
   Rect,
@@ -98,6 +100,41 @@ export function snapRect(zone: SnapZone, view: Viewport, insets: SnapInsets): Re
       return { x: a.x, y: bottom, w: halfW, h: halfH }
     case 'bottom-right':
       return { x: right, y: bottom, w: halfW, h: halfH }
+  }
+}
+
+/** One axis of `fitRect`: returns the fitted `[pos, size]`. */
+function fitAxis(pos: number, size: number, min: number, room: number, mode: AxisMode): [number, number] {
+  if (mode === 'free') return [pos, size]
+  if (mode === 'centre') pos = Math.max(0, Math.round((room - size) / 2))
+  if (pos + size <= room) return [pos, size]
+  const p = Math.max(Math.min(pos, 0), room - size)
+  return [p, p + size > room ? Math.max(min, room - p) : size]
+}
+
+/**
+ * The rect an intent takes in `view`, per axis mode. Pure, idempotent, never grows a size above the
+ * intent. `maxW` / `maxH` are not applied: the intent already obeys them.
+ */
+export function fitRect(intent: Rect, modes: AxisModes, limits: SizeLimits, view: Viewport, bounds: Bounds): Rect {
+  const [x, w] = fitAxis(intent.x, intent.w, limits.minW, view.w, modes.x)
+  const [y, h] = fitAxis(intent.y, intent.h, limits.minH, view.h, modes.y)
+  return { x: clampX(x, w, view, bounds), y: clampY(y, h, view, bounds), w, h }
+}
+
+/**
+ * The zone rect after size limits, pulled back from the snap area's far edge. Equals `snapRect`
+ * when the zone fits.
+ */
+export function dockRect(zone: SnapZone, limits: SizeLimits, view: Viewport, insets: SnapInsets): Rect {
+  const r = snapRect(zone, view, insets)
+  const { w, h } = clampSize(r.w, r.h, limits)
+  const a = snapArea(view, insets)
+  return {
+    x: Math.max(a.x, Math.min(r.x, a.x + a.w - w)),
+    y: Math.max(a.y, Math.min(r.y, a.y + a.h - h)),
+    w,
+    h,
   }
 }
 

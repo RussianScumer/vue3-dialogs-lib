@@ -182,6 +182,15 @@ export interface SizeLimits {
   maxH: number | null
 }
 
+/** How one axis of a window answers a viewport change: shrink to fit, stay put, or stay centred. */
+export type AxisMode = 'fit' | 'free' | 'centre'
+
+/** The per-axis modes of a window. */
+export interface AxisModes {
+  x: AxisMode
+  y: AxisMode
+}
+
 /** Where a snapped window sits. Halves, quarters and maximize — the Windows set. */
 export type SnapZone =
   | 'left'
