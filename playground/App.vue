@@ -143,6 +143,37 @@ async function openModal() {
   log(`the modal settled: ${answer.ok ? String(answer.data) : answer.reason}`)
 }
 
+/** A wide desktop app's layout: a 1140-wide window and a smaller centred one. Resize to reflow. */
+function openWideLayout() {
+  win.open('longDoc', {}, { preset: 'wide', title: 'Wide (1140)' })
+  win.open(
+    'logViewer',
+    { source: 'centred-wide' },
+    { placement: 'center', w: 560, h: 360, title: 'Centred' },
+  )
+  log('opened the wide layout: narrow the browser, then widen it')
+}
+
+/** The non-draggable centred modal over the wide layout. */
+async function askOverWide() {
+  const answer = await win.open(
+    'modalDialog',
+    { message: 'Delete the selected items?' },
+    { preset: 'dialog', title: 'Centred modal' },
+  ).result
+  log(`the modal settled: ${answer.ok ? String(answer.data) : answer.reason}`)
+}
+
+/** Axis modes, plus the size the window chose when the reflow has fitted it to something smaller. */
+function intentLabel(id: string): string {
+  const m = win.axisModesOf(id)
+  const w = win.byId(id)
+  const r = win.intentOf(id)
+  let label = m ? `${m.x}/${m.y}` : 'docked'
+  if (w && r && (r.w !== w.w || r.h !== w.h)) label += ` · chose ${r.w}×${r.h}`
+  return label
+}
+
 /** Two at once: stacked modals dim each other, and only the top one answers. */
 function openTwoModals() {
   void win.open(
@@ -965,7 +996,9 @@ function clearStorage() {
             <h2>25 · Small screens</h2>
             <p>
               Below {{ options.mobileBreakpoint }}px windows go fullscreen and drag/resize turn inert; the stored geometry
-              is untouched. Narrow the browser to see it.
+              is untouched. With <code>mobileMode: 'overflow'</code> (now {{ options.mobileMode }}) only a window wider or
+              taller than the screen goes fullscreen and the rest stay floating; with <code>'always'</code> every window
+              does. Narrow the browser to see it.
             </p>
           </section>
 
@@ -1042,6 +1075,26 @@ function clearStorage() {
               Open growing window
             </button>
           </section>
+
+          <section>
+            <h2>30 · Resize the browser</h2>
+            <p>
+              Open the layout, narrow the browser, then widen it. Every window returns to its rect, centred ones stay
+              centred, and a resize writes nothing to storage.
+            </p>
+            <button
+              type="button"
+              @click="openWideLayout"
+            >
+              Open wide layout
+            </button>
+            <button
+              type="button"
+              @click="askOverWide"
+            >
+              Ask over it
+            </button>
+          </section>
         </div>
 
         <aside class="side">
@@ -1056,8 +1109,9 @@ function clearStorage() {
               <td>{{ w.title || w.name }}</td>
               <td>{{ w.minimized ? 'min' : `${Math.round(w.x)},${Math.round(w.y)} ${w.w}×${w.h}` }}</td>
               <td>{{ win.dockZone(w.id) ?? '—' }}</td>
+              <td>{{ intentLabel(w.id) }}</td>
               <td>z{{ w.z }} → {{ options.zIndexBase + bandOf(w.id) * win.s.topZ + w.z }}</td>
-              <td>{{ [win.ownerOf(w.id) ? 'child' : '', win.hasChild(w.id) || win.isBlockedByModal(w.id) ? 'inert' : '', win.isPinned(w.id) ? 'pinned' : '', win.isModal(w.id) ? 'modal' : '', w.closable ? '' : 'no-x', w.minimizable ? '' : 'no-min', w.draggable ? '' : 'no-drag', w.resizable ? '' : 'no-size'].filter(Boolean).join(' ') || '—' }}</td>
+              <td>{{ [win.ownerOf(w.id) ? 'child' : '', win.hasChild(w.id) || win.isBlockedByModal(w.id) ? 'inert' : '', win.isPinned(w.id) ? 'pinned' : '', win.isModal(w.id) ? 'modal' : '', w.closable ? '' : 'no-x', w.minimizable ? '' : 'no-min', w.draggable ? '' : 'no-drag', w.resizable ? '' : 'no-size', win.isFullscreen(w.id) ? 'fullscreen' : ''].filter(Boolean).join(' ') || '—' }}</td>
             </tr>
           </table>
 

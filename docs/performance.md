@@ -13,9 +13,10 @@ pnpm bench      # vitest bench --run
 
 | File | Covers |
 |---|---|
-| `src/__bench__/store.bench.ts` | `open` (dedupe scan, eviction), `focus`, `minimize`/`restore`, `byId`, `setGeometry` (one drag frame), `clampAll`, `close`, computed recomputation. Pure JS, no DOM. |
+| `src/__bench__/store.bench.ts` | `open` (dedupe scan, eviction), `focus`, `minimize`/`restore`, `byId`, `setGeometry` (one drag frame), `clampAll`, the reflow (no-op, shrink and widen, after drift), `close`, computed recomputation. Pure JS, no DOM. |
 | `src/__bench__/host.bench.ts` | Mounting `WindowHost` with N open vs N minimized windows, minimize/restore round trips, 60 drag frames, 100 pointermoves through the real drag handler, 60 focus bumps. jsdom. |
 | `src/__bench__/persist.bench.ts` | Hydration on install (valid, oversized, rejected snapshots) and one debounced serialize. |
+| `src/__bench__/persist-write.bench.ts` | The real write path: an edit flushed through `pagehide`, and a viewport-only reflow that serializes and skips `setItem`. |
 
 Two rules the benchmarks follow, because breaking them is the usual way a benchmark lies:
 
@@ -40,7 +41,6 @@ Your absolute numbers will differ; the ratios are the point.
 | `focus` (z bump) | 116,096 | 0.0086 ms |
 | `setGeometry` — one drag frame | 115,693 | 0.0086 ms |
 | `minimize` + `restore` round trip | 44,183 | 0.0226 ms |
-| `clampAll` — one viewport resize | 19,900 | 0.0503 ms |
 
 A drag frame costs ~9µs of store work at 100 windows, against a 16.7ms budget at 60Hz. Geometry is
 never the bottleneck; rendering the window's own content is.
@@ -142,6 +142,25 @@ a synchronous `storage.setItem`. At the default 8 windows that is ~0.08ms per fl
 dominates**: 8 windows carrying 100KB drafts each serialize 27× slower than the same 8 windows with
 200B drafts, and `localStorage.setItem` is synchronous on the main thread. Keep drafts small, or
 swap `storage` for an adapter that writes asynchronously.
+
+### Reflow and the intent write
+
+AMD Ryzen 7 4700U, Node 24.12.0, vitest 4.1.11, jsdom, from one `pnpm bench` run on a loaded
+machine (load average about 3). These rows are not comparable with the tables above, which come from
+another machine.
+
+| Operation | hz | mean |
+|---|---:|---:|
+| `clampAll` — the no-op reflow, 100 windows | 1,315 | 0.760 ms |
+| reflow, shrinking and widening in turn, 100 windows | 1,128 | 0.886 ms |
+| reflow after every window drifted, 100 windows (includes the 100 writes) | 949 | 1.05 ms |
+| write after one edit, 8 windows | 1,378 | 0.726 ms |
+| write after one edit, 100 windows | 88.6 | 11.3 ms |
+| viewport-only reflow, 8 windows (serialize, no `setItem`) | 1,189 | 0.841 ms |
+
+A reflow at 100 windows costs about a millisecond, a small fraction of a 16.7ms frame, and it runs
+at most once per animation frame. A viewport-only change pays a serialize but no `setItem`, so other
+tabs are not stopped by a resize.
 
 ## Real-browser check
 

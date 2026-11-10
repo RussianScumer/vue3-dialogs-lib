@@ -64,6 +64,22 @@ describe('mutations at stack size 100', () => {
   })
 })
 
+describe('reflow at stack size 100', () => {
+  const fitted = storeWith(100)
+  const drifted = storeWith(100)
+  let i = 0
+
+  bench('reflow, shrinking and widening in turn (every window fitted, then given back)', () => {
+    fitted.clampAll(i++ % 2 ? { w: 1280, h: 800 } : { w: 480, h: 360 })
+  })
+
+  bench('reflow after every window drifted (includes the 100 writes)', () => {
+    const dx = i++ % 2
+    for (const w of drifted.s.stack) w.x = 40 + dx
+    drifted.clampAll({ w: 1280, h: 800 })
+  })
+})
+
 describe('close', () => {
   const pool = storeWith(100)
   let i = 0
