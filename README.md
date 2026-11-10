@@ -18,13 +18,15 @@ content is unmounted, not hidden), and with persistence on it survives a page re
 - **Native `<dialog>`, non-modal by default** — several windows at once, the page behind stays
   usable, teleported poppers from your own components keep working.
 - **Minimize = unmount.** A minimized window keeps its descriptor and draft state, and nothing else.
-- **Drag, resize from eight grips, keyboard nudging**, min/max size limits, viewport clamping,
-  fullscreen below a mobile breakpoint.
+- **Drag, resize from eight grips, keyboard nudging**, min/max size limits, a reflow on
+  viewport changes that gives windows their chosen size back when the screen grows, and fullscreen
+  below a mobile breakpoint for windows that do not fit.
 - **Edge snapping** like a desktop: halves, quarters, maximize (with an opt-in button), a ghost
   preview, and a rebindable keymap for snapping and window switching. `tileAll()` and
   `cascadeAll()` arrange every window at once.
 - **Persistence** to any `{ getItem, setItem, removeItem }` storage, with a schema check, repair
-  of partial descriptors and a guard against two tabs writing the same key.
+  of partial descriptors and a guard against two tabs writing the same key. Snapped windows come
+  back snapped.
 - **Close guards** — app-wide and per window, sync or async — behind `requestClose()`.
 - **Window results**: `open()` returns a promise for what the window settled with, and it never
   hangs.

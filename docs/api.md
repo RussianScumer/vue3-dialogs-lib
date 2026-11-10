@@ -13,6 +13,7 @@ that.
 - [Typed `open()`](#typed-open)
 - [Contract for consumers](#contract-for-consumers)
 - [Behavior notes](#behavior-notes)
+- [Viewport changes](#viewport-changes)
 - [Persistence](#persistence)
 - [Snapping](#snapping)
 - [Pinned windows](#pinned-windows)
@@ -22,6 +23,7 @@ that.
 - [Header context menu](#header-context-menu)
 - [Keyboard](#keyboard)
 - [Styling](#styling)
+- [Upgrading](#upgrading)
 - [Known limitations](#known-limitations)
 - [Non-goals](#non-goals)
 
@@ -47,7 +49,8 @@ app.use(createWindows({
     corner: 100,                         // px from two edges that arms a quarter
     insets: { bottom: 36 },              // keep snapped windows clear of your taskbar
   },
-  mobileBreakpoint: 768,                 // below this: fullscreen, no drag/resize
+  mobileBreakpoint: 768,                 // below this: windows too big for the screen go fullscreen
+  mobileMode: 'overflow',                // 'always' = every window fullscreen below the breakpoint
   zIndexBase: 0,                         // added to every window's z, to clear your own overlays
   beforeClose: (d) => confirm(`Close ${d.title}?`), // consulted by requestClose(), see below
   keymap: {                              // Meta+arrow snapping, Alt+` switching; on by default
@@ -122,6 +125,9 @@ win.closeAll()
 win.updateProps(id, { id: 43 })
 win.setMeta(id, { version: 7 })
 
+win.clampAll({ w: innerWidth, h: innerHeight }) // reflow, see Viewport changes
+win.intentOf(id)         // the rect the window chose, which the reflow fits
+
 await result             // what the window settled with — see Window results
 win.resultOf(id)         // the same promise, for a window you did not open yourself
 
@@ -161,7 +167,8 @@ was when it left — the store no longer has it by the time the listener runs.
 `geometry` fires once per drag, resize or arrow-key nudge — at the end of the gesture, not per
 frame — and on `snap()`, `setGeometry()`, `tileAll()` and `cascadeAll()` (once per window moved). A
 drop into a snap zone reports once, from the snap.
-Re-clamping the whole stack after a viewport resize is silent.
+The reflow after a viewport resize is silent, though it may change a window's size as well as its
+position (see [Viewport changes](#viewport-changes)).
 
 `active` is derived, not set, so it is reported once the transition that changed it has settled —
 after that transition's own events, on Vue's next scheduler flush — and only once however many
@@ -445,14 +452,74 @@ edits is the sharpest edge this design creates.
   followed live), they widen to 20px edges and 28px corners, still inside the frame, so on touch
   they cover the outer 20px of your content.
 - `[data-vw-nodrag]` on any element inside the header stops it from starting a drag.
-- Windows are re-clamped on viewport resize so a shrinking window can never strand one off-screen.
-- Below `mobileBreakpoint` geometry is forced fullscreen and drag/resize are inert; the stored
-  geometry is untouched and comes back on a wide viewport.
+- A viewport resize reflows every window, so a shrinking viewport can never strand one off-screen
+  and a growing one gives each window its chosen rect back; see
+  [Viewport changes](#viewport-changes).
+- Below `mobileBreakpoint` a window too big for the screen is fullscreen and inert to drag and
+  resize (every window, under `mobileMode: 'always'`); the stored geometry is untouched and comes
+  back on a wide viewport; see [Viewport changes](#viewport-changes).
+
+## Viewport changes
+
+`clampAll(view, bounds?)` is the reflow, and `WindowHost` runs it on every resize. It fits every
+floating window from the rect the window chose (its intent) to `view`, re-docks every snapped
+window, may change `w` and `h` as well as `x` and `y`, and emits no event. The descriptor holds the
+fitted, on-screen rect; `win.intentOf(id)` returns the chosen one. Shrink the viewport and then
+grow it with no input in between, and every window is back at its exact rect.
+
+How a window is fitted is decided per axis by its `AxisMode`:
+
+| Mode | At each reflow |
+| --- | --- |
+| `fit` | moved on screen, then shrunk down to `minW` / `minH`, never grown past the intent |
+| `free` | left where it is; only the `bounds.minVisible` reach rule applies (the 0.6.x behaviour) |
+| `centre` | re-centred at every size, then treated as `fit` |
+
+`open()` sets the modes. An explicit `x` or `y` is measured against the app viewport: `free` when
+the window already overhangs on that axis, else `fit`. A self-placed axis is `fit`, or `centre`
+with `placement: 'center'`, and is fitted at once.
+
+Any change to a window's rect that the reflow did not make is the user's choice: a drag, a grip or
+keyboard resize, an arrow nudge, `setGeometry()`, growing to fit, `tileAll()` / `cascadeAll()` or a
+direct descriptor write. The next reflow adopts it as the new intent, per axis: only the changed
+axis takes the new values and a freshly measured mode (against the viewport of the previous
+reflow), so moving a centred window sideways keeps it vertically centred. A snapped window has no
+record; its pre-snap rect is its intent.
+
+Below `mobileBreakpoint`, `mobileMode` decides what is fullscreen. `'overflow'` (the default)
+makes fullscreen, and inert to drag, resize, snapping, keymap snaps, maximize and arrange, only a
+window whose chosen size is wider or taller than the viewport; the others keep floating and are
+fitted. `'always'` is the 0.6.x behaviour: every window is fullscreen and the host does not reflow
+below the breakpoint. `mobileBreakpoint: 0` still turns the whole thing off. The page load still
+reflows once under `'always'`; the blob keeps the intent, so nothing stored changes.
+
+Three pure reads, and the optional third argument of `hydrate`:
+
+```js
+win.intentOf(id)          // Rect | null: the chosen rect; null for an unknown id
+win.axisModesOf(id)       // AxisModes | null: { x, y }; null for a snapped window or an unknown id
+win.isFullscreen(id, view?, fallback?) // boolean; view defaults to the app viewport, fallback is
+                                       // the { w, h } used when the id has already left the store
+win.hydrate(stack, topZ, { docks, modes }) // extra is optional; persistence calls it, you rarely need to
+```
+
+```ts
+import type { AxisMode, AxisModes, MobileMode } from '@korneevecin/vue3-dialogs-lib'
+```
 
 ## Persistence
 
 Persistence writes a debounced (~300ms) snapshot. `storage` is any
 `{ getItem, setItem, removeItem }`, so IndexedDB or a server-backed adapter drops in.
+
+The snapshot stores intent: each window is written with its chosen rect (a snapped one with its
+pre-snap rect), plus two top-level keys, `docks` (id to zone) and `modes` (id to `{ x, y }`), always
+written and `{}` when empty. `SCHEMA` is still 2. A viewport-only change writes nothing, so a resize
+no longer stops a second tab. A snapped window comes back snapped and follows the viewport, and a
+reload at a narrow viewport followed by widening restores the saved arrangement. An older library
+reading a new blob ignores the two keys and shows a snapped window undocked at its pre-snap rect; a
+blob without them (written by 0.6.x) loads with modes measured at load. See
+[Viewport changes](#viewport-changes).
 
 On load, a descriptor whose `name` is no longer registered is dropped, and one missing fields — an
 older schema, or a hand-edited blob — is repaired from that component's defaults rather than
@@ -509,9 +576,10 @@ target before you release, and double-clicking the header toggles maximize.
 
 Dragging a snapped window away restores its previous size under the cursor; resizing one by a grip
 keeps the new size and simply stops treating it as snapped. Snapped windows follow the viewport
-when the browser is resized, while floating ones are only clamped back into reach.
+when the browser is resized, while floating ones are fitted from their chosen rect. A zone the
+window's `minW` / `minH` cannot fit is pulled back inside the snap area rather than overflowing it.
 
-Snapping is inert below `mobileBreakpoint`, where windows are fullscreen anyway, and can be turned
+Snapping is inert for a fullscreen window (see [Viewport changes](#viewport-changes)) and can be turned
 off with `snap: { enabled: false }`. The snap area is the viewport minus `snap.insets`, so a fixed
 taskbar or app header is never covered. Growing to fit the content stops at the same area.
 
@@ -519,7 +587,7 @@ Drive it directly when you need to:
 
 ```js
 win.snap(id, 'left', { w: innerWidth, h: innerHeight })  // 'left' | 'right' | 'max' | 'top-left' | …
-win.snap(id, 'none', { w: innerWidth, h: innerHeight })  // back to the pre-snap geometry
+win.snap(id, 'none', { w: innerWidth, h: innerHeight })  // back to the pre-snap geometry, fitted into the app viewport
 win.dockZone(id)                                          // the current zone, or null
 ```
 
@@ -540,8 +608,9 @@ is on. It is opt-in so a window that never asks keeps exactly the controls it ha
 itself, `maximizable` is not on the descriptor and an `open()` call's value is gone after a reload,
 while a spec's is read again.
 
-Snap state is **runtime-only**: it is not part of the descriptor and is not persisted. After a
-reload a snapped window comes back as a plain floating window with the geometry the snap gave it.
+Snap state is not on the descriptor, but it persists in the blob's `docks` key (see
+[Persistence](#persistence)): after a reload a snapped window comes back snapped, with its pre-snap
+rect kept.
 
 ### Arranging every window
 
@@ -559,10 +628,11 @@ and neither changes the stacking order or focus. Each returns the ids it moved a
 They move only windows the user could move by hand: not minimized, pinned or modal ones, and not one
 opened with `draggable: false`. Tiling also resizes, so it skips `resizable: false` windows as
 well; cascading only moves, so those take part. Size limits still apply, so a window whose `minW`
-is wider than its cell overlaps its neighbour. Below `mobileBreakpoint` both do nothing.
+is wider than its cell overlaps its neighbour. Below `mobileBreakpoint` fullscreen windows are
+skipped, all of them under `mobileMode: 'always'`.
 
 The result is plain floating windows: a snapped window is undocked, not re-snapped, and nothing
-remembers the arrangement. A window opened afterwards is placed as usual, and the next drag is free.
+remembers the arrangement. The results are not fitted: they become the windows' chosen rects. A window opened afterwards is placed as usual, and the next drag is free.
 
 ## Pinned windows
 
@@ -761,7 +831,7 @@ The slot props (`WindowMenuProps`):
 | --- | --- |
 | `descriptor` | The window the menu belongs to. |
 | `x`, `y` | Where the menu opened, in viewport pixels. |
-| `canSnap` | Whether a snap or maximize would move the window. It uses the same rules as the header double-click: `snap.enabled`, `draggable`, `resizable`, not pinned, not below `mobileBreakpoint`. |
+| `canSnap` | Whether a snap or maximize would move the window. It uses the same rules as the header double-click: `snap.enabled`, `draggable`, `resizable`, not pinned, not fullscreen. |
 | `maximized`, `pinned` | The current state, for toggle labels. |
 | `snap(zone)` | Snaps to a zone, or `'none'` to give back the pre-snap geometry. |
 | `toggleMaximize()` | What the maximize button calls. |
@@ -810,8 +880,8 @@ inert without a DOM, so SSR is unaffected. Clicking a window raises *and* focuse
 on top is the one the keyboard is talking to.
 
 The snap chords go through the same `snap(id, zone, view)` a drop does, so they respect
-`snap.enabled`, `snap.insets`, the window's `draggable`/`resizable` flags and the inertness below
-`mobileBreakpoint`. A keystroke inside an `<input>`, `<textarea>` or `contenteditable` belongs to
+`snap.enabled`, `snap.insets`, the window's `draggable`/`resizable` flags and the inertness of a
+fullscreen window. A keystroke inside an `<input>`, `<textarea>` or `contenteditable` belongs to
 the text field and never reaches the window — `Meta`+`←` is line-start on macOS, and
 `Ctrl`+`Shift`+arrow is word-select everywhere. The listener is on the bubble phase, so content
 that calls `preventDefault()` keeps its key and your own handlers can pre-empt the library.
@@ -932,6 +1002,20 @@ A window is three rows: header, body, footer. `.vw__body` is the only one that s
 taller than the frame stays inside it and the action buttons in the optional `footer` slot stay
 reachable while the user resizes the window down.
 
+## Upgrading
+
+### From 0.6.x
+
+- **`mobileMode` defaults to `'overflow'`.** Below `mobileBreakpoint` only a window too big for the
+  screen goes fullscreen; in 0.6.x every window did. To keep the old behaviour:
+  `createWindows({ ..., mobileMode: 'always' })`.
+- **`clampAll` may now change sizes**, not only positions: a window is fitted from its chosen rect
+  and given the size back when the screen grows.
+- **Snapped windows survive a reload**, and the blob carries two more keys, `docks` and `modes`.
+  `SCHEMA` does not move; an older library ignores the keys.
+- An app that sized windows from `innerWidth` / `innerHeight` at module load
+  (`Math.min(820, innerHeight - 80)`) can drop that and pass the size it wants.
+
 ## Known limitations
 
 - **No announcement on minimize/restore.** Minimizing removes a subtree with nothing said to a
@@ -943,6 +1027,11 @@ reachable while the user resizes the window down.
   merged, and a tab that ignores `onExternalChange` is stale until it reloads.
 - **A modal does not trap Tab.** The scrim blocks the pointer; the keyboard still reaches your page
   unless you point `modal: { inertRoot }` at it — see [Modal windows](#modal-windows).
+- **The reflow adopts what a window has when the viewport is narrow.** A window dragged or resized
+  at a narrow viewport takes that as its new choice, and a window un-snapped at a narrow viewport
+  adopts the fitted size. `snap(id, 'none', view)` and the drag-out un-snap fit the pre-snap rect
+  into the app viewport, not the `view` argument. `tileAll()` / `cascadeAll()` results are not
+  fitted (they become the windows' choice). Owned and modal windows are still never persisted.
 - Resize grips sit inside the window's edges, in the outermost 4px with a mouse and 20px with a
   finger, which is where a body scrollbar also lands. They never extend outside the frame.
 

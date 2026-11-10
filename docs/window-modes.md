@@ -17,7 +17,7 @@ uses it, and what survives a reload.
 - [5 · Pinned (always on top)](#5--pinned-always-on-top) — `fixed: true`
 - [6 · Owned child window (sheet)](#6--owned-child-window-sheet) — `owner: id`
 - [7 · Modal](#7--modal) — `modal: true`
-- [8 · Fullscreen on small screens](#8--fullscreen-on-small-screens) — automatic
+- [8 · Fullscreen on small screens](#8--fullscreen-on-small-screens) — automatic, per window
 - [9 · Presets: naming a mode](#9--presets-naming-a-mode)
 - [Choosing between them](#choosing-between-them)
 - [What persists, and what does not](#what-persists-and-what-does-not)
@@ -35,7 +35,7 @@ uses it, and what survives a reload.
 | Modal | `modal: true` | every other window, plus the page if you ask | `zIndexBase + 3 * topZ + z` | never |
 
 Two of those switches are *capabilities on the descriptor* and persist with it; the rest are
-runtime-only, which is a deliberate trade explained in
+runtime-only (snapping aside, which persists through the blob's `docks` key), which is a deliberate trade explained in
 [What persists, and what does not](#what-persists-and-what-does-not).
 
 They compose. A window can be pinned **and** restricted, a modal can own a sheet, and a sheet can be
@@ -257,8 +257,8 @@ not wanted:
 createWindows({ components, snap: { enabled: true, edge: 12, corner: 100, insets: { bottom: 36 } } })
 ```
 
-Snap state is **runtime-only**: it is not on the descriptor and is not persisted. After a reload a
-snapped window comes back as an ordinary floating window with the geometry the snap gave it.
+Snap state is not on the descriptor, but it persists in the blob's `docks` key: after a reload a
+snapped window comes back snapped, and it follows the viewport.
 Dragging a snapped window away restores its pre-snap size under the cursor; resizing one by a grip
 keeps the new size and simply stops treating it as docked.
 
@@ -295,8 +295,7 @@ Mentioning `fixed` at all is what makes a window pin-*capable*, so `fixed: false
 button without starting pinned, and a window that never mentions it renders exactly as it did before
 the feature existed — no extra control, no second band.
 
-Pin state is runtime-only. A reload brings a pinned window back unpinned and draggable, exactly as it
-brings a snapped one back undocked: pinning is toggled by the user at runtime, and persisting it
+Pin state is runtime-only. A reload brings a pinned window back unpinned and draggable: pinning is toggled by the user at runtime, and persisting it
 would mean moving the storage schema.
 
 ---
@@ -429,14 +428,18 @@ rather than hanging the caller.
 
 ## 8 · Fullscreen on small screens
 
-Below `mobileBreakpoint` (768px by default) a floating window is unusable, so every window renders at
-`100vw × 100dvh` with drag, resize and snapping turned off. Nothing is asked for and nothing is
-stored: the descriptor's geometry is untouched, so widening the browser puts every window back
-exactly where it was.
+Below `mobileBreakpoint` (768px by default) a window wider or taller than the screen is unusable, so
+it renders at `100vw × 100dvh` with drag, resize, snapping and arranging turned off. The other
+windows keep floating and are fitted to the screen. Nothing is asked for and nothing is stored: the
+chosen geometry is kept, so widening the browser puts every window back exactly where it was. See
+[Viewport changes](./api.md#viewport-changes).
 
 ```js
-createWindows({ components, mobileBreakpoint: 768 })   // 0 disables the behaviour entirely
+createWindows({ components, mobileBreakpoint: 768 })                          // default mobileMode: 'overflow'
+createWindows({ components, mobileBreakpoint: 768, mobileMode: 'always' })   // every window fullscreen
 ```
+
+`mobileBreakpoint: 0` disables the behaviour entirely.
 
 This is the one mode you do not opt into. It composes with the rest: a pinned window is still on top,
 a modal still dims what is behind it.
@@ -482,6 +485,9 @@ win.open('confirm', { message }, { placement: 'center', y: 40 })
 // an explicit x or y still wins, one axis at a time
 ```
 
+A window placed with `placement: 'center'` stays centred across resizes (the `centre` mode of the
+reflow), a non-draggable modal included, until the user moves it.
+
 ---
 
 ## Choosing between them
@@ -503,17 +509,18 @@ the app keeps working while the user thinks.
 ## What persists, and what does not
 
 With `persist` configured, the store is written to storage (debounced, and flushed on `pagehide`) and
-read back on the next load. Only the descriptor is written.
+read back on the next load. The descriptor is written, plus the snap zones and the axis modes.
 
 **On the descriptor, therefore persisted:** `id`, `name`, `props`, `state` (your `useWindowState`
 draft), `title`, `minimized`, `x`, `y`, `w`, `h`, `z`, `meta`, and the four capability flags with
-their size limits.
+their size limits. The stored `x`, `y`, `w` and `h` are the rect the window chose (a snapped window's
+pre-snap rect), not the fitted one a small screen shows. Beside the descriptors the blob carries the
+snap zone per snapped window (`docks`) and the axis modes (`modes`).
 
 **Runtime-only, therefore not:**
 
 | State | What a reload does |
 | --- | --- |
-| Snap zone | the window comes back floating, with the geometry the snap gave it |
 | Pin (`fixed`) | comes back unpinned and draggable |
 | Owner link | the child is **never written at all** |
 | Modality | the modal is **never written at all** |

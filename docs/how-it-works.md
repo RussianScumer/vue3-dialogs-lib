@@ -40,10 +40,10 @@ Nothing in it is a component reference, a fetched entity, or a function. That is
 
 | File | Job |
 |---|---|
-| `state.ts` | The reactive store: the stack, `open`/`close`/`minimize`/`restore`/`focus`, dedupe, eviction, clamping. No DOM except the header registry focus hand-off needs. |
+| `state.ts` | The reactive store: the stack, `open`/`close`/`minimize`/`restore`/`focus`, dedupe, eviction, the reflow and the per-window geometry records. No DOM except the header registry focus hand-off needs. |
 | `createWindows.ts` | Plugin factory. Resolves options, creates one store per app, provides both, wires persistence. |
 | `options.ts` | Defaults, per-type async loading options, the parsed keymap, and memoized `resolve(name)` that turns loader functions into async components. |
-| `WindowHost.vue` | Renders one `BaseWindow` per **non-minimized** descriptor, holds a leaving frame for the motion duration, and re-clamps on viewport resize. |
+| `WindowHost.vue` | Renders one `BaseWindow` per **non-minimized** descriptor, holds a leaving frame for the motion duration, and reflows on viewport resize (skipped below the breakpoint under `mobileMode: 'always'`). |
 | `BaseWindow.vue` | The `<dialog>`: geometry, header, drag handle, ESC, raise-and-focus on pointerdown, `data-vw-state`, per-window context. |
 | `WindowTaskbar.vue` | Renderless. Exposes the minimized set to the consumer's own markup, `registerFocusTarget` for opting into focus on minimize, and `setTaskbarRect` for opting into the fly-to-button animation. |
 | `useWindowDrag.ts` | Pointer-events drag + arrow-key move/resize, and the snap zone armed by a drag. |
@@ -54,7 +54,7 @@ Nothing in it is a component reference, a fetched entity, or a function. That is
 | `useViewport.ts` | The app's one viewport tracker, created by the plugin. One resize listener, however many windows. SSR-safe. |
 | `useKeymap.ts` | The app's one keymap listener, created by the plugin. On the document, acting on the active window. SSR-safe. |
 | `persist.ts` | Snapshot, schema check, hydration filtering, debounced writes, cross-tab detection. |
-| `geometry.ts` | Cascade placement, clamping and snap-zone maths — pure functions. |
+| `geometry.ts` | Cascade placement, clamping, `fitRect` and `dockRect` (the reflow's fit and re-dock) and snap-zone maths — pure functions. |
 
 ## Lifecycle of a window
 
@@ -66,6 +66,7 @@ win.open('itemEditor', { id: 42 }, { title: 'Item 42', w: 720, h: 520 })  → { 
   ├─ at maxWindows?           → close the oldest, or requestClose it when it has a guard
   └─ push descriptor { id, name, props, cascade geometry, z: ++topZ }
        │                       + record the unsettled result, before the `open` event fires
+       │                       + record intent and axis modes, and fit a self-placed axis at once
        │
 WindowHost renders `visible` (= stack minus minimized)
        │
@@ -160,7 +161,7 @@ and a drop into a snap zone fires it once, from `snap()`. Note what this deliber
 a draft mutation, or a mid-gesture frame. Both write straight onto the descriptor without passing
 through a store method, which is exactly why persistence watches the stack deeply instead of
 listening to events. `clampAll` on a viewport resize is silent by the same reasoning — nobody
-asked for that move.
+asked for that move — though it may resize a window as well as move it.
 
 ## Why the content is really gone while minimized
 
@@ -261,10 +262,27 @@ native picker are skipped too.
   base out of the stored value means a persisted descriptor stays valid when the base changes.
   `focus()` skips the write when the window is already on top, so an ordinary click inside a window
   does not wake the persistence watcher.
-- `bounds.minVisible` (default 80px) is clamped on drag, on hydration, and on every viewport
-  resize, so a window can never end up unreachable.
-- Below `mobileBreakpoint` the rendered geometry is forced fullscreen and drag/resize go inert. The
-  stored geometry is untouched, so the window returns to its old place on a wide viewport.
+- Each floating window has a geometry record, beside `docks` and replaced whole on every change:
+
+  ```
+  geometry: Map<id, { intent, modes, applied }>   // runtime-only, beside docks; replaced whole
+  ```
+
+  `intent` is the rect the window chose, `modes` its per-axis `AxisMode`s (`fit`, `free`, `centre`),
+  `applied` the rect the last reflow wrote. The reflow (`clampAll`) fits every window from its
+  intent, not from where the last reflow left it, so a shrink followed by a widen gives the window
+  back. Drift is judged against `applied`: an axis whose descriptor values no longer equal
+  `applied` was changed by something other than the reflow (a drag, a resize, `setGeometry()`, a
+  direct write), so the next reflow adopts the descriptor's values on that axis as the new intent,
+  with a mode measured against the previous reflow's viewport. The other axis keeps its record.
+  `bounds.minVisible` (default 80px) is the reach rule of `free`, and it is applied on drag and on
+  hydration too, so a window can never end up unreachable.
+- Below `mobileBreakpoint`, `isFullscreen(id, view)` decides which windows are rendered fullscreen
+  with drag and resize inert: under `'overflow'` those whose intent is wider or taller than the
+  viewport, under `'always'` all of them. It reads the intent, never the fitted rect: the fitted
+  rect always fits, so the answer would flip on every reflow. A leaving frame, whose id the store
+  has already dropped, holds its last answer through `held()`. The stored geometry is untouched, so
+  the window returns to its old place on a wide viewport.
 
 ## Snapping
 
@@ -273,19 +291,19 @@ plain descriptor with `x/y/w/h` — the store simply remembers, outside the pers
 zone put it there and what it looked like before:
 
 ```
-docks: Map<id, { zone, prev }>     // runtime-only, so the descriptor and SCHEMA never move
+docks: Map<id, { zone, prev }>     // outside `s`; persisted through the blob's `docks` key, so the descriptor and SCHEMA never move
 ```
 
 ```
 drag moves           → zoneFromPointer(pointer, viewport, snap) → store.preview → WindowHost ghost
-drag released        → snap(id, zone): stash `prev` once, assign snapRect(zone), focus
+drag released        → snap(id, zone): stash `prev` once (the intent), assign dockRect(zone), focus
 drag passes 4px on a
   snapped window     → undockForDrag: pre-snap size back, placed under the cursor. On the
                        movement, never on the press, so a click cannot un-maximize
 double-click header  → snap(id, dockZone === 'max' ? 'none' : 'max')
 pinned window        → every one of these is refused; see Pinned windows
 corner resize        → undock(id): keep the new size, forget the zone
-viewport resize      → clampAll: docked windows re-snap, floating ones clamp
+viewport resize      → clampAll: docked windows re-dock through dockRect, floating ones fit from intent
 ```
 
 The zone geometry comes from `snapRect`, and the ghost is drawn from the same function, so the
@@ -295,7 +313,8 @@ corner band is wide (100px by default) and the edge band is a few px, otherwise 
 unreachable. The bottom edge alone arms nothing.
 
 Because `docks` lives outside the reactive `s` object, the debounced persistence watcher never sees
-a ghost hover, and a reload brings a snapped window back as an ordinary floating one.
+a ghost hover. Persistence has a second watcher source on the dock zones, so a snap or un-snap
+still writes, and a reload brings a snapped window back snapped.
 
 ## Pinned windows
 
@@ -318,7 +337,7 @@ render band            → pinned: zIndexBase + topZ + z    unpinned: zIndexBase
 snap(id, …)            → refused while pinned, so the document-level keymap is no exception
 drag / resize / arrows → BaseWindow's one `interactive` predicate goes false while pinned
 close / closeAll /
-  hydrate              → the entry is dropped where the `docks` entry is
+  hydrate              → the entry is dropped with the other runtime maps; `docks` is refilled from the blob
 ```
 
 `z` is always positive, so `topZ + z` puts every pinned window above every unpinned one while
@@ -408,7 +427,8 @@ opened, exactly as an unknown owner id does.
 `createStore(options)` does not have — the store is built before `createViewport()` — so the plugin
 hands it over with `store.attachViewport(view)` inside its own effect scope, and the store holds the
 same `1024 × 768` default `createViewport()` starts from until then. An explicit `x` or `y` still
-wins, one axis at a time.
+wins, one axis at a time. A centred self-placed window stays centred at every size it fits, until
+the user moves it (the `centre` mode of the reflow).
 
 ## Control labels
 
@@ -481,9 +501,9 @@ install → read(storage[key])
             ├─ descriptor whose `name` is not registered  → dropped
             ├─ non-finite geometry, duplicate id, past `maxWindows` (lowest `z`) → dropped
             ├─ non-finite `topZ` → 10; `state` not an object → null
-            └─ survivors: clamp to the current viewport, hydrate, mark as restored
-watch(stack, deep) → debounce 300ms → storage[key] = { schema, topZ, stack, writer }
-                                       (skipped when it would only echo what was just hydrated)
+            └─ survivors: hydrate (docks and modes restored), reflow to the current viewport, mark as restored
+watch(stack, deep) → debounce 300ms → storage[key] = { schema, topZ, stack (intent rects), docks, modes, writer }
+                                       (skipped when the string equals the last one written or hydrated)
 pagehide → a pending debounced write is flushed synchronously (nothing once stopped)
 storage event on key, from our storage area → writer !== ours → stop writing, onExternalChange(info)
                                           └─ info.resume() → re-read, hydrate, write on the next edit
@@ -508,6 +528,9 @@ Node or during SSR does nothing. `storage` is any `{ getItem, setItem, removeIte
 so `useWindowContext().isRestored` tells a content component whether this mount came from storage
 or from a fresh `open()`.
 
+Under `mobileMode: 'always'` the host does not reflow below the breakpoint, but the page load still
+reflows once (the hydrate path); the blob keeps the intent, so nothing stored changes.
+
 Bump `SCHEMA` in `persist.ts` whenever the descriptor shape changes; a stale blob hydrating into
 new code is the likeliest source of hard-to-reproduce bugs in this design.
 
@@ -515,7 +538,8 @@ new code is the likeliest source of hard-to-reproduce bugs in this design.
 
 `writer` is a token minted once per `setupPersist` call and written in the blob's **envelope**, not
 on a descriptor: the descriptor shape is unchanged, so `SCHEMA` does not move for it, an old blob
-with no token reads fine, and old code ignores the key. It answers exactly one question — did this
+with no token reads fine, and old code ignores the key. `docks` and `modes` are envelope keys like it,
+so `SCHEMA` does not move for them either. It answers exactly one question — did this
 tab's last write produce the value that just arrived?
 
 A `storage` event whose value is not this tab's own is a foreign write. Anything unreadable counts
@@ -534,7 +558,9 @@ tab, so each of them stops, and two tabs that both `resume()` would ping-pong th
 300 ms for as long as both stay open. `hydrateFromStorage` therefore remembers the blob it would
 write for the data it just hydrated, and the next `write()` compares against it: identical means
 nothing to say, skip; different means an edit landed inside the same debounce window, write as
-usual. The comparison is consumed either way, so it never suppresses a later write.
+usual. The comparison is against the last string written or hydrated and is no longer consumed:
+a reflow that changes only the screen produces an equal string, so a resize writes nothing and
+stops no other tab.
 
 The event's `storageArea` is checked against the configured `storage`: `sessionStorage` and
 `localStorage` can share a key name, and a write to one is not a write to the other. An event with
