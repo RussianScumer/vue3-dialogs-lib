@@ -1211,8 +1211,17 @@ export function createStore(options: ResolvedOptions) {
     return restoredIds.has(id)
   }
 
-  /** Replaces the stack with a hydrated one; every id counts as restored. */
-  function hydrate(stack: WindowDescriptor[], topZ: number): void {
+  /**
+   * Replaces the stack with a hydrated one; every id counts as restored. `extra` restores docks and
+   * geometry records: a docked id gets its dock (the descriptor rect is the pre-snap rect), any
+   * other id a record whose intent is the descriptor rect and whose modes are the given ones or,
+   * when missing, measured against the store viewport. The caller reflows; nothing is emitted.
+   */
+  function hydrate(
+    stack: WindowDescriptor[],
+    topZ: number,
+    extra?: { docks?: Record<string, SnapZone>; modes?: Record<string, AxisModes> },
+  ): void {
     // A window the incoming stack does not carry is gone for a listener in every way that matters,
     // so it leaves through the same event a `close()` would have fired. Arrivals stay silent:
     // `open` means a call asked for a window, and a hydration is nobody asking.
@@ -1227,6 +1236,16 @@ export function createStore(options: ResolvedOptions) {
     forgetRuntime()
     const settled = settleAll()
     for (const w of stack) {
+      const zone = extra?.docks?.[w.id]
+      if (zone) {
+        docks.set(w.id, { zone, prev: rectOf(w) })
+      } else {
+        const m = extra?.modes?.[w.id]
+        const modes: AxisModes = m
+          ? { x: m.x, y: m.y }
+          : { x: measureAxis(w.x, w.w, viewport.w), y: measureAxis(w.y, w.h, viewport.h) }
+        geometry.set(w.id, { intent: rectOf(w), modes, applied: rectOf(w) })
+      }
       restoredIds.add(w.id)
       // A restored descriptor has no live opener — the call that opened it belongs to a previous
       // page load, possibly a previous day. Its result is settled before anyone can ask, so
