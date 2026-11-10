@@ -54,6 +54,8 @@ function rectOf(d: WindowDescriptor): Rect {
   return { x: d.x, y: d.y, w: d.w, h: d.h }
 }
 
+const FIT: AxisModes = { x: 'fit', y: 'fit' }
+
 function sameRect(a: Rect, b: Rect): boolean {
   return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h
 }
@@ -734,10 +736,11 @@ export function createStore(options: ResolvedOptions) {
     const place = cascade(s.stack.length, { x: opts.x, y: opts.y, w: opts.w ?? defs.w, h: opts.h ?? defs.h })
     // `center` needs the size, which `cascade` has just resolved. An explicit x or y still wins,
     // one axis at a time — a call that pins only `y` keeps the centred `x`.
-    if ((opts.placement ?? defs.placement ?? 'cascade') === 'center') {
-      const centred = centerRect(place.w, place.h, viewport)
-      if (opts.x === undefined) place.x = centred.x
-      if (opts.y === undefined) place.y = centred.y
+    const centred = (opts.placement ?? defs.placement ?? 'cascade') === 'center'
+    if (centred) {
+      const mid = centerRect(place.w, place.h, viewport)
+      if (opts.x === undefined) place.x = mid.x
+      if (opts.y === undefined) place.y = mid.y
     }
     const d: WindowDescriptor = {
       id: newId(),
@@ -761,7 +764,24 @@ export function createStore(options: ResolvedOptions) {
       maxH: opts.maxH ?? defs.maxH ?? null,
     }
     Object.assign(d, clampSize(d.w, d.h, d))
+    // Explicit axes are the caller's and are not moved at open; self-placed axes are fitted at once
+    // and keep the unfitted rect as their intent.
+    const intent = rectOf(d)
+    const modes: AxisModes = {
+      x: opts.x !== undefined ? measureAxis(d.x, d.w, viewport.w) : centred ? 'centre' : 'fit',
+      y: opts.y !== undefined ? measureAxis(d.y, d.h, viewport.h) : centred ? 'centre' : 'fit',
+    }
+    const fitted = fitRect(intent, modes, d, viewport, options.bounds)
+    if (opts.x === undefined) {
+      d.x = fitted.x
+      d.w = fitted.w
+    }
+    if (opts.y === undefined) {
+      d.y = fitted.y
+      d.h = fitted.h
+    }
     s.stack.push(d)
+    geometry.set(d.id, { intent, modes, applied: rectOf(d) })
     // Not on the descriptor, so not in `d` above: mentioning `fixed` at all is what makes the
     // window pin-capable, and the resolved value is whether it starts pinned.
     const fixed = opts.fixed ?? defs.fixed
@@ -988,7 +1008,7 @@ export function createStore(options: ResolvedOptions) {
 
     if (zone === 'none') {
       if (current) {
-        Object.assign(w, current.prev)
+        Object.assign(w, fitRect(current.prev, FIT, w, viewport, options.bounds))
         docks.delete(id)
         emit({ type: 'geometry', id, rect: rectOf(w) })
         emit({ type: 'snap', id, zone: null })
@@ -996,10 +1016,10 @@ export function createStore(options: ResolvedOptions) {
       return id
     }
 
-    docks.set(id, { zone, prev: current?.prev ?? rectOf(w) })
+    docks.set(id, { zone, prev: current?.prev ?? intentOf(id)! })
+    geometry.delete(id)
     autoHeights.delete(id)
-    const rect = snapRect(zone, view, options.snap.insets)
-    Object.assign(w, rect, clampSize(rect.w, rect.h, w))
+    Object.assign(w, dockRect(zone, w, view, options.snap.insets))
     emit({ type: 'geometry', id, rect: rectOf(w) })
     // Re-snapping into the zone the window is already in moves nothing worth a `snap`.
     if (current?.zone !== zone) emit({ type: 'snap', id, zone })
@@ -1044,16 +1064,19 @@ export function createStore(options: ResolvedOptions) {
 
   /**
    * Undock at the start of a drag: the window gets its pre-snap size back and is placed so the
-   * pointer keeps the same relative position along the header, as it does on Windows.
+   * pointer keeps the same relative position along the header, as it does on Windows. The size is
+   * the pre-snap one fitted into the viewport, so a window docked at a larger size does not come
+   * back wider than the screen.
    */
   function undockForDrag(id: string, pointerX: number): void {
     const dock = docks.get(id)
     if (!dock) return
     const w = require(id)
     const ratio = w.w > 0 ? (pointerX - w.x) / w.w : 0.5
-    w.w = dock.prev.w
-    w.h = dock.prev.h
-    w.x = Math.round(pointerX - dock.prev.w * ratio)
+    const r = fitRect(dock.prev, FIT, w, viewport, options.bounds)
+    w.w = r.w
+    w.h = r.h
+    w.x = Math.round(pointerX - r.w * ratio)
     docks.delete(id)
     // No `geometry` here: the drag this starts reports it once, when it ends.
     emit({ type: 'snap', id, zone: null })

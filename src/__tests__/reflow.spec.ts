@@ -148,3 +148,99 @@ describe('reflow', () => {
     expect(c.axisModesOf(id)).toBeNull()
   })
 })
+
+describe('open and snap', () => {
+  it('fits self-placed axes at open and keeps the intent', () => {
+    const win = store()
+    win.attachViewport({ ...small })
+    const id = win.open('editor', { id: 1 }).id
+    expect(rect(win, id)).toEqual({ x: 0, y: 20, w: 600, h: 480 })
+    expect(win.intentOf(id)).toEqual({ x: 40, y: 40, w: 640, h: 480 })
+    expect(win.axisModesOf(id)).toEqual({ x: 'fit', y: 'fit' })
+    win.clampAll(big)
+    expect(rect(win, id)).toEqual({ x: 40, y: 40, w: 640, h: 480 })
+  })
+
+  it('leaves explicit axes where the caller put them', () => {
+    const win = setup()
+    const a = win.open('editor', { id: 1 }, { x: 900, y: 700 }).id
+    expect(rect(win, a)).toMatchObject({ x: 900, y: 700 })
+    expect(win.axisModesOf(a)).toEqual({ x: 'free', y: 'free' })
+    const b = win.open('editor', { id: 2 }, { x: 100, y: 100, w: 400, h: 300 }).id
+    expect(win.axisModesOf(b)).toEqual({ x: 'fit', y: 'fit' })
+  })
+
+  it('keeps a centred window centred at every size (I4)', () => {
+    for (const extra of [{}, { modal: true, draggable: false }]) {
+      const win = setup()
+      const id = win.open('editor', { id: 1 }, { placement: 'center', w: 400, h: 300, ...extra }).id
+      expect(rect(win, id)).toMatchObject({ x: 300, y: 250 })
+      expect(win.axisModesOf(id)).toEqual({ x: 'centre', y: 'centre' })
+      win.clampAll(small)
+      expect(rect(win, id)).toMatchObject({ x: 100, y: 100 })
+      win.clampAll({ w: 1400, h: 900 })
+      expect(rect(win, id)).toMatchObject({ x: 500, y: 300 })
+    }
+  })
+
+  it('centres one axis when the other is explicit', () => {
+    const win = setup()
+    const id = win.open('editor', { id: 1 }, { placement: 'center', w: 400, h: 300, y: 12 }).id
+    expect(win.axisModesOf(id)).toEqual({ x: 'centre', y: 'fit' })
+  })
+
+  it('keeps x centred when auto-height growth changes y and h (P4)', () => {
+    const win = setup()
+    const id = win.open('editor', { id: 1 }, { placement: 'center', w: 400 }).id
+    win.growToFit(id, 100, big)
+    win.clampAll(small)
+    expect(rect(win, id).x).toBe(100)
+    expect(win.axisModesOf(id)!.x).toBe('centre')
+    expect(win.axisModesOf(id)!.y).not.toBe('centre')
+  })
+
+  it('drops centre once the window is moved', () => {
+    const win = setup()
+    const id = win.open('editor', { id: 1 }, { placement: 'center', w: 400, h: 300 }).id
+    win.setGeometry(id, { x: 50 })
+    win.clampAll(small)
+    expect(win.axisModesOf(id)!.x).toBe('fit')
+    expect(rect(win, id).x).toBe(50)
+  })
+
+  it('docks through dockRect', () => {
+    const win = setup()
+    const id = win.open('editor', { id: 1 }, { x: 100, y: 100, w: 600, h: 300, minW: 600 }).id
+    win.snap(id, 'right', big)
+    expect(rect(win, id)).toMatchObject({ x: 400, w: 600 })
+    expect(win.axisModesOf(id)).toBeNull()
+  })
+
+  it('stores the intent, not the fitted rect, as prev', () => {
+    const win = store()
+    win.attachViewport({ ...small })
+    const id = win.open('editor', { id: 1 }).id
+    win.snap(id, 'left', small)
+    win.attachViewport({ ...big })
+    win.snap(id, 'none', big)
+    expect(rect(win, id)).toEqual({ x: 40, y: 40, w: 640, h: 480 })
+  })
+
+  it("fits prev on snap('none')", () => {
+    const win = setup()
+    const id = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 800, h: 600 }).id
+    win.snap(id, 'max', big)
+    win.attachViewport({ ...small })
+    win.snap(id, 'none', small)
+    expect(rect(win, id)).toEqual({ x: 0, y: 0, w: 600, h: 500 })
+  })
+
+  it('fits prev on undockForDrag', () => {
+    const win = setup()
+    const id = win.open('editor', { id: 1 }, { x: 120, y: 90, w: 800, h: 600 }).id
+    win.snap(id, 'max', big)
+    win.attachViewport({ ...small })
+    win.undockForDrag(id, 300)
+    expect(rect(win, id)).toMatchObject({ w: 600, h: 500, x: 120 })
+  })
+})
