@@ -165,7 +165,7 @@ describe('keymap — snapping', () => {
   })
 
   it('is inert below mobileBreakpoint, where the window is fullscreen anyway', async () => {
-    const { wrapper, win } = app({ mobileBreakpoint: window.innerWidth + 1 })
+    const { wrapper, win } = app({ mobileBreakpoint: window.innerWidth + 1, mobileMode: 'always' })
     const id = win.open('editor', { id: 1 }, { x: 100, y: 90, w: 400, h: 300 }).id
     await nextTick()
 

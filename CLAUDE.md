@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Vue 3.5 window/dialog library (`@korneevecin/vue3-dialogs-lib`), pnpm, ES-only Vite lib build, no CI.
 
+Knowledge base: ~/mem/projects/packages/README.md (search: qmd search "<terms>" -c mem -n 8). Read it before non-trivial work; record decisions there.
+
 ## Commands
 
 - `pnpm build` — `type-check` + `build-only` in parallel, then `build-types` (`vue-tsc -p tsconfig.lib.json` → `dist/types/`), then `build-css`. `dist/style.css` is a plain file copy of `src/style.css`, not bundled; if `build-types` fails, `build-css` never runs and `dist/` ships without CSS.

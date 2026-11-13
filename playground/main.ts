@@ -58,6 +58,9 @@ createApp(App)
       // the call that named it.
       presets: {
         dialog: { modal: true, placement: 'center', w: 420, h: 260, draggable: false, resizable: false },
+        // A wide desktop app's main window: centred, bigger than a laptop screen in one or both
+        // axes. The reflow fits it to the screen and gives it back when the screen grows again.
+        wide: { placement: 'center', w: 1140, h: 640 },
       },
       // The scrim stops the pointer; nothing stops Tab. This is the opt-in that does. It names the
       // wrapper around everything *except* WindowHost — an ancestor of the windows would make the

@@ -26,21 +26,27 @@ const preview = win.preview
  * A window being dragged across a monitor edge or a browser being resized by hand fires `resize`
  * far more often than the screen repaints, and `clampAll` walks every window. It runs at most once
  * per animation frame, against the viewport as it is by then. The first run is immediate, so the
- * first render is already clamped, and without `requestAnimationFrame` every run is.
+ * first render is already clamped, and without `requestAnimationFrame` every run is. Under
+ * `mobileMode: 'always'` below the breakpoint every window is fullscreen and nothing is reflowed.
  */
 let clampFrame: number | null = null
 
+function reflow(): void {
+  if (options.mobileMode === 'always' && view.w < options.mobileBreakpoint) return
+  win.clampAll(view)
+}
+
 function clampSoon(): void {
   if (clampFrame !== null) return
-  if (typeof requestAnimationFrame !== 'function') return win.clampAll(view)
+  if (typeof requestAnimationFrame !== 'function') return reflow()
   clampFrame = requestAnimationFrame(() => {
     clampFrame = null
-    win.clampAll(view)
+    reflow()
   })
 }
 
 watch(() => [view.w, view.h], clampSoon)
-win.clampAll(view)
+reflow()
 
 /**
  * The leaving lifecycle. The store stays the truth — `close()` and `minimize()` are synchronous

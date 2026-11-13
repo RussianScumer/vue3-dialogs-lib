@@ -222,6 +222,7 @@ export function resolveOptions(options: WindowsOptions): ResolvedOptions {
       },
     },
     mobileBreakpoint: options.mobileBreakpoint ?? 768,
+    mobileMode: options.mobileMode ?? 'overflow',
     zIndexBase: options.zIndexBase ?? 0,
     beforeClose: options.beforeClose ?? null,
     keymap: resolveKeymap(options.keymap),

@@ -84,8 +84,13 @@ function held<T>(get: () => T) {
   return computed<T>((prev) => (leaving.value && prev !== undefined ? prev : get()))
 }
 
-/** Below the breakpoint a floating window is unusable: fullscreen, no drag or resize. */
-const mobile = computed(() => view.w < options.mobileBreakpoint)
+/**
+ * This window is fullscreen and inert: below the breakpoint, and (unless `mobileMode` is
+ * `'always'`) only when its intent exceeds the viewport. Held, so a leaving frame keeps the state
+ * it had after the store has forgotten the window; the descriptor is the fallback for a read in
+ * that gap.
+ */
+const mobile = held(() => win.isFullscreen(d.id, view, d))
 /** Pinned above every other window, and inert to geometry for as long as it is. */
 const pinned = held(() => win.isPinned(d.id))
 /**
@@ -278,7 +283,7 @@ const band = held(() => {
 
 /**
  * Where the frame is and how big, as the three inline values that say so. Mobile overrides all
- * three: below the breakpoint the frame is the viewport.
+ * three: a fullscreen frame is the viewport.
  */
 function geometry(g: Pick<WindowDescriptor, 'x' | 'y' | 'w' | 'h'>) {
   return mobile.value

@@ -182,6 +182,18 @@ export interface SizeLimits {
   maxH: number | null
 }
 
+/** How one axis of a window answers a viewport change: shrink to fit, stay put, or stay centred. */
+export type AxisMode = 'fit' | 'free' | 'centre'
+
+/** Below `mobileBreakpoint`: only windows too big for the viewport go fullscreen, or every window does. */
+export type MobileMode = 'overflow' | 'always'
+
+/** The per-axis modes of a window. */
+export interface AxisModes {
+  x: AxisMode
+  y: AxisMode
+}
+
 /** Where a snapped window sits. Halves, quarters and maximize — the Windows set. */
 export type SnapZone =
   | 'left'
@@ -486,6 +498,12 @@ export interface WindowsOptions {
   bounds?: Partial<Bounds>
   snap?: SnapOptions
   mobileBreakpoint?: number
+  /**
+   * What happens below `mobileBreakpoint`. `'overflow'` (default): only a window whose chosen size
+   * exceeds the viewport on either axis is fullscreen and inert; the others keep floating.
+   * `'always'`: every window is fullscreen and the host does not reflow them.
+   */
+  mobileMode?: MobileMode
   /** Added to every window's `z` at render time, to clear an app's own stacking contexts. */
   zIndexBase?: number
   /** Consulted by `requestClose()` for every window, including minimized ones. */
@@ -535,6 +553,7 @@ export interface ResolvedOptions {
   bounds: Bounds
   snap: ResolvedSnap
   mobileBreakpoint: number
+  mobileMode: MobileMode
   zIndexBase: number
   beforeClose: BeforeCloseGuard | null
   keymap: ResolvedKeymap

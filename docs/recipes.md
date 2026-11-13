@@ -22,6 +22,7 @@ createApp(App)
     maxWindows: 8,
     bounds: { minVisible: 80 },
     mobileBreakpoint: 768,
+    mobileMode: 'overflow',
   }))
   .mount('#app')
 ```
@@ -471,7 +472,7 @@ win.byId(id)
 win.focus(id)
 win.setTitle(id, 'New title')
 win.setGeometry(id, { x: 0, y: 0, w: 900, h: 600 })
-win.clampAll({ w: window.innerWidth, h: window.innerHeight })
+win.clampAll({ w: window.innerWidth, h: window.innerHeight }) // the reflow the host runs on resize; silent
 win.isRestored(id)
 ```
 
@@ -576,6 +577,10 @@ createWindows({
 `open()` options still win over these, and these win over the library's. Because the flags end up
 on the descriptor, they survive a reload with the window.
 
+Give the size you want, even when it is bigger than some screens. The window is fitted at open and
+on every resize, and gets its size back when the screen grows, so sizing from `innerWidth` at module
+load is not needed.
+
 ## 17 · Type-check `open()` against your components
 
 ```ts
@@ -631,8 +636,9 @@ const off = win.on('*', (e) => analytics.track(`window:${e.type}`, { id: e.id })
 Events cover store transitions only. `geometry` reports one event per gesture — a drag, a resize or
 an arrow-key nudge, at the end of it — plus `snap()` and `setGeometry()`; the frames in between and
 a draft mutation write straight onto the descriptor without passing through a store method, so
-neither emits. If you need those, watch the descriptor yourself. Clamping the stack back into a
-shrunken viewport is silent too: it is the browser moving the windows, not the user.
+neither emits. If you need those, watch the descriptor yourself. The reflow after a viewport change
+is silent too, and it may change sizes as well as positions: it is the browser moving the windows,
+not the user.
 
 ## 19 · Say something while a window loads, and when it fails
 

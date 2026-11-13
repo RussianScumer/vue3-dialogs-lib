@@ -1,17 +1,20 @@
-import { computed, reactive, shallowRef, watch } from 'vue'
+import { computed, reactive, shallowReactive, shallowRef, watch } from 'vue'
 import {
   DEFAULT_MIN_H,
   DEFAULT_MIN_W,
   cascade,
   cascadeRects,
   centerRect,
-  clampDescriptor,
   clampSize,
+  dockRect,
+  fitRect,
   snapArea,
   snapRect,
   tileRects,
 } from './geometry'
 import type {
+  AxisMode,
+  AxisModes,
   Bounds,
   CloseGuard,
   ComponentsMap,
@@ -49,6 +52,24 @@ function newId(): string {
 
 function rectOf(d: WindowDescriptor): Rect {
   return { x: d.x, y: d.y, w: d.w, h: d.h }
+}
+
+const FIT: AxisModes = { x: 'fit', y: 'fit' }
+
+function sameRect(a: Rect, b: Rect): boolean {
+  return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h
+}
+
+/** What a window chose and what the last reflow made of it. Replaced whole, never mutated. */
+interface GeometryRecord {
+  intent: Rect
+  modes: AxisModes
+  applied: Rect
+}
+
+/** One axis, measured: `free` when it already overhangs the room, else `fit`. */
+function measureAxis(pos: number, size: number, room: number): AxisMode {
+  return pos < 0 || pos + size > room ? 'free' : 'fit'
 }
 
 /**
@@ -103,6 +124,14 @@ export function createStore(options: ResolvedOptions) {
    * `prev` is the geometry to give back on undock.
    */
   const docks = reactive(new Map<string, { zone: SnapZone; prev: Rect }>())
+  /**
+   * Runtime geometry record per undocked window, outside `s` for the same reason as `docks`: a new
+   * descriptor field would wake the persistence watcher and move the schema. Shallow, and a record
+   * is replaced whole, so a reader that depends on it re-runs when it changes.
+   */
+  const geometry = shallowReactive(new Map<string, GeometryRecord>())
+  /** The viewport of the previous reflow, a copy: the caller's object may be the live reactive one. */
+  let lastView: Viewport | null = null
   /** The drop target armed by the current drag, rendered as a ghost by WindowHost. */
   const preview = shallowRef<({ zone: SnapZone } & Rect) | null>(null)
   /**
@@ -404,7 +433,7 @@ export function createStore(options: ResolvedOptions) {
    * forgotten by one of them. Results are not here: each path settles them its own way.
    */
   function forgetRuntime(id?: string): void {
-    const all = [restoredIds, owners, docks, pins, modals, escapes, controlLabels, maximizables, autoHeights, taskbarRects, closeGuards, closing, attention, pending]
+    const all = [restoredIds, owners, docks, geometry, pins, modals, escapes, controlLabels, maximizables, autoHeights, taskbarRects, closeGuards, closing, attention, pending]
     for (const m of all) {
       if (id === undefined) m.clear()
       else m.delete(id)
@@ -707,10 +736,11 @@ export function createStore(options: ResolvedOptions) {
     const place = cascade(s.stack.length, { x: opts.x, y: opts.y, w: opts.w ?? defs.w, h: opts.h ?? defs.h })
     // `center` needs the size, which `cascade` has just resolved. An explicit x or y still wins,
     // one axis at a time — a call that pins only `y` keeps the centred `x`.
-    if ((opts.placement ?? defs.placement ?? 'cascade') === 'center') {
-      const centred = centerRect(place.w, place.h, viewport)
-      if (opts.x === undefined) place.x = centred.x
-      if (opts.y === undefined) place.y = centred.y
+    const centred = (opts.placement ?? defs.placement ?? 'cascade') === 'center'
+    if (centred) {
+      const mid = centerRect(place.w, place.h, viewport)
+      if (opts.x === undefined) place.x = mid.x
+      if (opts.y === undefined) place.y = mid.y
     }
     const d: WindowDescriptor = {
       id: newId(),
@@ -734,7 +764,24 @@ export function createStore(options: ResolvedOptions) {
       maxH: opts.maxH ?? defs.maxH ?? null,
     }
     Object.assign(d, clampSize(d.w, d.h, d))
+    // Explicit axes are the caller's and are not moved at open; self-placed axes are fitted at once
+    // and keep the unfitted rect as their intent.
+    const intent = rectOf(d)
+    const modes: AxisModes = {
+      x: opts.x !== undefined ? measureAxis(d.x, d.w, viewport.w) : centred ? 'centre' : 'fit',
+      y: opts.y !== undefined ? measureAxis(d.y, d.h, viewport.h) : centred ? 'centre' : 'fit',
+    }
+    const fitted = fitRect(intent, modes, d, viewport, options.bounds)
+    if (opts.x === undefined) {
+      d.x = fitted.x
+      d.w = fitted.w
+    }
+    if (opts.y === undefined) {
+      d.y = fitted.y
+      d.h = fitted.h
+    }
     s.stack.push(d)
+    geometry.set(d.id, { intent, modes, applied: rectOf(d) })
     // Not on the descriptor, so not in `d` above: mentioning `fixed` at all is what makes the
     // window pin-capable, and the resolved value is whether it starts pinned.
     const fixed = opts.fixed ?? defs.fixed
@@ -961,7 +1008,7 @@ export function createStore(options: ResolvedOptions) {
 
     if (zone === 'none') {
       if (current) {
-        Object.assign(w, current.prev)
+        Object.assign(w, fitRect(current.prev, FIT, w, viewport, options.bounds))
         docks.delete(id)
         emit({ type: 'geometry', id, rect: rectOf(w) })
         emit({ type: 'snap', id, zone: null })
@@ -969,10 +1016,10 @@ export function createStore(options: ResolvedOptions) {
       return id
     }
 
-    docks.set(id, { zone, prev: current?.prev ?? rectOf(w) })
+    docks.set(id, { zone, prev: current?.prev ?? intentOf(id)! })
+    geometry.delete(id)
     autoHeights.delete(id)
-    const rect = snapRect(zone, view, options.snap.insets)
-    Object.assign(w, rect, clampSize(rect.w, rect.h, w))
+    Object.assign(w, dockRect(zone, w, view, options.snap.insets))
     emit({ type: 'geometry', id, rect: rectOf(w) })
     // Re-snapping into the zone the window is already in moves nothing worth a `snap`.
     if (current?.zone !== zone) emit({ type: 'snap', id, zone })
@@ -1017,16 +1064,19 @@ export function createStore(options: ResolvedOptions) {
 
   /**
    * Undock at the start of a drag: the window gets its pre-snap size back and is placed so the
-   * pointer keeps the same relative position along the header, as it does on Windows.
+   * pointer keeps the same relative position along the header, as it does on Windows. The size is
+   * the pre-snap one fitted into the viewport, so a window docked at a larger size does not come
+   * back wider than the screen.
    */
   function undockForDrag(id: string, pointerX: number): void {
     const dock = docks.get(id)
     if (!dock) return
     const w = require(id)
     const ratio = w.w > 0 ? (pointerX - w.x) / w.w : 0.5
-    w.w = dock.prev.w
-    w.h = dock.prev.h
-    w.x = Math.round(pointerX - dock.prev.w * ratio)
+    const r = fitRect(dock.prev, FIT, w, viewport, options.bounds)
+    w.w = r.w
+    w.h = r.h
+    w.x = Math.round(pointerX - r.w * ratio)
     docks.delete(id)
     // No `geometry` here: the drag this starts reports it once, when it ends.
     emit({ type: 'snap', id, zone: null })
@@ -1043,28 +1093,97 @@ export function createStore(options: ResolvedOptions) {
   }
 
   /**
-   * Re-clamp every window; a shrinking viewport must not strand one off-screen. A snapped window
-   * is re-snapped instead: it follows the new viewport rather than being dragged back by minVisible.
+   * What the next reflow takes as intent and modes, per axis. An axis that still matches the
+   * record's `applied` keeps the record's intent and mode; a drifted axis (no record, or the
+   * descriptor moved or resized since) takes the descriptor's values, measured against the previous
+   * reflow's viewport, which drops `centre` on that axis only. Always fresh objects.
+   */
+  function adopted(w: WindowDescriptor, rec: GeometryRecord | undefined): { intent: Rect; modes: AxisModes; drifted: boolean } {
+    const last = lastView ?? viewport
+    const dx = !rec || w.x !== rec.applied.x || w.w !== rec.applied.w
+    const dy = !rec || w.y !== rec.applied.y || w.h !== rec.applied.h
+    return {
+      intent: {
+        x: dx ? w.x : rec.intent.x,
+        w: dx ? w.w : rec.intent.w,
+        y: dy ? w.y : rec.intent.y,
+        h: dy ? w.h : rec.intent.h,
+      },
+      modes: {
+        x: dx ? measureAxis(w.x, w.w, last.w) : rec.modes.x,
+        y: dy ? measureAxis(w.y, w.h, last.h) : rec.modes.y,
+      },
+      drifted: dx || dy,
+    }
+  }
+
+  /**
+   * The reflow: every window is fitted to `view` from the rect it chose, not from where the last
+   * reflow left it, so a shrink followed by a widen gives the window back. A snapped window is
+   * re-docked instead, following the new viewport. Silent (no event); may change `w` and `h`.
    */
   function clampAll(view: Viewport, bounds: Bounds = options.bounds): void {
     for (const w of s.stack) {
       const dock = docks.get(w.id)
       if (dock) {
-        const rect = snapRect(dock.zone, view, options.snap.insets)
-        Object.assign(w, rect, clampSize(rect.w, rect.h, w))
-      } else clampDescriptor(w, view, bounds)
+        geometry.delete(w.id)
+        Object.assign(w, dockRect(dock.zone, w, view, options.snap.insets))
+        continue
+      }
+      const rec = geometry.get(w.id)
+      const { intent, modes, drifted } = adopted(w, rec)
+      const applied = fitRect(intent, modes, w, view, bounds)
+      Object.assign(w, applied)
+      if (drifted || !sameRect(applied, rec!.applied)) geometry.set(w.id, { intent, modes, applied })
     }
+    lastView = { w: view.w, h: view.h }
+  }
+
+  /** The rect a window chose, which the next reflow would fit. Pure read; `null` for an unknown id. */
+  function intentOf(id: string): Rect | null {
+    const w = byId(id)
+    if (!w) return null
+    const dock = docks.get(id)
+    if (dock) return { ...dock.prev }
+    return adopted(w, geometry.get(id)).intent
+  }
+
+  /**
+   * The per-axis modes the next reflow would use, also for a window with no record yet (after an
+   * un-snap), so the persisted string does not change when the reflow creates the record. Pure
+   * read; `null` only for a docked window or an id not in the stack.
+   */
+  function axisModesOf(id: string): AxisModes | null {
+    if (docks.has(id)) return null
+    const w = byId(id)
+    if (!w) return null
+    return adopted(w, geometry.get(id)).modes
+  }
+
+  /**
+   * Whether a window is fullscreen at `view`. Above `mobileBreakpoint` never. Below it, `'always'`
+   * says yes and `'overflow'` says yes when the window's intent is wider or taller than `view`.
+   * Reads the intent, never the fitted rect: the fitted rect always fits, so it would flip the
+   * answer on every reflow. `fallback` is the descriptor rect a caller still holds for an id the
+   * store has dropped (a leaving frame). Pure read.
+   */
+  function isFullscreen(id: string, view: Viewport = viewport, fallback?: Pick<Rect, 'w' | 'h'>): boolean {
+    if (view.w >= options.mobileBreakpoint) return false
+    if (options.mobileMode === 'always') return true
+    const r = intentOf(id) ?? fallback
+    if (!r) return false
+    return r.w > view.w || r.h > view.h
   }
 
   /**
    * The windows an arrange-all command may move, bottom of the stack first so the active window
-   * lands last. The same gates a snap chord respects: nothing below `mobileBreakpoint`, where every
-   * window is fullscreen, and nothing pinned or modal. `resize` asks for `resizable` as well.
+   * lands last. The same gates a snap chord respects: nothing that is fullscreen, and nothing
+   * pinned or modal. `resize` asks for `resizable` as well.
    */
   function arrangeable(view: Viewport, resize: boolean): WindowDescriptor[] {
-    if (view.w < options.mobileBreakpoint) return []
     return s.stack
       .filter((w) => !w.minimized && w.draggable && (!resize || w.resizable))
+      .filter((w) => !isFullscreen(w.id, view))
       .filter((w) => !isPinned(w.id) && !modals.has(w.id))
       .sort((a, b) => a.z - b.z)
   }
@@ -1110,8 +1229,17 @@ export function createStore(options: ResolvedOptions) {
     return restoredIds.has(id)
   }
 
-  /** Replaces the stack with a hydrated one; every id counts as restored. */
-  function hydrate(stack: WindowDescriptor[], topZ: number): void {
+  /**
+   * Replaces the stack with a hydrated one; every id counts as restored. `extra` restores docks and
+   * geometry records: a docked id gets its dock (the descriptor rect is the pre-snap rect), any
+   * other id a record whose intent is the descriptor rect and whose modes are the given ones or,
+   * when missing, measured against the store viewport. The caller reflows; nothing is emitted.
+   */
+  function hydrate(
+    stack: WindowDescriptor[],
+    topZ: number,
+    extra?: { docks?: Record<string, SnapZone>; modes?: Record<string, AxisModes> },
+  ): void {
     // A window the incoming stack does not carry is gone for a listener in every way that matters,
     // so it leaves through the same event a `close()` would have fired. Arrivals stay silent:
     // `open` means a call asked for a window, and a hydration is nobody asking.
@@ -1126,6 +1254,16 @@ export function createStore(options: ResolvedOptions) {
     forgetRuntime()
     const settled = settleAll()
     for (const w of stack) {
+      const zone = extra?.docks?.[w.id]
+      if (zone) {
+        docks.set(w.id, { zone, prev: rectOf(w) })
+      } else {
+        const m = extra?.modes?.[w.id]
+        const modes: AxisModes = m
+          ? { x: m.x, y: m.y }
+          : { x: measureAxis(w.x, w.w, viewport.w), y: measureAxis(w.y, w.h, viewport.h) }
+        geometry.set(w.id, { intent: rectOf(w), modes, applied: rectOf(w) })
+      }
       restoredIds.add(w.id)
       // A restored descriptor has no live opener — the call that opened it belongs to a previous
       // page load, possibly a previous day. Its result is settled before anyone can ask, so
@@ -1197,6 +1335,9 @@ export function createStore(options: ResolvedOptions) {
     labelsFor,
     setPreview,
     clampAll,
+    intentOf,
+    axisModesOf,
+    isFullscreen,
     tileAll,
     cascadeAll,
     attachViewport,

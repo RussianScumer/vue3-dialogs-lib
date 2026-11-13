@@ -1,7 +1,7 @@
 import { getCurrentScope, onScopeDispose, watch } from 'vue'
-import { DEFAULT_MIN_H, DEFAULT_MIN_W, clampDescriptor, clampSize } from './geometry'
+import { DEFAULT_MIN_H, DEFAULT_MIN_W, clampSize } from './geometry'
 import type { WindowsApi } from './state'
-import type { ResolvedOptions, WindowDescriptor } from './types'
+import type { AxisMode, AxisModes, ResolvedOptions, SnapZone, WindowDescriptor } from './types'
 import { warn } from './warn'
 
 /** Bump whenever the descriptor shape changes: a stale blob in new code is the sharpest bug here. */
@@ -21,6 +21,44 @@ interface Snapshot {
    * code ignores the key and old blobs simply have none, so `SCHEMA` does not move for it.
    */
   writer?: string
+  /**
+   * Zone per docked window id. Like `writer`, old code ignores the key and its absence marks a
+   * legacy blob, so `SCHEMA` does not move for it.
+   */
+  docks?: Record<string, SnapZone>
+  /** Axis modes per window id that has a geometry record; same compatibility story as `docks`. */
+  modes?: Record<string, AxisModes>
+}
+
+const ZONES = new Set<string>(
+  ['left', 'right', 'max', 'top-left', 'top-right', 'bottom-left', 'bottom-right'] satisfies SnapZone[],
+)
+const MODES = new Set<string>(['fit', 'free', 'centre'] satisfies AxisMode[])
+
+function isPlain(v: unknown): v is Record<string, unknown> {
+  return Boolean(v) && typeof v === 'object' && !Array.isArray(v)
+}
+
+function docksOf(v: unknown, ids: Set<string>): Record<string, SnapZone> {
+  const out: Record<string, SnapZone> = {}
+  if (!isPlain(v)) return out
+  for (const [id, zone] of Object.entries(v)) {
+    if (ids.has(id) && typeof zone === 'string' && ZONES.has(zone)) out[id] = zone as SnapZone
+  }
+  return out
+}
+
+function modesOf(v: unknown, ids: Set<string>): Record<string, AxisModes> {
+  const out: Record<string, AxisModes> = {}
+  if (!isPlain(v)) return out
+  for (const [id, m] of Object.entries(v)) {
+    if (!ids.has(id) || !isPlain(m)) continue
+    const { x, y } = m
+    if (typeof x === 'string' && typeof y === 'string' && MODES.has(x) && MODES.has(y)) {
+      out[id] = { x: x as AxisMode, y: y as AxisMode }
+    }
+  }
+  return out
 }
 
 /** One per `setupPersist` call, so a tab can tell its own writes from everyone else's. */
@@ -125,7 +163,15 @@ function read(options: ResolvedOptions): Snapshot | null {
     }
     // `Infinity` parses fine (`1e999`) and would make every later `++topZ` a no-op, so no window
     // could ever be raised again. `size()` asks the same finite question the descriptors get.
-    return { schema: SCHEMA, topZ: size(parsed.topZ, 10), stack: trim(stack, options.maxWindows) }
+    const kept = trim(stack, options.maxWindows)
+    const ids = new Set(kept.map((d) => d.id))
+    return {
+      schema: SCHEMA,
+      topZ: size(parsed.topZ, 10),
+      stack: kept,
+      docks: docksOf(parsed.docks, ids),
+      modes: modesOf(parsed.modes, ids),
+    }
   } catch (err) {
     warn(`the blob under "${p.key}" is not valid JSON; it is ignored`, err)
     return null
@@ -139,34 +185,42 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
 
   const token = newToken()
   let timer: ReturnType<typeof setTimeout> | undefined
-  /** The blob this tab would write for the data it was last hydrated with; see `write()`. */
-  let hydrated: string | undefined
+  /** The last blob written or hydrated; `write()` never writes a string equal to it. */
+  let last: string | undefined
 
   // Owned and modal windows are dropped on the way out, not filtered on the way in: both links
   // live in a runtime map, so a persisted child would come back as an ordinary window with no
   // owner and no way to be answered, and a persisted modal as a question with nobody asking it —
   // dimming the page on load over an answer that was given yesterday.
   const serialize = (): string => {
-    const data: Snapshot = {
-      schema: SCHEMA,
-      topZ: store.s.topZ,
-      stack: store.s.stack.filter((w) => !store.ownerOf(w.id) && !store.isModal(w.id)),
-      writer: token,
-    }
+    const kept = store.s.stack.filter((w) => !store.ownerOf(w.id) && !store.isModal(w.id))
+    const docks: Record<string, SnapZone> = {}
+    const modes: Record<string, AxisModes> = {}
+    // The blob stores intent, so a reflow that only fits the on-screen rect produces the same string.
+    const stack = kept.map((w) => {
+      const zone = store.dockZone(w.id)
+      if (zone) docks[w.id] = zone
+      const m = store.axisModesOf(w.id)
+      if (m) modes[w.id] = m
+      return { ...w, ...store.intentOf(w.id)! }
+    })
+    const data: Snapshot = { schema: SCHEMA, topZ: store.s.topZ, stack, docks, modes, writer: token }
     return JSON.stringify(data)
   }
 
   function hydrateFromStorage(): void {
     const snapshot = read(options)
-    if (!snapshot) return
-    const view = { w: window.innerWidth, h: window.innerHeight }
-    for (const d of snapshot.stack) clampDescriptor(d, view, options.bounds)
-    store.hydrate(snapshot.stack, snapshot.topZ)
+    if (!snapshot) {
+      last = undefined
+      return
+    }
+    store.hydrate(snapshot.stack, snapshot.topZ, { docks: snapshot.docks, modes: snapshot.modes })
+    store.clampAll({ w: window.innerWidth, h: window.innerHeight }, options.bounds)
     // Replacing the stack wakes the deep watcher like any edit, and the write it schedules would
     // put the same data back under this tab's token: a foreign write to every other tab, which
     // stops them all, and a loop between two tabs that both `resume()`. The blob just hydrated
-    // cannot have a cycle, so this cannot throw.
-    hydrated = serialize()
+    // cannot have a cycle, so this cannot throw. `write()` skips a string equal to `last`.
+    last = serialize()
   }
 
   hydrateFromStorage()
@@ -179,12 +233,11 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
     if (stopped) return
     try {
       const raw = serialize()
-      // The first write after a hydrate is skipped only if it would say nothing new; an edit that
-      // landed inside the same debounce window changes the blob and goes through as usual.
-      const quiet = raw === hydrated
-      hydrated = undefined
-      if (quiet) return
+      // A reflow changes the screen, not the intent, so it writes nothing and other tabs see no
+      // `storage` event. An edit that changes the blob goes through as usual.
+      if (raw === last) return
       p.storage.setItem(p.key, raw)
+      last = raw
     } catch (err) {
       // Storage full or unavailable: drop the write, keep the app alive.
       warn(`could not write "${p.key}" to storage; this change is not persisted`, err)
@@ -194,17 +247,17 @@ export function setupPersist(store: WindowsApi, options: ResolvedOptions): void 
   // Deep, and it has to stay deep: `useWindowState` hands the content its draft object to mutate
   // directly, and the drag writes x/y straight onto the descriptor. Neither goes through a store
   // method, so no event-based scheme could see them.
-  watch(
-    () => store.s,
-    () => {
-      clearTimeout(timer)
-      timer = setTimeout(() => {
-        timer = undefined
-        write()
-      }, DEBOUNCE_MS)
-    },
-    { deep: true },
-  )
+  const schedule = (): void => {
+    clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = undefined
+      write()
+    }, DEBOUNCE_MS)
+  }
+  watch(() => store.s, schedule, { deep: true })
+  // Dock state lives outside `s`, and a snap into a zone that equals the current rect moves nothing
+  // the deep watcher sees.
+  watch(() => store.s.stack.map((w) => `${w.id}:${store.dockZone(w.id) ?? ''}`).join('|'), schedule)
 
   /**
    * The debounce is the whole reason a draft can be lost: a reload a keystroke after the last edit
