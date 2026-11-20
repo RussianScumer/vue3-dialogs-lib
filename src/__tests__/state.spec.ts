@@ -196,7 +196,7 @@ describe('store', () => {
     win.hydrate([hydrated], 12)
 
     expect(win.isRestored('x')).toBe(true)
-    expect(win.s.topZ).toBe(12)
+    expect(win.s.topZ).toBe(1)
     expect(win.isRestored(win.open('editor', { id: 9 }).id)).toBe(false)
   })
 

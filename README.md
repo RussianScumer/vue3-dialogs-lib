@@ -134,6 +134,19 @@ const answer = await win.open('confirm', { message }, { modal: true, placement: 
 if (answer.ok) proceed()
 ```
 
+## The z-index budget
+
+Windows are non-modal `<dialog>`s, so the library manages `z-index` itself. The `zIndexBase` option
+of `createWindows()` shifts the whole band it occupies: every rendered element — frames, the modal
+scrim, the snap ghost, the title-bar context menu — stays inside
+`[zIndexBase, zIndexBase + 4*maxWindows + 1]`, permanently. Window ranks are compacted after every
+stack change, so nothing grows with use or across reloads. Keep your own overlay bands above it:
+Element Plus starts its overlays at 2000 on every page load, and with the default `maxWindows: 8`
+any `zIndexBase ≤ ~1960` is safe against that — `zIndexBase: 1000` tops out at
+`1000 + 4*8 + 1 = 1033`. Defaults: `zIndexBase: 0`, `maxWindows: 8`. Full contract:
+[the z-index band](https://github.com/RussianScumer/vue3-dialogs-lib/blob/master/docs/api.md#the-z-index-band)
+in the API reference.
+
 ## Styling
 
 Everything a window needs to work is inline, so the library runs with no stylesheet imported. Two

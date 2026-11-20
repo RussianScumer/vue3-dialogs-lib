@@ -51,7 +51,7 @@ app.use(createWindows({
   },
   mobileBreakpoint: 768,                 // below this: windows too big for the screen go fullscreen
   mobileMode: 'overflow',                // 'always' = every window fullscreen below the breakpoint
-  zIndexBase: 0,                         // added to every window's z, to clear your own overlays
+  zIndexBase: 0,                         // shifts the whole z-index band to clear your overlays; see below
   beforeClose: (d) => confirm(`Close ${d.title}?`), // consulted by requestClose(), see below
   keymap: {                              // Meta+arrow snapping, Alt+` switching; on by default
     enabled: true,                       // false removes every binding, store API unaffected
@@ -105,6 +105,26 @@ gets `all` (every window), `windows` (only the minimized ones), `active` (the to
 `registerFocusTarget` is
 optional: bind it as a template ref and the taskbar becomes where focus goes when the last window
 is minimized, instead of the element that opened it.
+
+### The z-index band
+
+`zIndexBase` shifts the whole band the library occupies; the ordering inside it is untouched. Every
+rendered z-index — window frames in every band, the modal scrim, the snap ghost, the title-bar
+context menu — lies in `[zIndexBase, zIndexBase + 4*maxWindows + 1]`. The bound is permanent, not a
+snapshot: the store keeps `z` a permutation of `1..n` and `topZ` a high-water ceiling — the
+largest stack size since load — that never shrinks while windows animate out and never exceeds
+the largest stack size reached; ranks are compacted after every ordering or membership change,
+and hydrate resets the ceiling from the incoming stack, ignoring any poisoned persisted counter
+— so no value grows with use or survives a reload unbounded. The factor
+4 and the `+ 1` come from the highest formula, the context menu's `zIndexBase + 4*topZ + 1`.
+Owned windows (a confirm dialog, for instance) do not count towards `maxWindows`, so with
+several of them open the total window count `n` can slightly exceed it; the exact bound is
+`zIndexBase + 4*n + 1`.
+
+Keep your own overlay bands above it. Element Plus starts its overlays at 2000 on every page load:
+with `zIndexBase: 1000` and `maxWindows: 8` the library tops out at `1000 + 4*8 + 1 = 1033`,
+permanently below; with the default `maxWindows: 8` any `zIndexBase ≤ ~1960` is safe against a 2000
+band. Defaults: `zIndexBase: 0`, `maxWindows: 8`.
 
 ## Driving it
 
@@ -415,7 +435,8 @@ edits is the sharpest edge this design creates.
 - Windows are **non-modal** (`dialog.show()`): several at once, the background stays usable, the
   taskbar stays clickable, and teleported poppers from your own components keep working. The cost
   is no top layer, so the library manages `z-index` itself — offset it with `zIndexBase` if your
-  app has its own stacking contexts to clear.
+  app has its own stacking contexts to clear; the band it occupies is bounded, see
+  [The z-index band](#the-z-index-band).
 - **ESC minimizes** the active window rather than closing it. A non-modal `<dialog>` gets no close
   request from the browser — `cancel` and ESC-to-close belong to `showModal()` — so this runs off a
   `keydown` handler on the window element. It does nothing when: content called `preventDefault()`

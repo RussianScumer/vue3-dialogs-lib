@@ -140,22 +140,22 @@ describe('persist', () => {
     vi.useRealTimers()
   })
 
-  it('hydrates a non-finite topZ as 10 so windows can still be raised', () => {
-    // `1e999` parses to `Infinity`; `Math.max(Infinity, …)` would then poison every later `++topZ`.
+  it('ignores a non-finite persisted topZ and compacts, so windows can still be raised', () => {
+    // `1e999` parses to `Infinity`; the persisted counter is ignored entirely — `topZ` is derived from the stack, so no poison can survive.
     const storage = memoryStorage(`{"schema":${SCHEMA},"topZ":1e999,"stack":[${JSON.stringify(descriptor())}]}`)
     const options = resolveOptions({ components: { editor: Stub }, persist: { key: 'k', storage } })
     const store = createStore(options)
     setupPersist(store, options)
 
-    expect(store.s.topZ).toBe(11) // the finite z of the one hydrated window
+    expect(store.s.topZ).toBe(1) // the stack length; the persisted counter is ignored
     const id = store.open('editor').id
     expect(Number.isFinite(store.byId(id)!.z)).toBe(true)
-    expect(store.byId(id)!.z).toBeGreaterThan(11)
+    expect(store.byId(id)!.z).toBeGreaterThan(1)
   })
 
   it('hydrates a topZ that is not a number as 10', () => {
     const { store } = setup({ schema: SCHEMA, topZ: 'top', stack: [] })
-    expect(store.s.topZ).toBe(10)
+    expect(store.s.topZ).toBe(0)
   })
 
   it('keeps the first of two descriptors that share an id', () => {

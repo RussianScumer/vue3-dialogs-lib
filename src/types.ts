@@ -504,7 +504,14 @@ export interface WindowsOptions {
    * `'always'`: every window is fullscreen and the host does not reflow them.
    */
   mobileMode?: MobileMode
-  /** Added to every window's `z` at render time, to clear an app's own stacking contexts. */
+  /**
+   * Shifts the library's whole z-index band at render time, to clear an app's own stacking
+   * contexts. The band is `[zIndexBase, zIndexBase + 4*maxWindows + 1]` and never grows: window
+   * ranks are compacted after every stack change. Owned windows do not count towards
+   * `maxWindows`, so the exact bound is `zIndexBase + 4*n + 1` for `n` open windows. Keep
+   * overlay bands above it — Element Plus starts at 2000, so with the default `maxWindows: 8`
+   * any value up to ~1960 is safe against it. Default `0`.
+   */
   zIndexBase?: number
   /** Consulted by `requestClose()` for every window, including minimized ones. */
   beforeClose?: BeforeCloseGuard

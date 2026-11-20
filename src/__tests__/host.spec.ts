@@ -632,8 +632,8 @@ describe('capabilities', () => {
     await nextTick()
 
     const dialog = wrapper.find('dialog.vw').element as HTMLElement
-    expect(win.byId(id)!.z).toBe(11) // the stored counter never learns about the base
-    expect(dialog.style.zIndex).toBe('1011')
+    expect(win.byId(id)!.z).toBe(1) // the stored counter never learns about the base
+    expect(dialog.style.zIndex).toBe('1001')
     wrapper.unmount()
   })
 
