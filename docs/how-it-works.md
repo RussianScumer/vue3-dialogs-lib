@@ -258,10 +258,15 @@ native picker are skipped too.
   rest of the geometry, so the plugin keeps one `(pointer: coarse)` tracker next to the viewport
   tracker and each frame picks the 4px or the 20px set from it; a stylesheet media query could not
   do that, because the library has to work with no stylesheet imported.
-- `z` is a bare counter in the descriptor; the rendered `z-index` is `zIndexBase + z`. Keeping the
-  base out of the stored value means a persisted descriptor stays valid when the base changes.
-  `focus()` skips the write when the window is already on top, so an ordinary click inside a window
-  does not wake the persistence watcher.
+- `z` is the window's rank in the stack, not a growing counter: after every ordering or membership
+  change the values are compacted to a rank order of `1..n` with `topZ` a high-water ceiling that
+  never exceeds the largest stack size, relative order preserved, and a hydrate resets the ceiling
+  from the incoming stack — a persisted counter cannot poison it. The
+  rendered `z-index` is `zIndexBase + z` in the plain band, so the library occupies a fixed band
+  above the base ([the z-index band](./api.md#the-z-index-band)). Keeping the base out of the stored
+  value means a persisted descriptor stays valid when the base changes. `focus()` skips the write
+  when the window is already on top, so an ordinary click inside a window does not wake the
+  persistence watcher.
 - Each floating window has a geometry record, beside `docks` and replaced whole on every change:
 
   ```
