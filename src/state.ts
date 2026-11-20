@@ -108,7 +108,7 @@ function makeHandle<T>(id: string, result: Promise<WindowResult<T>>): WindowHand
 }
 
 export function createStore(options: ResolvedOptions) {
-  const s = reactive({ stack: [] as WindowDescriptor[], topZ: 10 })
+  const s = reactive({ stack: [] as WindowDescriptor[], topZ: 0 })
   /**
    * The viewport, once the plugin has one to give — `createViewport()` runs after the store is
    * built, so `attachViewport` hands it over rather than the constructor taking it. Until then, and
@@ -346,9 +346,36 @@ export function createStore(options: ResolvedOptions) {
     return out
   }
 
+  /**
+   * High-water stack size since the last hydrate. `topZ` is set to this, never to the
+   * instantaneous stack length, so it cannot shrink while a leaving frame (or the lingering
+   * modal scrim) still renders `zIndexBase + band * topZ + z`. Reset by `hydrate` only. Plain
+   * (non-reactive): it is always written together with the reactive `s.topZ`, and it must stay
+   * off `s` so the persistence watcher and the schema do not move.
+   */
+  let peak = 0
+
+  /**
+   * The rank-order invariant: after every ordering or membership mutation the stack's `z`
+   * values are exactly `1..n`. `topZ` is the high-water stack size (`peak`), so it never shrinks
+   * between hydrates and stays <= the session's max stack size (<= maxWindows + owned) — no
+   * rendered tier outgrows `4 * maxWindows + 1` in the roots-only regime. Sorts a copy by `z`
+   * (stable: ties keep array order) and renumbers the same reactive descriptors in place — the
+   * stack array keeps creation order, and nothing is replaced.
+   */
+  function compact(): void {
+    const order = [...s.stack].sort((a, b) => a.z - b.z)
+    order.forEach((w, i) => {
+      w.z = i + 1
+    })
+    peak = Math.max(peak, s.stack.length)
+    s.topZ = peak
+  }
+
   /** Re-stacks a whole group in one go, which is what keeps a child at exactly `owner.z + 1`. */
   function raiseGroup(group: WindowDescriptor[]): void {
     for (const w of group) w.z = ++s.topZ
+    compact()
   }
 
   /**
@@ -358,11 +385,15 @@ export function createStore(options: ResolvedOptions) {
    *
    * An owner and its children move as one: focusing either raises the whole group, in chain order,
    * so their relative stacking never changes and a sheet can never end up under its own owner.
+   *
+   * Topmost means the maximum rank (`s.stack.length`), not `topZ`: `topZ` is the high-water
+   * ceiling and can exceed the stack after a close, so comparing against it would re-raise an
+   * already-top window and emit a spurious `focus`.
    */
   function focus(id: string): string {
     const w = require(id)
     const group = groupOf(id)
-    if (group[group.length - 1]!.z === s.topZ && !w.minimized) return id
+    if (group[group.length - 1]!.z === s.stack.length && !w.minimized) return id
     raiseGroup(group)
     emit({ type: 'focus', id })
     return id
@@ -458,6 +489,7 @@ export function createStore(options: ResolvedOptions) {
     // evicted or dismissed itself; it went with its owner.
     for (const child of childrenOf(id)) remove(child, 'closed')
     s.stack = s.stack.filter((w) => w.id !== id)
+    compact()
     forgetRuntime(id)
     // Before the event, so a listener that awaits the result is not waiting on a microtask that
     // has not been queued yet.
@@ -468,6 +500,7 @@ export function createStore(options: ResolvedOptions) {
   function closeAll(): void {
     const gone = s.stack
     s.stack = []
+    compact()
     forgetRuntime()
     // Every outstanding result settles here: logging out must not leave a caller awaiting a window
     // that no longer exists. `settleAll` empties the map as it goes.
@@ -816,6 +849,7 @@ export function createStore(options: ResolvedOptions) {
       // exactly `owner.z + 1` however deep the chain goes.
       raiseGroup(groupOf(d.id))
     }
+    compact()
     // Before the event: an `on('open')` listener may ask for the result, and by then it exists.
     const result = deferResult(d.id)
     emit({ type: 'open', id: d.id })
@@ -1234,6 +1268,8 @@ export function createStore(options: ResolvedOptions) {
    * geometry records: a docked id gets its dock (the descriptor rect is the pre-snap rect), any
    * other id a record whose intent is the descriptor rect and whose modes are the given ones or,
    * when missing, measured against the store viewport. The caller reflows; nothing is emitted.
+   * `topZ` is accepted for API compatibility but ignored — the counter is derived from the
+   * incoming stack.
    */
   function hydrate(
     stack: WindowDescriptor[],
@@ -1246,11 +1282,11 @@ export function createStore(options: ResolvedOptions) {
     const arrived = new Set(stack.map((w) => w.id))
     const departed = s.stack.filter((w) => !arrived.has(w.id))
     s.stack = stack
-    // A loop, not a spread: `Math.max(...stack)` is an argument list, and a crafted blob long
-    // enough overflows it. A non-finite `topZ` would poison every later `++s.topZ`.
-    let top = Number.isFinite(topZ) ? topZ : 10
-    for (const w of stack) if (w.z > top) top = w.z
-    s.topZ = Math.max(top, 10)
+    // The persisted `topZ` argument is accepted for API compatibility but ignored for ordering.
+    // Reset the high-water ceiling and derive it from the incoming stack: `compact()` heals a
+    // poisoned blob (huge or non-finite values alike) on the first load after the upgrade.
+    peak = 0
+    compact()
     forgetRuntime()
     const settled = settleAll()
     for (const w of stack) {
